@@ -8,12 +8,10 @@ const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 
 const RANGES = [
-  { label: '1D',  days: 1     },
-  { label: '7D',  days: 7     },
-  { label: '1M',  days: 30    },
-  { label: '1Y',  days: 365   },
-  { label: '5Y',  days: 1825  },
-  { label: 'All', days: 'max' },
+  { label: '1D', days: 1   },
+  { label: '7D', days: 7   },
+  { label: '1M', days: 30  },
+  { label: '1Y', days: 365 },
 ]
 
 function parseChartData(json, days) {
@@ -38,7 +36,7 @@ function parseChartData(json, days) {
 
 async function loadData() {
   const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true').then(r => r.json()),
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp&include_24hr_vol=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
@@ -46,17 +44,19 @@ async function loadData() {
 
   const btc = priceRes.status === 'fulfilled' ? (priceRes.value.bitcoin ?? {}) : {}
   return {
-    price:       btc.usd          ?? null,
-    volume24h:   btc.usd_24h_vol  ?? null,
+    priceUsd:   btc.usd          ?? null,
+    priceGbp:   btc.gbp          ?? null,
+    volumeUsd:  btc.usd_24h_vol  ?? null,
+    volumeGbp:  btc.gbp_24h_vol  ?? null,
     fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
     blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
     fng:         fngRes.status    === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
   }
 }
 
-async function fetchChart(days) {
+async function fetchChart(days, currency) {
   const json = await fetch(
-    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=${currency}&days=${days}`
   ).then(r => r.json())
   return parseChartData(json, days)
 }
@@ -68,21 +68,26 @@ function readCache() {
 function writeCache(data) {
   const prev = readCache() ?? {}
   const patch = {}
-  if (data.price     != null) patch.price     = data.price
-  if (data.volume24h != null) patch.volume24h = data.volume24h
+  if (data.priceUsd  != null) patch.priceUsd  = data.priceUsd
+  if (data.priceGbp  != null) patch.priceGbp  = data.priceGbp
+  if (data.volumeUsd != null) patch.volumeUsd = data.volumeUsd
+  if (data.volumeGbp != null) patch.volumeGbp = data.volumeGbp
   if (data.fng       != null) patch.fng       = data.fng
   if (data.fees      != null) patch.fees      = data.fees
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
-const fmtUsd = n =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+const fmtCurrency = (n, currency) =>
+  new Intl.NumberFormat(currency === 'gbp' ? 'en-GB' : 'en-US', {
+    style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0,
+  }).format(n)
 
-const fmtVolume = n => {
+const fmtVolume = (n, currency) => {
   if (n == null) return null
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(0)}M`
-  return fmtUsd(n)
+  const sym = currency === 'gbp' ? '£' : '$'
+  if (n >= 1e9) return `${sym}${(n / 1e9).toFixed(1)}B`
+  if (n >= 1e6) return `${sym}${(n / 1e6).toFixed(0)}M`
+  return fmtCurrency(n, currency)
 }
 
 function Skeleton({ className = '' }) {
@@ -106,7 +111,7 @@ function KpiCard({ label, value, sub }) {
   )
 }
 
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, currency }) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
@@ -115,17 +120,18 @@ function ChartTooltip({ active, payload, label }) {
       boxShadow: '0 4px 12px rgb(0 0 0 / 0.4)',
     }}>
       <p style={{ color: '#6b7280', marginBottom: 2, fontSize: 11 }}>{label}</p>
-      <p style={{ color: ORANGE, fontWeight: 600 }}>{fmtUsd(payload[0].value)}</p>
+      <p style={{ color: ORANGE, fontWeight: 600 }}>{fmtCurrency(payload[0].value, currency)}</p>
     </div>
   )
 }
 
 export default function App() {
-  const [data, setData]           = useState(null)
-  const [loading, setLoading]     = useState(true)
+  const [data, setData]               = useState(null)
+  const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [range, setRange]         = useState('7D')
-  const [chart, setChart]         = useState(null)
+  const [range, setRange]             = useState('7D')
+  const [currency, setCurrency]       = useState('usd')
+  const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const chartCache = useRef(new Map())
 
@@ -139,8 +145,10 @@ export default function App() {
       const cache = readCache() ?? {}
       setData({
         ...result,
-        price:     result.price     ?? cache.price     ?? null,
-        volume24h: result.volume24h ?? cache.volume24h ?? null,
+        priceUsd:  result.priceUsd  ?? cache.priceUsd  ?? null,
+        priceGbp:  result.priceGbp  ?? cache.priceGbp  ?? null,
+        volumeUsd: result.volumeUsd ?? cache.volumeUsd ?? null,
+        volumeGbp: result.volumeGbp ?? cache.volumeGbp ?? null,
         fng:       result.fng       ?? cache.fng       ?? null,
         fees:      result.fees      ?? cache.fees      ?? null,
       })
@@ -151,38 +159,41 @@ export default function App() {
     return () => { active = false }
   }, [])
 
-  // Load chart whenever range changes; use session cache to avoid re-fetching
+  // Load chart whenever range or currency changes; cache by "range-currency"
   useEffect(() => {
     let active = true
     const days = RANGES.find(r => r.label === range)?.days ?? 7
+    const cacheKey = `${range}-${currency}`
 
-    if (chartCache.current.has(range)) {
-      setChart(chartCache.current.get(range))
+    if (chartCache.current.has(cacheKey)) {
+      setChart(chartCache.current.get(cacheKey))
       setChartLoading(false)
       return
     }
 
     setChartLoading(true)
     async function run() {
-      const result = await fetchChart(days)
+      const result = await fetchChart(days, currency)
       if (!active) return
-      chartCache.current.set(range, result)
+      chartCache.current.set(cacheKey, result)
       setChart(result)
       setChartLoading(false)
     }
     run()
     return () => { active = false }
-  }, [range])
+  }, [range, currency])
 
-  const { price, volume24h, fees, blockHeight, fng } = data ?? {}
+  const { priceUsd, priceGbp, volumeUsd, volumeGbp, fees, blockHeight, fng } = data ?? {}
+  const price  = currency === 'gbp' ? priceGbp  : priceUsd
+  const volume = currency === 'gbp' ? volumeGbp : volumeUsd
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
   const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
   const pad = (hi - lo) * 0.08
 
-  // Show roughly 7–8 x-axis ticks regardless of data length
-  const xInterval = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
+  const xInterval  = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
+  const currencySym = currency === 'gbp' ? '£' : '$'
 
   return (
     <div className="min-h-screen bg-gray-950 p-8 text-white">
@@ -190,19 +201,37 @@ export default function App() {
       {/* Header */}
       <header className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Bitcoin Dashboard</h1>
-        <p className="text-sm text-gray-500">
-          {lastUpdated
-            ? `Updated ${lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-            : loading ? 'Loading…' : ''
-          }
-        </p>
+        <div className="flex items-center gap-4">
+          {/* Currency toggle */}
+          <div className="flex gap-1">
+            {['usd', 'gbp'].map(c => (
+              <button
+                key={c}
+                onClick={() => setCurrency(c)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
+                  currency === c
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500">
+            {lastUpdated
+              ? `Updated ${lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+              : loading ? 'Loading…' : ''
+            }
+          </p>
+        </div>
       </header>
 
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-4 gap-4">
         <KpiCard
           label="BTC Price"
-          value={price != null ? fmtUsd(price) : null}
+          value={price != null ? fmtCurrency(price, currency) : null}
         />
         <KpiCard
           label="Fear & Greed"
@@ -215,7 +244,7 @@ export default function App() {
         />
         <KpiCard
           label="24h Volume"
-          value={fmtVolume(volume24h)}
+          value={fmtVolume(volume, currency)}
         />
       </div>
 
@@ -226,7 +255,7 @@ export default function App() {
         <div className="col-span-2 rounded-2xl bg-gray-900 p-6">
           <div className="mb-5 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-              Price · USD
+              Price · {currency.toUpperCase()}
             </p>
             <div className="flex gap-1">
               {RANGES.map(({ label }) => (
@@ -268,10 +297,10 @@ export default function App() {
                       domain={[lo - pad, hi + pad]}
                       tick={{ fill: '#6b7280', fontSize: 11 }}
                       axisLine={false} tickLine={false}
-                      tickFormatter={v => `$${Math.round(v / 1000)}k`}
+                      tickFormatter={v => `${currencySym}${Math.round(v / 1000)}k`}
                       width={52}
                     />
-                    <Tooltip content={<ChartTooltip />} />
+                    <Tooltip content={<ChartTooltip currency={currency} />} />
                     <Area
                       type="monotone" dataKey="price"
                       stroke={ORANGE} strokeWidth={2}
