@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -7,38 +7,58 @@ import './App.css'
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 
+const RANGES = [
+  { label: '1D',  days: 1     },
+  { label: '7D',  days: 7     },
+  { label: '1M',  days: 30    },
+  { label: '1Y',  days: 365   },
+  { label: '5Y',  days: 1825  },
+  { label: 'All', days: 'max' },
+]
+
+function parseChartData(json, days) {
+  if (!json?.prices?.length) return null
+  if (days === 1) {
+    return json.prices.map(([ts, p]) => ({
+      date: new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      price: Math.round(p),
+    }))
+  }
+  const dayMap = new Map()
+  json.prices.forEach(([ts, p]) => {
+    const d = new Date(ts)
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    dayMap.set(key, { ts, price: Math.round(p) })
+  })
+  return Array.from(dayMap.values()).map(({ ts, price }) => ({
+    date: new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    price,
+  }))
+}
+
 async function loadData() {
-  const [priceRes, chartRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true').then(r => r.json()),
-    fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=7').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
   ])
 
-  function parseChart(res) {
-    if (res.status !== 'fulfilled') return null
-    const dayMap = new Map()
-    res.value.prices?.forEach(([ts, p]) => {
-      const d = new Date(ts)
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-      dayMap.set(key, { ts, price: Math.round(p) })
-    })
-    return Array.from(dayMap.values()).map(({ ts, price }) => ({
-      date: new Date(ts).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
-      price,
-    }))
-  }
-
   const btc = priceRes.status === 'fulfilled' ? (priceRes.value.bitcoin ?? {}) : {}
   return {
-    price:     btc.usd          ?? null,
-    volume24h: btc.usd_24h_vol  ?? null,
-    chart:     parseChart(chartRes),
-    fees:      feesRes.status  === 'fulfilled' ? feesRes.value          : null,
-    blockHeight: heightRes.status === 'fulfilled' ? heightRes.value     : null,
-    fng:       fngRes.status   === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
+    price:       btc.usd          ?? null,
+    volume24h:   btc.usd_24h_vol  ?? null,
+    fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
+    blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
+    fng:         fngRes.status    === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
   }
+}
+
+async function fetchChart(days) {
+  const json = await fetch(
+    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+  ).then(r => r.json())
+  return parseChartData(json, days)
 }
 
 function readCache() {
@@ -101,10 +121,15 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export default function App() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [range, setRange]         = useState('7D')
+  const [chart, setChart]         = useState(null)
+  const [chartLoading, setChartLoading] = useState(true)
+  const chartCache = useRef(new Map())
 
+  // Load KPI data once on mount
   useEffect(() => {
     let active = true
     async function run() {
@@ -126,12 +151,38 @@ export default function App() {
     return () => { active = false }
   }, [])
 
-  const { price, volume24h, chart, fees, blockHeight, fng } = data ?? {}
+  // Load chart whenever range changes; use session cache to avoid re-fetching
+  useEffect(() => {
+    let active = true
+    const days = RANGES.find(r => r.label === range)?.days ?? 7
+
+    if (chartCache.current.has(range)) {
+      setChart(chartCache.current.get(range))
+      setChartLoading(false)
+      return
+    }
+
+    setChartLoading(true)
+    async function run() {
+      const result = await fetchChart(days)
+      if (!active) return
+      chartCache.current.set(range, result)
+      setChart(result)
+      setChartLoading(false)
+    }
+    run()
+    return () => { active = false }
+  }, [range])
+
+  const { price, volume24h, fees, blockHeight, fng } = data ?? {}
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
   const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
   const pad = (hi - lo) * 0.08
+
+  // Show roughly 7–8 x-axis ticks regardless of data length
+  const xInterval = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
 
   return (
     <div className="min-h-screen bg-gray-950 p-8 text-white">
@@ -173,42 +224,63 @@ export default function App() {
 
         {/* Price chart */}
         <div className="col-span-2 rounded-2xl bg-gray-900 p-6">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-widest text-gray-500">
-            7-Day Price · USD
-          </p>
-          {loading || !chart
+          <div className="mb-5 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+              Price · USD
+            </p>
+            <div className="flex gap-1">
+              {RANGES.map(({ label }) => (
+                <button
+                  key={label}
+                  onClick={() => setRange(label)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    range === label
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loading && !chart
             ? <Skeleton className="h-64" />
             : (
-              <ResponsiveContainer width="100%" height={264}>
-                <AreaChart data={chart} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
-                      <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: '#6b7280', fontSize: 11 }}
-                    axisLine={false} tickLine={false}
-                  />
-                  <YAxis
-                    domain={[lo - pad, hi + pad]}
-                    tick={{ fill: '#6b7280', fontSize: 11 }}
-                    axisLine={false} tickLine={false}
-                    tickFormatter={v => `$${Math.round(v / 1000)}k`}
-                    width={52}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area
-                    type="monotone" dataKey="price"
-                    stroke={ORANGE} strokeWidth={2}
-                    fill="url(#priceGrad)" dot={false}
-                    activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                <ResponsiveContainer width="100%" height={264}>
+                  <AreaChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
+                        <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      interval={xInterval}
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      domain={[lo - pad, hi + pad]}
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={v => `$${Math.round(v / 1000)}k`}
+                      width={52}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone" dataKey="price"
+                      stroke={ORANGE} strokeWidth={2}
+                      fill="url(#priceGrad)" dot={false}
+                      activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )
           }
         </div>
