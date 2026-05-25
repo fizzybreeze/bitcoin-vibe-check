@@ -196,11 +196,11 @@ export default function App() {
   const currencySym = currency === 'gbp' ? '£' : '$'
 
   return (
-    <div className="min-h-screen bg-gray-950 p-8 text-white">
+    <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
       {/* Header */}
       <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Bitcoin Dashboard</h1>
+        <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Dashboard</h1>
         <div className="flex items-center gap-4">
           {/* Currency toggle */}
           <div className="flex gap-1">
@@ -228,7 +228,7 @@ export default function App() {
       </header>
 
       {/* KPI row */}
-      <div className="mb-4 grid grid-cols-4 gap-4">
+      <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard
           label="BTC Price"
           value={price != null ? fmtCurrency(price, currency) : null}
@@ -249,15 +249,15 @@ export default function App() {
       </div>
 
       {/* Chart + Fees */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
         {/* Price chart */}
-        <div className="col-span-2 rounded-2xl bg-gray-900 p-6">
-          <div className="mb-5 flex items-center justify-between">
+        <div className="rounded-2xl bg-gray-900 p-6 md:col-span-2">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
               Price · {currency.toUpperCase()}
             </p>
-            <div className="flex gap-1">
+            <div className="flex gap-1 overflow-x-auto">
               {RANGES.map(({ label }) => (
                 <button
                   key={label}
@@ -319,7 +319,7 @@ export default function App() {
           <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-gray-500">
             Network Fees
           </p>
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-1 flex-row gap-3 md:flex-col">
             {loading || !fees
               ? [0, 1, 2].map(i => <Skeleton key={i} className="flex-1" />)
               : [
@@ -327,10 +327,10 @@ export default function App() {
                   { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
                   { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
                 ].map(({ label, time, value }) => (
-                  <div key={label} className="flex flex-1 flex-col justify-center rounded-2xl bg-gray-900 px-6 py-5">
+                  <div key={label} className="flex flex-1 flex-col justify-center rounded-2xl bg-gray-900 px-3 py-4 md:px-6 md:py-5">
                     <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-orange-400">{value}</span>
+                    <div className="mt-2 flex items-baseline gap-1 md:gap-2">
+                      <span className="text-xl font-bold text-orange-400 md:text-3xl">{value}</span>
                       <span className="text-sm text-gray-500">sat/vB</span>
                     </div>
                     <p className="mt-1 text-xs text-gray-600">{time}</p>
