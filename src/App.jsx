@@ -476,7 +476,10 @@ export default function App() {
 
       {/* Header */}
       <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Dashboard</h1>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
+          <p className="mt-0.5 text-xs text-gray-500">Read the room.</p>
+        </div>
         <div className="flex items-center gap-4">
           <div className="relative">
             <select
