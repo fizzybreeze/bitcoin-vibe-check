@@ -30,6 +30,14 @@ const FNG_COLOR = {
   'Extreme Greed':'text-green-400',
 }
 
+const WS_SYMBOL_MAP = {
+  'BTC/USD': 'priceUsd',
+  'BTC/GBP': 'priceGbp',
+  'BTC/EUR': 'priceEur',
+  'BTC/CAD': 'priceCad',
+  'BTC/CHF': 'priceChf',
+}
+
 function parseChartData(json, days) {
   if (!json?.prices?.length) return null
   if (days === 1) {
@@ -167,7 +175,10 @@ export default function App() {
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
-  const chartCache = useRef(new Map())
+  const [wsLive, setWsLive]           = useState(false)
+  const chartCache   = useRef(new Map())
+  const wsRef        = useRef(null)
+  const reconnectRef = useRef(null)
 
   // Load KPI data once on mount
   useEffect(() => {
@@ -198,6 +209,52 @@ export default function App() {
     }
     run()
     return () => { active = false }
+  }, [])
+
+  // Real-time price feed via Kraken WebSocket v2
+  useEffect(() => {
+    let retryDelay = 1000
+
+    function connect() {
+      const ws = new WebSocket('wss://ws.kraken.com/v2')
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          method: 'subscribe',
+          params: { channel: 'ticker', symbol: Object.keys(WS_SYMBOL_MAP) },
+        }))
+        setWsLive(true)
+        retryDelay = 1000
+      }
+
+      ws.onmessage = ({ data }) => {
+        const msg = JSON.parse(data)
+        if (msg.channel !== 'ticker' || !msg.data?.length) return
+        const updates = {}
+        for (const ticker of msg.data) {
+          const key = WS_SYMBOL_MAP[ticker.symbol]
+          if (key && ticker.last != null) updates[key] = Math.round(ticker.last)
+        }
+        const usdTicker = msg.data.find(t => t.symbol === 'BTC/USD')
+        if (usdTicker?.change_pct != null) updates.priceChange24h = usdTicker.change_pct
+        if (Object.keys(updates).length) setData(prev => prev ? { ...prev, ...updates } : prev)
+      }
+
+      ws.onclose = () => {
+        setWsLive(false)
+        reconnectRef.current = setTimeout(connect, retryDelay)
+        retryDelay = Math.min(retryDelay * 2, 30000)
+      }
+
+      ws.onerror = () => ws.close()
+    }
+
+    connect()
+    return () => {
+      clearTimeout(reconnectRef.current)
+      wsRef.current?.close()
+    }
   }, [])
 
   // Load chart whenever range or currency changes; cache by "range-currency"
@@ -265,8 +322,13 @@ export default function App() {
             </select>
             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-orange-400 text-xs">▾</span>
           </div>
-          <p className="text-sm text-gray-500">
-            {lastUpdated
+          <p className="flex items-center gap-1.5 text-sm text-gray-500">
+            {wsLive ? (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                Live
+              </>
+            ) : lastUpdated
               ? `Updated ${lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
               : loading ? 'Loading…' : ''
             }

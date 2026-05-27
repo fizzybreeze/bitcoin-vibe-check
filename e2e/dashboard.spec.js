@@ -19,6 +19,8 @@ async function mockApis(page) {
   await page.route('https://api.alternative.me/fng/**', route =>
     route.fulfill({ json: fngFixture })
   )
+  // Block the Kraken WebSocket so fixture price values are not overwritten
+  await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())
 }
 
 test.describe('Bitcoin Dashboard', () => {
