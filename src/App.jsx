@@ -129,7 +129,7 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
       <div className="mt-3">
         {value == null
           ? <Skeleton className="h-9 w-32" />
-          : <p className="text-3xl font-bold text-orange-400">{value}</p>
+          : <p className="text-2xl font-bold text-orange-400 md:text-3xl">{value}</p>
         }
         {change != null && value != null && (
           <p className={`mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
