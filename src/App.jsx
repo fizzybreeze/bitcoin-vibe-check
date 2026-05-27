@@ -14,6 +14,20 @@ const RANGES = [
   { label: '1Y', days: 365 },
 ]
 
+const RANGE_CHANGE_LABEL = {
+  '1D': '24h change',
+  '7D': '7d change',
+  '1M': '30d change',
+  '1Y': '1y change',
+}
+
+function computeChartChange(chartData) {
+  if (!chartData || chartData.length < 2) return null
+  const first = chartData[0].price
+  const last  = chartData[chartData.length - 1].price
+  return ((last - first) / first) * 100
+}
+
 function parseChartData(json, days) {
   if (!json?.prices?.length) return null
   if (days === 1) {
@@ -151,6 +165,7 @@ export default function App() {
   const [currency, setCurrency]       = useState('usd')
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
+  const [chartChange, setChartChange] = useState(null)
   const chartCache = useRef(new Map())
 
   // Load KPI data once on mount
@@ -185,17 +200,21 @@ export default function App() {
     const cacheKey = `${range}-${currency}`
 
     if (chartCache.current.has(cacheKey)) {
-      setChart(chartCache.current.get(cacheKey))
+      const cached = chartCache.current.get(cacheKey)
+      setChart(cached)
+      setChartChange(computeChartChange(cached))
       setChartLoading(false)
       return
     }
 
     setChartLoading(true)
+    setChartChange(null)
     async function run() {
       const result = await fetchChart(days, currency)
       if (!active) return
       if (result !== null) chartCache.current.set(cacheKey, result)
       setChart(result)
+      setChartChange(computeChartChange(result))
       setChartLoading(false)
     }
     run()
@@ -205,6 +224,9 @@ export default function App() {
   const { priceUsd, priceGbp, volumeUsd, volumeGbp, priceChange24h, fees, blockHeight, fng } = data ?? {}
   const price  = currency === 'gbp' ? priceGbp  : priceUsd
   const volume = currency === 'gbp' ? volumeGbp : volumeUsd
+
+  const displayedChange = range === '1D' ? (priceChange24h ?? null) : chartChange
+  const changeLabel = RANGE_CHANGE_LABEL[range]
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -251,7 +273,8 @@ export default function App() {
         <KpiCard
           label="BTC Price"
           value={price != null ? fmtCurrency(price, currency) : null}
-          change={priceChange24h ?? null}
+          change={displayedChange}
+          sub={displayedChange != null ? changeLabel : null}
         />
         <KpiCard
           label="Fear & Greed"
