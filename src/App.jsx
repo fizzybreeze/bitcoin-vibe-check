@@ -8,12 +8,10 @@ const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 
 const RANGES = [
-  { label: '1D',  days: 1     },
-  { label: '7D',  days: 7     },
-  { label: '1M',  days: 30    },
-  { label: '1Y',  days: 365   },
-  { label: '5Y',  days: 1825  },
-  { label: 'All', days: 'max' },
+  { label: '1D', days: 1   },
+  { label: '7D', days: 7   },
+  { label: '1M', days: 30  },
+  { label: '1Y', days: 365 },
 ]
 
 function parseChartData(json, days) {
@@ -25,19 +23,14 @@ function parseChartData(json, days) {
       volume: json.total_volumes?.[i]?.[1] ?? 0,
     }))
   }
-  const isLongRange = days === 'max' || days >= 1825
   const bucketMap = new Map()
   json.prices.forEach(([ts, p], i) => {
     const d = new Date(ts)
-    const key = isLongRange
-      ? `${d.getFullYear()}-${d.getMonth()}`
-      : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
     bucketMap.set(key, { ts, price: Math.round(p), volume: json.total_volumes?.[i]?.[1] ?? 0 })
   })
   return Array.from(bucketMap.values()).map(({ ts, price, volume }) => ({
-    date: isLongRange
-      ? new Date(ts).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-      : new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    date: new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     price,
     volume,
   }))
