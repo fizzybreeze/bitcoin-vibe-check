@@ -3,6 +3,7 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import './App.css'
+import { CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange } from './utils.js'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -21,19 +22,12 @@ const RANGE_CHANGE_LABEL = {
   '1Y': '1y change',
 }
 
-const CURRENCY_META = {
-  usd: { sym: '$',   locale: 'en-US' },
-  gbp: { sym: '£',   locale: 'en-GB' },
-  eur: { sym: '€',   locale: 'de-DE' },
-  cad: { sym: 'C$',  locale: 'en-CA' },
-  chf: { sym: 'Fr.', locale: 'de-CH' },
-}
-
-function computeChartChange(chartData) {
-  if (!chartData || chartData.length < 2) return null
-  const first = chartData[0].price
-  const last  = chartData[chartData.length - 1].price
-  return ((last - first) / first) * 100
+const FNG_COLOR = {
+  'Extreme Fear': 'text-red-400',
+  'Fear':         'text-amber-400',
+  'Neutral':      'text-yellow-400',
+  'Greed':        'text-lime-400',
+  'Extreme Greed':'text-green-400',
 }
 
 function parseChartData(json, days) {
@@ -115,24 +109,11 @@ function writeCache(data) {
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
-const fmtCurrency = (n, currency) =>
-  new Intl.NumberFormat(CURRENCY_META[currency]?.locale ?? 'en-US', {
-    style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0,
-  }).format(n)
-
-const fmtVolume = (n, currency) => {
-  if (n == null) return null
-  const sym = CURRENCY_META[currency]?.sym ?? '$'
-  if (n >= 1e9) return `${sym}${(n / 1e9).toFixed(1)}B`
-  if (n >= 1e6) return `${sym}${(n / 1e6).toFixed(0)}M`
-  return fmtCurrency(n, currency)
-}
-
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
 }
 
-function KpiCard({ label, value, sub, change }) {
+export function KpiCard({ label, value, sub, subClassName, change }) {
   const changePositive = change != null && change >= 0
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
@@ -148,7 +129,7 @@ function KpiCard({ label, value, sub, change }) {
           </p>
         )}
         {sub && value != null && (
-          <p className="mt-1.5 text-sm text-gray-400">{sub}</p>
+          <p className={`mt-1.5 text-sm ${subClassName ?? 'text-gray-400'}`}>{sub}</p>
         )}
       </div>
     </div>
@@ -305,6 +286,7 @@ export default function App() {
           label="Fear & Greed"
           value={fng?.value ?? null}
           sub={fng?.value_classification}
+          subClassName={FNG_COLOR[fng?.value_classification]}
         />
         <KpiCard
           label="Block Height"
