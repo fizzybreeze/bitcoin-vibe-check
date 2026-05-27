@@ -21,6 +21,14 @@ const RANGE_CHANGE_LABEL = {
   '1Y': '1y change',
 }
 
+const CURRENCY_META = {
+  usd: { sym: '$',   locale: 'en-US' },
+  gbp: { sym: '£',   locale: 'en-GB' },
+  eur: { sym: '€',   locale: 'de-DE' },
+  cad: { sym: 'C$',  locale: 'en-CA' },
+  chf: { sym: 'Fr.', locale: 'de-CH' },
+}
+
 function computeChartChange(chartData) {
   if (!chartData || chartData.length < 2) return null
   const first = chartData[0].price
@@ -52,7 +60,7 @@ function parseChartData(json, days) {
 
 async function loadData() {
   const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
@@ -62,8 +70,14 @@ async function loadData() {
   return {
     priceUsd:      btc.usd          ?? null,
     priceGbp:      btc.gbp          ?? null,
+    priceEur:      btc.eur          ?? null,
+    priceCad:      btc.cad          ?? null,
+    priceChf:      btc.chf          ?? null,
     volumeUsd:     btc.usd_24h_vol  ?? null,
     volumeGbp:     btc.gbp_24h_vol  ?? null,
+    volumeEur:     btc.eur_24h_vol  ?? null,
+    volumeCad:     btc.cad_24h_vol  ?? null,
+    volumeChf:     btc.chf_24h_vol  ?? null,
     priceChange24h: btc.usd_24h_change ?? null,
     fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
     blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
@@ -87,8 +101,14 @@ function writeCache(data) {
   const patch = {}
   if (data.priceUsd       != null) patch.priceUsd       = data.priceUsd
   if (data.priceGbp       != null) patch.priceGbp       = data.priceGbp
+  if (data.priceEur       != null) patch.priceEur       = data.priceEur
+  if (data.priceCad       != null) patch.priceCad       = data.priceCad
+  if (data.priceChf       != null) patch.priceChf       = data.priceChf
   if (data.volumeUsd      != null) patch.volumeUsd      = data.volumeUsd
   if (data.volumeGbp      != null) patch.volumeGbp      = data.volumeGbp
+  if (data.volumeEur      != null) patch.volumeEur      = data.volumeEur
+  if (data.volumeCad      != null) patch.volumeCad      = data.volumeCad
+  if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
   if (data.fng            != null) patch.fng            = data.fng
   if (data.fees           != null) patch.fees           = data.fees
@@ -96,13 +116,13 @@ function writeCache(data) {
 }
 
 const fmtCurrency = (n, currency) =>
-  new Intl.NumberFormat(currency === 'gbp' ? 'en-GB' : 'en-US', {
+  new Intl.NumberFormat(CURRENCY_META[currency]?.locale ?? 'en-US', {
     style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0,
   }).format(n)
 
 const fmtVolume = (n, currency) => {
   if (n == null) return null
-  const sym = currency === 'gbp' ? '£' : '$'
+  const sym = CURRENCY_META[currency]?.sym ?? '$'
   if (n >= 1e9) return `${sym}${(n / 1e9).toFixed(1)}B`
   if (n >= 1e6) return `${sym}${(n / 1e6).toFixed(0)}M`
   return fmtCurrency(n, currency)
@@ -180,8 +200,14 @@ export default function App() {
         ...result,
         priceUsd:       result.priceUsd       ?? cache.priceUsd       ?? null,
         priceGbp:       result.priceGbp       ?? cache.priceGbp       ?? null,
+        priceEur:       result.priceEur       ?? cache.priceEur       ?? null,
+        priceCad:       result.priceCad       ?? cache.priceCad       ?? null,
+        priceChf:       result.priceChf       ?? cache.priceChf       ?? null,
         volumeUsd:      result.volumeUsd      ?? cache.volumeUsd      ?? null,
         volumeGbp:      result.volumeGbp      ?? cache.volumeGbp      ?? null,
+        volumeEur:      result.volumeEur      ?? cache.volumeEur      ?? null,
+        volumeCad:      result.volumeCad      ?? cache.volumeCad      ?? null,
+        volumeChf:      result.volumeChf      ?? cache.volumeChf      ?? null,
         priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
@@ -221,9 +247,11 @@ export default function App() {
     return () => { active = false }
   }, [range, currency])
 
-  const { priceUsd, priceGbp, volumeUsd, volumeGbp, priceChange24h, fees, blockHeight, fng } = data ?? {}
-  const price  = currency === 'gbp' ? priceGbp  : priceUsd
-  const volume = currency === 'gbp' ? volumeGbp : volumeUsd
+  const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
+          volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
+          priceChange24h, fees, blockHeight, fng } = data ?? {}
+  const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
+  const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
   const displayedChange = range === '1D' ? (priceChange24h ?? null) : chartChange
   const changeLabel = RANGE_CHANGE_LABEL[range]
@@ -234,7 +262,7 @@ export default function App() {
   const pad = (hi - lo) * 0.08
 
   const xInterval  = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
-  const currencySym = currency === 'gbp' ? '£' : '$'
+  const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
@@ -244,20 +272,17 @@ export default function App() {
         <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Dashboard</h1>
         <div className="flex items-center gap-4">
           {/* Currency toggle */}
-          <div className="flex gap-1">
-            {['usd', 'gbp'].map(c => (
-              <button
-                key={c}
-                onClick={() => setCurrency(c)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase transition-colors ${
-                  currency === c
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
+          <div className="relative">
+            <select
+              value={currency}
+              onChange={e => setCurrency(e.target.value)}
+              className="appearance-none cursor-pointer rounded-full bg-gray-800 pl-3 pr-7 py-1 text-xs font-semibold uppercase text-orange-400 outline-none"
+            >
+              {['usd', 'gbp', 'eur', 'cad', 'chf'].map(c => (
+                <option key={c} value={c}>{c.toUpperCase()}</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-orange-400 text-xs">▾</span>
           </div>
           <p className="text-sm text-gray-500">
             {lastUpdated
