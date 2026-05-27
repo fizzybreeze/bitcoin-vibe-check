@@ -146,19 +146,20 @@ function FngArc({ score, classification }) {
 }
 
 function DifficultyBar({ change }) {
-  const halfW  = 40
   const capped = change != null ? Math.max(-10, Math.min(10, change)) : 0
-  const fillW  = Math.abs(capped) / 10 * halfW
-  // negative = easier = green fills left; positive = harder = red fills right
-  const fillX     = capped >= 0 ? halfW : halfW - fillW
-  const fillColor = capped >= 0 ? '#f87171' : '#4ade80'
+  const pct    = Math.abs(capped) / 10 * 50
+  const isPositive = capped >= 0
   return (
     <div className="mt-3">
-      <svg width="80" height="6" viewBox="0 0 80 6">
-        <rect x={0} y={0} width={80} height={6} rx={3} fill="#1f2937" />
-        {change != null && <rect x={fillX} y={0} width={fillW} height={6} fill={fillColor} />}
-        <rect x={39} y={0} width={2} height={6} fill="#374151" />
-      </svg>
+      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+        {change != null && (
+          <div
+            className={`absolute top-0 h-full ${isPositive ? 'left-1/2' : 'right-1/2'} ${isPositive ? 'bg-red-400' : 'bg-green-400'}`}
+            style={{ width: `${pct}%` }}
+          />
+        )}
+        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-px bg-gray-600" />
+      </div>
       <div className="mt-1 flex justify-between">
         <span className="text-xs text-gray-700">Bearish</span>
         <span className="text-xs text-gray-700">Bullish</span>
@@ -215,7 +216,7 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
                 ? <p className="text-2xl font-bold text-gray-600">—</p>
-                : <p className="text-2xl font-bold text-gray-400">
+                : <p className="text-2xl font-bold text-orange-400">
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
