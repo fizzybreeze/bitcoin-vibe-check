@@ -134,13 +134,13 @@ function Skeleton({ className = '' }) {
 
 function FngArc({ score, classification }) {
   const angle    = score != null ? (180 - (score / 100) * 180) * Math.PI / 180 : null
-  const dotX     = angle != null ? 40 + 32 * Math.cos(angle) : null
-  const dotY     = angle != null ? 40 - 32 * Math.sin(angle) : null
+  const dotX     = angle != null ? 60 + 50 * Math.cos(angle) : null
+  const dotY     = angle != null ? 60 - 50 * Math.sin(angle) : null
   const dotColor = FNG_DOT_COLOR[classification] ?? ORANGE
   return (
-    <svg width="80" height="45" viewBox="0 0 80 45" className="mt-3">
-      <path d="M 8 40 A 32 32 0 0 1 72 40" fill="none" stroke="#1f2937" strokeWidth="4" strokeLinecap="round" />
-      {dotX != null && <circle cx={dotX} cy={dotY} r={4} fill={dotColor} />}
+    <svg width="120" height="65" viewBox="0 0 120 65" className="mt-5">
+      <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#1f2937" strokeWidth="5" strokeLinecap="round" />
+      {dotX != null && <circle cx={dotX} cy={dotY} r={5} fill={dotColor} />}
     </svg>
   )
 }
@@ -167,6 +167,15 @@ function DifficultyBar({ change }) {
   )
 }
 
+function diffInterpretation(change) {
+  if (change == null) return null
+  if (change < -4)  return { text: 'Miners Slowing',     cls: 'text-green-400' }
+  if (change < -1)  return { text: 'Slightly Easier',    cls: 'text-green-400' }
+  if (change <= 1)  return { text: 'Stable',             cls: 'text-gray-500'  }
+  if (change <= 4)  return { text: 'Slightly Harder',    cls: 'text-red-400'   }
+  return                   { text: 'Miners Speeding Up', cls: 'text-red-400'   }
+}
+
 function NetworkPulseCard({ fng, difficulty, loading }) {
   const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
   const fngClass       = fng?.value_classification ?? null
@@ -175,6 +184,7 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
   const diffDays       = remainingBlocks != null
     ? Math.round(remainingBlocks * 10 / 60 / 24)
     : null
+  const diffInterp     = diffInterpretation(diffChange)
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
@@ -205,18 +215,19 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
                 ? <p className="text-2xl font-bold text-gray-600">—</p>
-                : <p className="text-2xl font-bold text-orange-400">
+                : <p className="text-2xl font-bold text-gray-400">
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
+            <p className={`mt-1 text-sm ${diffInterp ? diffInterp.cls : 'text-gray-500'}`}>
+              {loading ? ' ' : diffInterp ? diffInterp.text : (diffChange == null ? 'Unavailable' : ' ')}
+            </p>
             <p className="mt-1 text-xs text-gray-500">
               {loading
                 ? ' '
-                : diffChange == null
-                  ? 'Unavailable'
-                  : remainingBlocks != null
-                    ? `in ${remainingBlocks.toLocaleString('en-US')} blocks (~${diffDays}d)`
-                    : ' '
+                : remainingBlocks != null
+                  ? `in ${remainingBlocks.toLocaleString('en-US')} blocks (~${diffDays}d)`
+                  : ' '
               }
             </p>
             <DifficultyBar change={loading ? null : diffChange} />
