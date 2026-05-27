@@ -30,6 +30,14 @@ const FNG_COLOR = {
   'Extreme Greed':'text-green-400',
 }
 
+const FNG_DOT_COLOR = {
+  'Extreme Fear': '#f87171',
+  'Fear':         '#fbbf24',
+  'Neutral':      '#facc15',
+  'Greed':        '#a3e635',
+  'Extreme Greed':'#4ade80',
+}
+
 const WS_SYMBOL_MAP = {
   'BTC/USD': 'priceUsd',
   'BTC/GBP': 'priceGbp',
@@ -61,29 +69,31 @@ function parseChartData(json, days) {
 }
 
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes, diffRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
+    fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
   ])
 
   const btc = priceRes.status === 'fulfilled' ? (priceRes.value.bitcoin ?? {}) : {}
   return {
-    priceUsd:      btc.usd          ?? null,
-    priceGbp:      btc.gbp          ?? null,
-    priceEur:      btc.eur          ?? null,
-    priceCad:      btc.cad          ?? null,
-    priceChf:      btc.chf          ?? null,
-    volumeUsd:     btc.usd_24h_vol  ?? null,
-    volumeGbp:     btc.gbp_24h_vol  ?? null,
-    volumeEur:     btc.eur_24h_vol  ?? null,
-    volumeCad:     btc.cad_24h_vol  ?? null,
-    volumeChf:     btc.chf_24h_vol  ?? null,
+    priceUsd:       btc.usd          ?? null,
+    priceGbp:       btc.gbp          ?? null,
+    priceEur:       btc.eur          ?? null,
+    priceCad:       btc.cad          ?? null,
+    priceChf:       btc.chf          ?? null,
+    volumeUsd:      btc.usd_24h_vol  ?? null,
+    volumeGbp:      btc.gbp_24h_vol  ?? null,
+    volumeEur:      btc.eur_24h_vol  ?? null,
+    volumeCad:      btc.cad_24h_vol  ?? null,
+    volumeChf:      btc.chf_24h_vol  ?? null,
     priceChange24h: btc.usd_24h_change ?? null,
-    fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
-    blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
-    fng:         fngRes.status    === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
+    fees:           feesRes.status === 'fulfilled' ? feesRes.value              : null,
+    blockHeight:    heightRes.status === 'fulfilled' ? heightRes.value          : null,
+    fng:            fngRes.status === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
+    difficulty:     diffRes.status === 'fulfilled' ? diffRes.value             : null,
   }
 }
 
@@ -113,12 +123,150 @@ function writeCache(data) {
   if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
   if (data.fng            != null) patch.fng            = data.fng
+  if (data.difficulty     != null) patch.difficulty     = data.difficulty
   if (data.fees           != null) patch.fees           = data.fees
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
+}
+
+function FngArc({ score, classification }) {
+  const angle    = score != null ? (180 - (score / 100) * 180) * Math.PI / 180 : null
+  const dotX     = angle != null ? 40 + 32 * Math.cos(angle) : null
+  const dotY     = angle != null ? 40 - 32 * Math.sin(angle) : null
+  const dotColor = FNG_DOT_COLOR[classification] ?? ORANGE
+  return (
+    <svg width="80" height="45" viewBox="0 0 80 45" className="mt-3">
+      <path d="M 8 40 A 32 32 0 0 1 72 40" fill="none" stroke="#1f2937" strokeWidth="4" strokeLinecap="round" />
+      {dotX != null && <circle cx={dotX} cy={dotY} r={4} fill={dotColor} />}
+    </svg>
+  )
+}
+
+function DifficultyBar({ change }) {
+  const halfW  = 40
+  const capped = change != null ? Math.max(-10, Math.min(10, change)) : 0
+  const fillW  = Math.abs(capped) / 10 * halfW
+  // negative = easier = green fills left; positive = harder = red fills right
+  const fillX     = capped >= 0 ? halfW : halfW - fillW
+  const fillColor = capped >= 0 ? '#f87171' : '#4ade80'
+  return (
+    <div className="mt-3">
+      <svg width="80" height="6" viewBox="0 0 80 6">
+        <rect x={0} y={0} width={80} height={6} rx={3} fill="#1f2937" />
+        {change != null && <rect x={fillX} y={0} width={fillW} height={6} fill={fillColor} />}
+        <rect x={39} y={0} width={2} height={6} fill="#374151" />
+      </svg>
+      <div className="mt-1 flex justify-between">
+        <span className="text-xs text-gray-700">-10%</span>
+        <span className="text-xs text-gray-700">+10%</span>
+      </div>
+    </div>
+  )
+}
+
+function NetworkPulseCard({ fng, difficulty, loading }) {
+  const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
+  const fngClass       = fng?.value_classification ?? null
+  const diffChange     = difficulty?.difficultyChange ?? null
+  const remainingBlocks = difficulty?.remainingBlocks ?? null
+  const diffDays       = remainingBlocks != null
+    ? Math.round(remainingBlocks * 10 / 60 / 24)
+    : null
+  const diffColorClass = diffChange == null
+    ? 'text-gray-500'
+    : diffChange < 0 ? 'text-green-400' : 'text-red-400'
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
+      <div className="mt-3 flex gap-4">
+
+        {/* Fear & Greed column */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear &amp; Greed</p>
+          <div className="mt-2">
+            {loading || fngScore == null
+              ? <Skeleton className="h-8 w-10" />
+              : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
+            }
+            <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
+              {fngClass ?? (loading ? ' ' : '—')}
+            </p>
+            <FngArc score={loading ? null : fngScore} classification={fngClass} />
+          </div>
+        </div>
+
+        <div className="w-px self-stretch bg-gray-800" />
+
+        {/* Difficulty column */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty</p>
+          <div className="mt-2">
+            {loading
+              ? <Skeleton className="h-8 w-16" />
+              : diffChange == null
+                ? <p className="text-2xl font-bold text-gray-600">—</p>
+                : <p className={`text-2xl font-bold ${diffColorClass}`}>
+                    {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
+                  </p>
+            }
+            <p className="mt-1 text-xs text-gray-500">
+              {loading
+                ? ' '
+                : diffChange == null
+                  ? 'Unavailable'
+                  : remainingBlocks != null
+                    ? `in ${remainingBlocks.toLocaleString('en-US')} blocks (~${diffDays}d)`
+                    : ' '
+              }
+            </p>
+            <DifficultyBar change={loading ? null : diffChange} />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+function BtcPriceCard({ value, change, sub }) {
+  const changePositive = change != null && change >= 0
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">BTC Price</p>
+      {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
+      <div className="mt-3 flex items-center justify-between md:block">
+        <div>
+          {value == null
+            ? <Skeleton className="h-9 w-32" />
+            : <p className="text-2xl font-bold text-orange-400 md:text-3xl">{value}</p>
+          }
+          {/* Desktop-only stacked change */}
+          {change != null && value != null && (
+            <p className={`hidden md:block mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
+              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
+            </p>
+          )}
+          {/* Desktop-only stacked sub */}
+          {sub && value != null && (
+            <p className="hidden md:block mt-1.5 text-sm text-gray-400">{sub}</p>
+          )}
+        </div>
+        {/* Mobile-only: change + sub on right, vertically centred via parent items-center */}
+        {change != null && value != null && (
+          <div className="md:hidden text-right shrink-0 ml-3">
+            <p className={`text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
+              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
+            </p>
+            {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function KpiCard({ label, value, sub, subClassName, change }) {
@@ -180,7 +328,7 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
-  // Load KPI data once on mount
+  // Load KPI data on mount
   useEffect(() => {
     let active = true
     async function run() {
@@ -202,6 +350,7 @@ export default function App() {
         volumeChf:      result.volumeChf      ?? cache.volumeChf      ?? null,
         priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
+        difficulty:     result.difficulty     ?? cache.difficulty     ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
       })
       setLastUpdated(new Date())
@@ -209,6 +358,26 @@ export default function App() {
     }
     run()
     return () => { active = false }
+  }, [])
+
+  // 60-second refresh cycle for KPI data (prices handled by WebSocket)
+  useEffect(() => {
+    const id = setInterval(async () => {
+      const result = await loadData()
+      writeCache(result)
+      setData(prev => {
+        if (!prev) return prev
+        const patch = {}
+        if (result.fng          != null) patch.fng          = result.fng
+        if (result.difficulty   != null) patch.difficulty   = result.difficulty
+        if (result.fees         != null) patch.fees         = result.fees
+        if (result.blockHeight  != null) patch.blockHeight  = result.blockHeight
+        if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
+        return { ...prev, ...patch }
+      })
+      setLastUpdated(new Date())
+    }, 60000)
+    return () => clearInterval(id)
   }, [])
 
   // Real-time price feed via Kraken WebSocket v2
@@ -287,7 +456,7 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, difficulty } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -299,7 +468,7 @@ export default function App() {
   const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
   const pad = (hi - lo) * 0.08
 
-  const xInterval  = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
+  const xInterval   = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
   const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 
   return (
@@ -309,7 +478,6 @@ export default function App() {
       <header className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Dashboard</h1>
         <div className="flex items-center gap-4">
-          {/* Currency toggle */}
           <div className="relative">
             <select
               value={currency}
@@ -338,18 +506,18 @@ export default function App() {
 
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard
-          label="BTC Price"
-          value={price != null ? fmtCurrency(price, currency) : null}
-          change={displayedChange}
-          sub={displayedChange != null ? changeLabel : null}
-        />
-        <KpiCard
-          label="Fear & Greed"
-          value={fng?.value ?? null}
-          sub={fng?.value_classification}
-          subClassName={FNG_COLOR[fng?.value_classification]}
-        />
+        {/* BTC Price: full-width on mobile, one col on desktop */}
+        <div className="col-span-2 md:col-span-1">
+          <BtcPriceCard
+            value={price != null ? fmtCurrency(price, currency) : null}
+            change={displayedChange}
+            sub={displayedChange != null ? changeLabel : null}
+          />
+        </div>
+        {/* Network Pulse: full-width on mobile, one col on desktop */}
+        <div className="col-span-2 md:col-span-1">
+          <NetworkPulseCard fng={fng} difficulty={difficulty} loading={loading} />
+        </div>
         <KpiCard
           label="Block Height"
           value={blockHeight != null ? blockHeight.toLocaleString('en-US') : null}
