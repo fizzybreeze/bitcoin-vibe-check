@@ -61,14 +61,20 @@ function parseChartData(json, days) {
 }
 
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes, sentiRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
+    fetch('https://api.senticrypt.com/v2/all.json').then(r => r.json()),
   ])
 
   const btc = priceRes.status === 'fulfilled' ? (priceRes.value.bitcoin ?? {}) : {}
+  let sentiCrypt = null
+  if (sentiRes.status === 'fulfilled' && Array.isArray(sentiRes.value) && sentiRes.value.length > 0) {
+    const latest = sentiRes.value[sentiRes.value.length - 1]
+    if (latest?.mean != null) sentiCrypt = { mean: latest.mean }
+  }
   return {
     priceUsd:      btc.usd          ?? null,
     priceGbp:      btc.gbp          ?? null,
@@ -84,6 +90,7 @@ async function loadData() {
     fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
     blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
     fng:         fngRes.status    === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
+    sentiCrypt,
   }
 }
 
@@ -113,12 +120,117 @@ function writeCache(data) {
   if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
   if (data.fng            != null) patch.fng            = data.fng
+  if (data.sentiCrypt     != null) patch.sentiCrypt     = data.sentiCrypt
   if (data.fees           != null) patch.fees           = data.fees
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
+const FNG_DOT_COLOR = {
+  'Extreme Fear': '#f87171',
+  'Fear':         '#fbbf24',
+  'Neutral':      '#facc15',
+  'Greed':        '#a3e635',
+  'Extreme Greed':'#4ade80',
+}
+
+const SENTI_COLOR = {
+  Bullish: 'text-green-400',
+  Neutral: 'text-yellow-400',
+  Bearish: 'text-red-400',
+}
+
+function sentiCryptLabel(mean) {
+  if (mean == null) return null
+  if (mean > 0.2) return 'Bullish'
+  if (mean < -0.2) return 'Bearish'
+  return 'Neutral'
+}
+
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
+}
+
+function FngArc({ score, classification }) {
+  const angle    = score != null ? (180 - (score / 100) * 180) * Math.PI / 180 : null
+  const dotX     = angle != null ? 40 + 32 * Math.cos(angle) : null
+  const dotY     = angle != null ? 40 - 32 * Math.sin(angle) : null
+  const dotColor = FNG_DOT_COLOR[classification] ?? ORANGE
+  return (
+    <svg width="80" height="45" viewBox="0 0 80 45" className="mt-3">
+      <path d="M 8 40 A 32 32 0 0 1 72 40" fill="none" stroke="#1f2937" strokeWidth="4" strokeLinecap="round" />
+      {dotX != null && <circle cx={dotX} cy={dotY} r={4} fill={dotColor} />}
+    </svg>
+  )
+}
+
+function SentiBar({ mean }) {
+  const halfW     = 40
+  const fillW     = mean != null ? Math.abs(mean) * halfW : 0
+  const fillX     = mean != null && mean < 0 ? halfW - fillW : halfW
+  const fillColor = mean != null && mean >= 0 ? '#4ade80' : '#f87171'
+  return (
+    <div className="mt-3">
+      <svg width="80" height="6" viewBox="0 0 80 6">
+        <rect x={0} y={0} width={80} height={6} rx={3} fill="#1f2937" />
+        {mean != null && <rect x={fillX} y={0} width={fillW} height={6} fill={fillColor} />}
+        <rect x={39} y={0} width={2} height={6} fill="#374151" />
+      </svg>
+      <div className="mt-1 flex justify-between">
+        <span className="text-xs text-gray-700">-1</span>
+        <span className="text-xs text-gray-700">+1</span>
+      </div>
+    </div>
+  )
+}
+
+function SentimentCard({ fng, sentiCrypt, loading }) {
+  const fngScore  = fng?.value != null ? parseInt(fng.value, 10) : null
+  const fngClass  = fng?.value_classification ?? null
+  const sentiMean = sentiCrypt?.mean ?? null
+  const sentiLbl  = sentiCryptLabel(sentiMean)
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Market Sentiment</p>
+      <div className="mt-3 flex gap-4">
+        {/* Fear & Greed */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear & Greed</p>
+          <div className="mt-2">
+            {loading || fngScore == null
+              ? <Skeleton className="h-8 w-10" />
+              : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
+            }
+            <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
+              {fngClass ?? (loading ? ' ' : '—')}
+            </p>
+            <FngArc score={loading ? null : fngScore} classification={fngClass} />
+          </div>
+        </div>
+
+        <div className="w-px self-stretch bg-gray-800" />
+
+        {/* SentiCrypt */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">SentiCrypt</p>
+          <div className="mt-2">
+            {loading
+              ? <Skeleton className="h-8 w-14" />
+              : sentiMean == null
+                ? <p className="text-2xl font-bold text-gray-600">—</p>
+                : <p className="text-2xl font-bold text-orange-400">
+                    {sentiMean >= 0 ? '+' : ''}{sentiMean.toFixed(2)}
+                  </p>
+            }
+            <p className={`mt-1 text-sm ${loading ? 'text-gray-600' : sentiMean == null ? 'text-gray-600' : (SENTI_COLOR[sentiLbl] ?? 'text-gray-400')}`}>
+              {loading ? ' ' : sentiMean == null ? 'Unavailable' : sentiLbl}
+            </p>
+            {!loading && <SentiBar mean={sentiMean} />}
+            {loading && <div className="mt-3 h-[45px]" />}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function KpiCard({ label, value, sub, subClassName, change }) {
@@ -202,6 +314,7 @@ export default function App() {
         volumeChf:      result.volumeChf      ?? cache.volumeChf      ?? null,
         priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
+        sentiCrypt:     result.sentiCrypt     ?? cache.sentiCrypt     ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
       })
       setLastUpdated(new Date())
@@ -287,7 +400,7 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, sentiCrypt } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -344,12 +457,7 @@ export default function App() {
           change={displayedChange}
           sub={displayedChange != null ? changeLabel : null}
         />
-        <KpiCard
-          label="Fear & Greed"
-          value={fng?.value ?? null}
-          sub={fng?.value_classification}
-          subClassName={FNG_COLOR[fng?.value_classification]}
-        />
+        <SentimentCard fng={fng} sentiCrypt={sentiCrypt} loading={loading} />
         <KpiCard
           label="Block Height"
           value={blockHeight != null ? blockHeight.toLocaleString('en-US') : null}
@@ -464,7 +572,7 @@ export default function App() {
       </div>
 
       <p className="mt-8 text-center text-xs text-gray-700">
-        CoinGecko · mempool.space · alternative.me
+        CoinGecko · mempool.space · alternative.me · senticrypt.com
       </p>
 
     </div>
