@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import './App.css'
 
@@ -8,35 +8,44 @@ const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 
 const RANGES = [
-  { label: '1D', days: 1   },
-  { label: '7D', days: 7   },
-  { label: '1M', days: 30  },
-  { label: '1Y', days: 365 },
+  { label: '1D',  days: 1     },
+  { label: '7D',  days: 7     },
+  { label: '1M',  days: 30    },
+  { label: '1Y',  days: 365   },
+  { label: '5Y',  days: 1825  },
+  { label: 'All', days: 'max' },
 ]
 
 function parseChartData(json, days) {
   if (!json?.prices?.length) return null
   if (days === 1) {
-    return json.prices.map(([ts, p]) => ({
+    return json.prices.map(([ts, p], i) => ({
       date: new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       price: Math.round(p),
+      volume: json.total_volumes?.[i]?.[1] ?? 0,
     }))
   }
-  const dayMap = new Map()
-  json.prices.forEach(([ts, p]) => {
+  const isLongRange = days === 'max' || days >= 1825
+  const bucketMap = new Map()
+  json.prices.forEach(([ts, p], i) => {
     const d = new Date(ts)
-    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-    dayMap.set(key, { ts, price: Math.round(p) })
+    const key = isLongRange
+      ? `${d.getFullYear()}-${d.getMonth()}`
+      : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    bucketMap.set(key, { ts, price: Math.round(p), volume: json.total_volumes?.[i]?.[1] ?? 0 })
   })
-  return Array.from(dayMap.values()).map(({ ts, price }) => ({
-    date: new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+  return Array.from(bucketMap.values()).map(({ ts, price, volume }) => ({
+    date: isLongRange
+      ? new Date(ts).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+      : new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     price,
+    volume,
   }))
 }
 
 async function loadData() {
   const [priceRes, feesRes, heightRes, fngRes] = await Promise.allSettled([
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp&include_24hr_vol=true').then(r => r.json()),
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
@@ -44,10 +53,11 @@ async function loadData() {
 
   const btc = priceRes.status === 'fulfilled' ? (priceRes.value.bitcoin ?? {}) : {}
   return {
-    priceUsd:   btc.usd          ?? null,
-    priceGbp:   btc.gbp          ?? null,
-    volumeUsd:  btc.usd_24h_vol  ?? null,
-    volumeGbp:  btc.gbp_24h_vol  ?? null,
+    priceUsd:      btc.usd          ?? null,
+    priceGbp:      btc.gbp          ?? null,
+    volumeUsd:     btc.usd_24h_vol  ?? null,
+    volumeGbp:     btc.gbp_24h_vol  ?? null,
+    priceChange24h: btc.usd_24h_change ?? null,
     fees:        feesRes.status   === 'fulfilled' ? feesRes.value              : null,
     blockHeight: heightRes.status === 'fulfilled' ? heightRes.value            : null,
     fng:         fngRes.status    === 'fulfilled' ? (fngRes.value.data?.[0] ?? null) : null,
@@ -68,12 +78,13 @@ function readCache() {
 function writeCache(data) {
   const prev = readCache() ?? {}
   const patch = {}
-  if (data.priceUsd  != null) patch.priceUsd  = data.priceUsd
-  if (data.priceGbp  != null) patch.priceGbp  = data.priceGbp
-  if (data.volumeUsd != null) patch.volumeUsd = data.volumeUsd
-  if (data.volumeGbp != null) patch.volumeGbp = data.volumeGbp
-  if (data.fng       != null) patch.fng       = data.fng
-  if (data.fees      != null) patch.fees      = data.fees
+  if (data.priceUsd       != null) patch.priceUsd       = data.priceUsd
+  if (data.priceGbp       != null) patch.priceGbp       = data.priceGbp
+  if (data.volumeUsd      != null) patch.volumeUsd      = data.volumeUsd
+  if (data.volumeGbp      != null) patch.volumeGbp      = data.volumeGbp
+  if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
+  if (data.fng            != null) patch.fng            = data.fng
+  if (data.fees           != null) patch.fees           = data.fees
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
@@ -94,7 +105,8 @@ function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
 }
 
-function KpiCard({ label, value, sub }) {
+function KpiCard({ label, value, sub, change }) {
+  const changePositive = change != null && change >= 0
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
@@ -103,6 +115,11 @@ function KpiCard({ label, value, sub }) {
           ? <Skeleton className="h-9 w-32" />
           : <p className="text-3xl font-bold text-orange-400">{value}</p>
         }
+        {change != null && value != null && (
+          <p className={`mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
+            {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
+          </p>
+        )}
         {sub && value != null && (
           <p className="mt-1.5 text-sm text-gray-400">{sub}</p>
         )}
@@ -113,14 +130,22 @@ function KpiCard({ label, value, sub }) {
 
 function ChartTooltip({ active, payload, label, currency }) {
   if (!active || !payload?.length) return null
+  const priceEntry  = payload.find(p => p.dataKey === 'price')
+  const volumeEntry = payload.find(p => p.dataKey === 'volume')
+  if (!priceEntry) return null
   return (
     <div style={{
       background: '#111827', border: '1px solid #374151',
       borderRadius: 8, padding: '8px 12px', fontSize: 13,
       boxShadow: '0 4px 12px rgb(0 0 0 / 0.4)',
     }}>
-      <p style={{ color: '#6b7280', marginBottom: 2, fontSize: 11 }}>{label}</p>
-      <p style={{ color: ORANGE, fontWeight: 600 }}>{fmtCurrency(payload[0].value, currency)}</p>
+      <p style={{ color: '#6b7280', marginBottom: 4, fontSize: 11 }}>{label}</p>
+      <p style={{ color: ORANGE, fontWeight: 600 }}>{fmtCurrency(priceEntry.value, currency)}</p>
+      {volumeEntry && (
+        <p style={{ color: '#6b7280', marginTop: 4, fontSize: 11 }}>
+          Vol&nbsp;{fmtVolume(volumeEntry.value, currency)}
+        </p>
+      )}
     </div>
   )
 }
@@ -145,12 +170,13 @@ export default function App() {
       const cache = readCache() ?? {}
       setData({
         ...result,
-        priceUsd:  result.priceUsd  ?? cache.priceUsd  ?? null,
-        priceGbp:  result.priceGbp  ?? cache.priceGbp  ?? null,
-        volumeUsd: result.volumeUsd ?? cache.volumeUsd ?? null,
-        volumeGbp: result.volumeGbp ?? cache.volumeGbp ?? null,
-        fng:       result.fng       ?? cache.fng       ?? null,
-        fees:      result.fees      ?? cache.fees      ?? null,
+        priceUsd:       result.priceUsd       ?? cache.priceUsd       ?? null,
+        priceGbp:       result.priceGbp       ?? cache.priceGbp       ?? null,
+        volumeUsd:      result.volumeUsd      ?? cache.volumeUsd      ?? null,
+        volumeGbp:      result.volumeGbp      ?? cache.volumeGbp      ?? null,
+        priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
+        fng:            result.fng            ?? cache.fng            ?? null,
+        fees:           result.fees           ?? cache.fees           ?? null,
       })
       setLastUpdated(new Date())
       setLoading(false)
@@ -175,7 +201,7 @@ export default function App() {
     async function run() {
       const result = await fetchChart(days, currency)
       if (!active) return
-      chartCache.current.set(cacheKey, result)
+      if (result !== null) chartCache.current.set(cacheKey, result)
       setChart(result)
       setChartLoading(false)
     }
@@ -183,7 +209,7 @@ export default function App() {
     return () => { active = false }
   }, [range, currency])
 
-  const { priceUsd, priceGbp, volumeUsd, volumeGbp, fees, blockHeight, fng } = data ?? {}
+  const { priceUsd, priceGbp, volumeUsd, volumeGbp, priceChange24h, fees, blockHeight, fng } = data ?? {}
   const price  = currency === 'gbp' ? priceGbp  : priceUsd
   const volume = currency === 'gbp' ? volumeGbp : volumeUsd
 
@@ -232,6 +258,7 @@ export default function App() {
         <KpiCard
           label="BTC Price"
           value={price != null ? fmtCurrency(price, currency) : null}
+          change={priceChange24h ?? null}
         />
         <KpiCard
           label="Fear & Greed"
@@ -279,7 +306,7 @@ export default function App() {
             : (
               <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
                 <ResponsiveContainer width="100%" height={264}>
-                  <AreaChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
@@ -294,20 +321,29 @@ export default function App() {
                       axisLine={false} tickLine={false}
                     />
                     <YAxis
+                      yAxisId="price"
                       domain={[lo - pad, hi + pad]}
                       tick={{ fill: '#6b7280', fontSize: 11 }}
                       axisLine={false} tickLine={false}
                       tickFormatter={v => `${currencySym}${Math.round(v / 1000)}k`}
                       width={52}
                     />
+                    <YAxis yAxisId="volume" hide />
                     <Tooltip content={<ChartTooltip currency={currency} />} />
+                    <Bar
+                      yAxisId="volume" dataKey="volume"
+                      fill={ORANGE} fillOpacity={0.15}
+                      strokeWidth={0} legendType="none"
+                      isAnimationActive={false}
+                    />
                     <Area
+                      yAxisId="price"
                       type="monotone" dataKey="price"
                       stroke={ORANGE} strokeWidth={2}
                       fill="url(#priceGrad)" dot={false}
                       activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
                     />
-                  </AreaChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             )
