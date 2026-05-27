@@ -451,13 +451,17 @@ export default function App() {
 
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard
-          label="BTC Price"
-          value={price != null ? fmtCurrency(price, currency) : null}
-          change={displayedChange}
-          sub={displayedChange != null ? changeLabel : null}
-        />
-        <SentimentCard fng={fng} sentiCrypt={sentiCrypt} loading={loading} />
+        <div className="col-span-2 md:col-span-1">
+          <KpiCard
+            label="BTC Price"
+            value={price != null ? fmtCurrency(price, currency) : null}
+            change={displayedChange}
+            sub={displayedChange != null ? changeLabel : null}
+          />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <SentimentCard fng={fng} sentiCrypt={sentiCrypt} loading={loading} />
+        </div>
         <KpiCard
           label="Block Height"
           value={blockHeight != null ? blockHeight.toLocaleString('en-US') : null}
