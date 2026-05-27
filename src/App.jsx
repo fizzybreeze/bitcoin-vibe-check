@@ -160,8 +160,8 @@ function DifficultyBar({ change }) {
         <rect x={39} y={0} width={2} height={6} fill="#374151" />
       </svg>
       <div className="mt-1 flex justify-between">
-        <span className="text-xs text-gray-700">-10%</span>
-        <span className="text-xs text-gray-700">+10%</span>
+        <span className="text-xs text-gray-700">Bearish</span>
+        <span className="text-xs text-gray-700">Bullish</span>
       </div>
     </div>
   )
@@ -175,10 +175,6 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
   const diffDays       = remainingBlocks != null
     ? Math.round(remainingBlocks * 10 / 60 / 24)
     : null
-  const diffColorClass = diffChange == null
-    ? 'text-gray-500'
-    : diffChange < 0 ? 'text-green-400' : 'text-red-400'
-
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
@@ -209,7 +205,7 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
                 ? <p className="text-2xl font-bold text-gray-600">—</p>
-                : <p className={`text-2xl font-bold ${diffColorClass}`}>
+                : <p className="text-2xl font-bold text-orange-400">
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
