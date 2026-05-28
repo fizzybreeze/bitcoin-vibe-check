@@ -1425,6 +1425,8 @@ export default function App() {
 
       <SatoshiQuote />
 
+      <p className="py-4 text-center text-xs text-gray-700">© 2026 Bitcoin Vibe Check · MIT Licence</p>
+
     </div>
   )
 }
