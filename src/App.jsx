@@ -5,7 +5,7 @@ import {
 import './App.css'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
-  blocksToNextHalving, halvingEstimatedDate, epochPercentage, epochProgressBar, btcDominanceLabel,
+  blocksToNextHalving, epochPercentage, btcDominanceLabel,
 } from './utils.js'
 
 const ORANGE = '#fb923c'
@@ -302,39 +302,105 @@ export function BtcPriceCard({ value, change, sub }) {
   )
 }
 
-function BlockHeightCard({ blockHeight, loading }) {
-  if (loading || blockHeight == null) {
-    return (
-      <div className="rounded-2xl bg-gray-900 p-6">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Block Height</p>
-        <div className="mt-3"><Skeleton className="h-9 w-32" /></div>
+function HalvingCountdown({ blockHeight }) {
+  const [secsLeft, setSecsLeft] = useState(null)
+
+  useEffect(() => {
+    if (blockHeight == null) return
+    setSecsLeft(Math.max(0, blocksToNextHalving(blockHeight)) * 10 * 60)
+  }, [blockHeight])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSecsLeft(prev => prev != null ? Math.max(0, prev - 1) : prev)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const blocksRemaining = blockHeight != null ? Math.max(0, blocksToNextHalving(blockHeight)) : null
+  const epochPct        = blockHeight != null ? epochPercentage(blockHeight) : null
+  const days  = secsLeft != null ? Math.floor(secsLeft / 86400) : null
+  const hours = secsLeft != null ? Math.floor((secsLeft % 86400) / 3600) : null
+  const mins  = secsLeft != null ? Math.floor((secsLeft % 3600) / 60) : null
+  const estStr = secsLeft != null
+    ? new Date(Date.now() + secsLeft * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : null
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 mb-4">
+      <div className="flex flex-col gap-6 md:flex-row md:gap-0">
+
+        {/* Blocks remaining */}
+        <div className="flex-1 md:pr-8">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+          {blocksRemaining != null
+            ? <p className="mt-2 text-3xl font-bold text-orange-400 md:text-5xl tabular-nums">
+                {blocksRemaining.toLocaleString('en-US')}
+              </p>
+            : <Skeleton className="mt-2 h-10 w-32" />
+          }
+        </div>
+
+        <div className="hidden md:block w-px self-stretch bg-gray-800" />
+
+        {/* Time remaining */}
+        <div className="flex-1 md:px-8">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Estimated Time</p>
+          {secsLeft != null
+            ? (
+              <>
+                <p className="mt-2 text-3xl font-bold text-white md:text-5xl tabular-nums">
+                  {days}d {hours}h {mins}m
+                </p>
+                {estStr && (
+                  <p className="mt-1.5 text-sm text-gray-500">est. {estStr}</p>
+                )}
+              </>
+            )
+            : <Skeleton className="mt-2 h-10 w-48" />
+          }
+        </div>
+
+        <div className="hidden md:block w-px self-stretch bg-gray-800" />
+
+        {/* Epoch progress */}
+        <div className="flex-1 md:pl-8">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Epoch Progress</p>
+          {epochPct != null
+            ? (
+              <div className="mt-3">
+                <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+                  <div
+                    className="h-full rounded-full bg-orange-400"
+                    style={{ width: `${epochPct}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-400">
+                  <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
+                  <span className="ml-1 text-gray-500">of current epoch complete</span>
+                </p>
+              </div>
+            )
+            : <Skeleton className="mt-3 h-3 w-full" />
+          }
+        </div>
+
       </div>
-    )
-  }
-  const remaining = blocksToNextHalving(blockHeight)
-  const estDate   = halvingEstimatedDate(remaining)
-  const estStr    = estDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  const epochPct  = epochPercentage(blockHeight)
-  const bar       = epochProgressBar(epochPct)
+    </div>
+  )
+}
+
+function BlockHeightCard({ blockHeight, loading }) {
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Block Height</p>
       <div className="mt-3">
-        <p className="text-2xl font-bold text-orange-400 md:text-3xl">
-          {blockHeight.toLocaleString('en-US')}
-        </p>
-        {/* Line 1: always visible */}
-        <p className="mt-1.5 text-xs text-gray-400">
-          ⏳ {remaining.toLocaleString('en-US')} blocks to halving
-        </p>
-        {/* Line 2: desktop only */}
-        <p className="hidden md:block mt-0.5 text-xs text-gray-500">
-          est. {estStr}
-        </p>
-        {/* Line 3: desktop only */}
-        <p className="hidden md:block mt-1 text-xs text-gray-500 font-mono">
-          {bar} {epochPct.toFixed(0)}% through epoch
-        </p>
+        {loading || blockHeight == null
+          ? <Skeleton className="h-9 w-32" />
+          : <p className="text-2xl font-bold text-orange-400 md:text-3xl">
+              {blockHeight.toLocaleString('en-US')}
+            </p>
+        }
       </div>
     </div>
   )
@@ -647,6 +713,9 @@ export default function App() {
           volHistory={volHistory}
         />
       </div>
+
+      {/* Halving countdown */}
+      <HalvingCountdown blockHeight={blockHeight} />
 
       {/* Chart + Fees */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

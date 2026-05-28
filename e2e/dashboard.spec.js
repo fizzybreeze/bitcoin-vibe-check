@@ -55,9 +55,9 @@ test.describe('Bitcoin Dashboard', () => {
   })
 
   test('network fees shows Slow, Medium, Fast tiers', async ({ page }) => {
-    await expect(page.getByText('Slow')).toBeVisible()
-    await expect(page.getByText('Medium')).toBeVisible()
-    await expect(page.getByText('Fast')).toBeVisible()
+    await expect(page.getByText('Slow', { exact: true })).toBeVisible()
+    await expect(page.getByText('Medium', { exact: true })).toBeVisible()
+    await expect(page.getByText('Fast', { exact: true })).toBeVisible()
   })
 
   // Change 1: BTC Price card always shows 24h change
@@ -107,8 +107,8 @@ test.describe('Bitcoin Dashboard', () => {
   })
 })
 
-// Change 4: Block Height context — desktop
-test.describe('Block Height context on desktop (1280px)', () => {
+// Halving Countdown card — desktop
+test.describe('Halving Countdown on desktop (1280px)', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
@@ -116,22 +116,26 @@ test.describe('Block Height context on desktop (1280px)', () => {
     await page.goto('/')
   })
 
-  test('shows blocks-to-halving on desktop', async ({ page }) => {
-    // blockHeightFixture = 897000; 1050000 - 897000 = 153000
-    await expect(page.getByText(/153,000 blocks to halving/)).toBeVisible()
+  test('shows blocks-to-halving number', async ({ page }) => {
+    // blockHeightFixture = 897000; 1050000 - 897000 = 153,000
+    await expect(page.getByText('153,000').first()).toBeVisible()
   })
 
-  test('shows estimated halving date on desktop', async ({ page }) => {
+  test('shows time remaining in days/hours/minutes format', async ({ page }) => {
+    await expect(page.getByText(/\d+d \d+h \d+m/)).toBeVisible()
+  })
+
+  test('shows estimated halving date', async ({ page }) => {
     await expect(page.getByText(/est\. /)).toBeVisible()
   })
 
-  test('shows epoch progress bar on desktop', async ({ page }) => {
-    await expect(page.getByText(/through epoch/)).toBeVisible()
+  test('shows epoch progress percentage', async ({ page }) => {
+    await expect(page.getByText(/of current epoch complete/)).toBeVisible()
   })
 })
 
-// Change 4: Block Height context — mobile
-test.describe('Block Height context on mobile (375px)', () => {
+// Halving Countdown card — mobile
+test.describe('Halving Countdown on mobile (375px)', () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
   test.beforeEach(async ({ page }) => {
@@ -139,17 +143,11 @@ test.describe('Block Height context on mobile (375px)', () => {
     await page.goto('/')
   })
 
-  test('shows blocks-to-halving on mobile', async ({ page }) => {
-    await expect(page.getByText(/153,000 blocks to halving/)).toBeVisible()
-  })
-
-  test('estimated halving date is hidden on mobile', async ({ page }) => {
-    // The "est. " line uses "hidden md:block" so it is in the DOM but not visible
-    await expect(page.getByText(/est\. /)).toBeHidden()
-  })
-
-  test('epoch progress bar is hidden on mobile', async ({ page }) => {
-    await expect(page.getByText(/through epoch/)).toBeHidden()
+  test('shows all three sections stacked on mobile', async ({ page }) => {
+    // All sections are visible on mobile (stacked, not hidden)
+    await expect(page.getByText('153,000').first()).toBeVisible()
+    await expect(page.getByText(/\d+d \d+h \d+m/)).toBeVisible()
+    await expect(page.getByText(/of current epoch complete/)).toBeVisible()
   })
 
   test('page is functional at 375px width', async ({ page }) => {
