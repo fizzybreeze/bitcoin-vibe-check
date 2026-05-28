@@ -179,15 +179,15 @@ function DifficultyBar({ change }) {
       <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
         {change != null && (
           <div
-            className={`absolute top-0 h-full ${isPositive ? 'left-1/2' : 'right-1/2'} ${isPositive ? 'bg-red-400' : 'bg-green-400'}`}
+            className={`absolute top-0 h-full ${isPositive ? 'left-1/2' : 'right-1/2'} bg-orange-400`}
             style={{ width: `${pct}%` }}
           />
         )}
         <div className="absolute left-1/2 top-0 h-full w-px -translate-x-px bg-gray-600" />
       </div>
       <div className="mt-1 flex justify-between">
-        <span className="text-xs text-gray-700">Bearish</span>
-        <span className="text-xs text-gray-700">Bullish</span>
+        <span className="text-xs text-gray-700">Slower</span>
+        <span className="text-xs text-gray-700">Faster</span>
       </div>
     </div>
   )
@@ -195,11 +195,11 @@ function DifficultyBar({ change }) {
 
 function diffInterpretation(change) {
   if (change == null) return null
-  if (change < -4)  return { text: 'Miners Slowing',     cls: 'text-green-400' }
-  if (change < -1)  return { text: 'Slightly Easier',    cls: 'text-green-400' }
-  if (change <= 1)  return { text: 'Stable',             cls: 'text-gray-500'  }
-  if (change <= 4)  return { text: 'Slightly Harder',    cls: 'text-red-400'   }
-  return                   { text: 'Miners Speeding Up', cls: 'text-red-400'   }
+  if (change < -4)  return { text: 'Miners Slowing Fast',   cls: 'text-gray-500' }
+  if (change < -1)  return { text: 'Miners Slowing',        cls: 'text-gray-500' }
+  if (change <= 1)  return { text: 'Stable',                cls: 'text-gray-500' }
+  if (change <= 4)  return { text: 'Miners Speeding Up',    cls: 'text-gray-500' }
+  return                   { text: 'Miners Speeding Up Fast', cls: 'text-gray-500' }
 }
 
 function NetworkPulseCard({ fng, difficulty, loading }) {
