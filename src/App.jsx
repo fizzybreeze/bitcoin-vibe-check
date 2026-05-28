@@ -722,6 +722,10 @@ function TxLookup({ price, currency }) {
     }
     setValidationErr(null)
     setResult(null)
+    if (cleaned === '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f') {
+      setStatus('genesis')
+      return
+    }
     setStatus('loading')
     try {
       const url = type === 'tx'
@@ -778,6 +782,21 @@ function TxLookup({ price, currency }) {
       {/* Not found / error */}
       {(status === 'notfound' || status === 'error') && (
         <p className="mt-3 text-xs text-red-400">Nothing found. Check the transaction ID or address and try again.</p>
+      )}
+
+      {status === 'genesis' && (
+        <div ref={resultRef} className="mt-4 rounded-xl border border-orange-500/30 bg-gray-950 p-6">
+          <p className="font-mono text-2xl font-bold text-orange-400 md:text-3xl">GENESIS BLOCK</p>
+          <p className="mt-2 text-xs text-gray-500">Block 0 · 3 January 2009 · Mined by Satoshi Nakamoto</p>
+          <div className="mt-4 h-px bg-gray-800" />
+          <p className="mt-4 text-sm italic text-white">"Bitcoin: A Peer-to-Peer Electronic Cash System"</p>
+          <iframe
+            src="https://bitcoin.org/bitcoin.pdf"
+            className="mt-4 w-full rounded border border-gray-700 h-[400px] md:h-[600px]"
+            title="Bitcoin Whitepaper"
+          />
+          <p className="mt-4 text-xs text-gray-600">The Times 03/Jan/2009 Chancellor on brink of second bailout for banks.</p>
+        </div>
       )}
 
       {/* Result panel */}
