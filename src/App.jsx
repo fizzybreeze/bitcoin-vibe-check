@@ -404,36 +404,21 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
   )
 }
 
-const CORS_PROXY = 'https://corsproxy.io/?'
-
 async function fetchNews() {
   try {
-    const res = await fetch(CORS_PROXY + encodeURIComponent('https://cryptocurrency.cv/api/v2/news?coin=bitcoin&limit=8'))
-    if (!res.ok) throw new Error('primary failed')
-    const data = await res.json()
-    if (!Array.isArray(data) || data.length === 0) throw new Error('empty')
-    return data.slice(0, 8).map(item => ({
+    const res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=BTC')
+    if (!res.ok) throw new Error('fetch failed')
+    const json = await res.json()
+    const articles = json?.Data ?? []
+    if (!articles.length) throw new Error('empty')
+    return articles.slice(0, 8).map(item => ({
       title:       item.title,
-      source:      item.source,
-      publishedAt: new Date(item.published_at),
+      source:      item.source_info?.name ?? 'Unknown',
+      publishedAt: new Date(item.published_on * 1000),
       url:         item.url,
     }))
   } catch {
-    try {
-      const res = await fetch(CORS_PROXY + encodeURIComponent('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=BTC'))
-      if (!res.ok) throw new Error('fallback failed')
-      const json = await res.json()
-      const articles = json?.Data ?? []
-      if (!articles.length) throw new Error('empty fallback')
-      return articles.slice(0, 8).map(item => ({
-        title:       item.title,
-        source:      item.source_info?.name ?? 'Unknown',
-        publishedAt: new Date(item.published_on * 1000),
-        url:         item.url,
-      }))
-    } catch {
-      return null
-    }
+    return null
   }
 }
 
