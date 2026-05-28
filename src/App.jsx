@@ -658,6 +658,13 @@ function TxLookup({ price, currency }) {
   const [validationErr, setValidationErr] = useState(null)
   const [status, setStatus]             = useState('idle') // idle | loading | result | notfound | error
   const [result, setResult]             = useState(null)   // { type, data }
+  const resultRef = useRef(null)
+
+  useEffect(() => {
+    if (status === 'result' && resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [status])
 
   function handleInputChange(e) {
     setInput(e.target.value)
@@ -733,13 +740,13 @@ function TxLookup({ price, currency }) {
 
       {/* Result panel */}
       {status === 'result' && result && (
-        <>
+        <div ref={resultRef}>
           <div className="mt-4 h-px bg-gray-800" />
           {result.type === 'tx'
             ? <TxResult data={result.data} price={price} currency={currency} />
             : <AddressResult data={result.data} price={price} currency={currency} />
           }
-        </>
+        </div>
       )}
     </div>
   )
