@@ -66,7 +66,7 @@ function parseChartData(json, days) {
 }
 
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes, lightningRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
@@ -75,6 +75,7 @@ async function loadData() {
     fetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
     fetch('https://mempool.space/api/mempool').then(r => r.json()),
     fetch('https://mempool.space/api/v1/blocks').then(r => r.json()),
+    fetch('https://mempool.space/api/v1/lightning/statistics/latest').then(r => r.json()),
   ])
 
   const btc        = priceRes.status  === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
@@ -98,9 +99,10 @@ async function loadData() {
     difficulty:     diffRes.status    === 'fulfilled' ? diffRes.value             : null,
     btcDominance:   globalData?.market_cap_percentage?.btc ?? null,
     mempool:        mempoolRes.status  === 'fulfilled' ? mempoolRes.value           : null,
-    lastBlockTs:    blocksRes.status   === 'fulfilled' && Array.isArray(blocksRes.value) && blocksRes.value.length > 0
+    lastBlockTs:    blocksRes.status    === 'fulfilled' && Array.isArray(blocksRes.value) && blocksRes.value.length > 0
                       ? (blocksRes.value[0].timestamp ?? null)
                       : null,
+    lightning:      lightningRes.status === 'fulfilled' ? lightningRes.value : null,
   }
 }
 
@@ -136,6 +138,7 @@ function writeCache(data) {
   if (data.btcDominance   != null) patch.btcDominance   = data.btcDominance
   if (data.mempool        != null) patch.mempool        = data.mempool
   if (data.lastBlockTs    != null) patch.lastBlockTs    = data.lastBlockTs
+  if (data.lightning      != null) patch.lightning      = data.lightning
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
@@ -631,6 +634,7 @@ export default function App() {
         btcDominance:   result.btcDominance   ?? cache.btcDominance   ?? null,
         mempool:        result.mempool        ?? cache.mempool        ?? null,
         lastBlockTs:    result.lastBlockTs    ?? cache.lastBlockTs    ?? null,
+        lightning:      result.lightning      ?? cache.lightning      ?? null,
       })
       setLastUpdated(new Date())
       setLoading(false)
@@ -658,6 +662,7 @@ export default function App() {
         if (result.btcDominance  != null) patch.btcDominance  = result.btcDominance
         if (result.mempool       != null) patch.mempool       = result.mempool
         if (result.lastBlockTs   != null) patch.lastBlockTs   = result.lastBlockTs
+        if (result.lightning     != null) patch.lightning     = result.lightning
         return { ...prev, ...patch }
       })
       setLastUpdated(new Date())
@@ -742,7 +747,7 @@ export default function App() {
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
           priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs,
-          marketCapUsd } = data ?? {}
+          marketCapUsd, lightning } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -974,6 +979,44 @@ export default function App() {
                     <p className="mt-0.5 text-xs text-gray-600">{time}</p>
                   </div>
                 ))
+            }
+          </div>
+
+          {/* Lightning Network */}
+          <div className="h-px bg-gray-800" />
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Lightning Network</p>
+            {loading && !lightning
+              ? <div className="grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map(i => <Skeleton key={i} className="h-10" />)}
+                </div>
+              : lightning?.latest
+                ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Capacity</p>
+                      <div className="mt-1 flex items-baseline gap-0.5">
+                        <span className="text-base font-bold text-orange-400">
+                          {(lightning.latest.total_capacity / 1e8).toFixed(1)}
+                        </span>
+                        <span className="text-xs text-gray-500">BTC</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Nodes</p>
+                      <p className="mt-1 text-base font-bold text-orange-400">
+                        {lightning.latest.node_count.toLocaleString('en-US')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Channels</p>
+                      <p className="mt-1 text-base font-bold text-orange-400">
+                        {lightning.latest.channel_count.toLocaleString('en-US')}
+                      </p>
+                    </div>
+                  </div>
+                )
+                : <p className="text-xs text-gray-500">Unavailable</p>
             }
           </div>
         </div>

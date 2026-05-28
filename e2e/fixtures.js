@@ -53,6 +53,14 @@ export const blocksFixture = [
   { timestamp: Math.floor(Date.now() / 1000) - 5 * 60 },  // 5 minutes ago
 ]
 
+export const lightningFixture = {
+  latest: {
+    channel_count: 54321,
+    node_count: 12345,
+    total_capacity: 5438000000,  // 54.38 BTC → "54.4 BTC"
+  },
+}
+
 export const mempoolFixture = {
   count: 14203,
   vsize: 25_000_000,  // Moderate (5M–50M)

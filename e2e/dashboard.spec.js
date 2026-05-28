@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
-  globalFixture, difficultyFixture, mempoolFixture, blocksFixture,
+  globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
 } from './fixtures.js'
 
 async function mockApis(page) {
@@ -30,6 +30,9 @@ async function mockApis(page) {
   )
   await page.route('https://mempool.space/api/v1/blocks', route =>
     route.fulfill({ json: blocksFixture })
+  )
+  await page.route('https://mempool.space/api/v1/lightning/statistics/latest', route =>
+    route.fulfill({ json: lightningFixture })
   )
   await page.route('https://api.alternative.me/fng/**', route =>
     route.fulfill({ json: fngFixture })
@@ -129,6 +132,17 @@ test.describe('Bitcoin Dashboard', () => {
   test('mempool transaction count is formatted with commas', async ({ page }) => {
     // mempoolFixture count = 14203 → "14,203 unconfirmed transactions"
     await expect(page.getByText(/14,203 unconfirmed transactions/)).toBeVisible()
+  })
+
+  // Lightning Network section
+  test('Lightning Network section shows capacity, nodes, and channels', async ({ page }) => {
+    await expect(page.getByText('Lightning Network')).toBeVisible()
+    // lightningFixture: total_capacity = 5438000000 → 54.4 BTC
+    await expect(page.getByText('54.4')).toBeVisible()
+    // node_count = 12345 → "12,345"
+    await expect(page.getByText('12,345')).toBeVisible()
+    // channel_count = 54321 → "54,321"
+    await expect(page.getByText('54,321')).toBeVisible()
   })
 
   // Change 5: no footer attribution
