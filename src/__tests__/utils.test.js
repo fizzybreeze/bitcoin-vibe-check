@@ -28,6 +28,21 @@ describe('fmtCurrency', () => {
   it('handles undefined without throwing', () => {
     expect(() => fmtCurrency(undefined, 'usd')).not.toThrow()
   })
+
+  it('formats EUR without throwing and includes a number', () => {
+    const result = fmtCurrency(105000, 'eur')
+    expect(result).toContain('105')
+  })
+
+  it('formats CAD without throwing and includes a number', () => {
+    const result = fmtCurrency(105000, 'cad')
+    expect(result).toContain('105')
+  })
+
+  it('formats CHF without throwing and includes a number', () => {
+    const result = fmtCurrency(105000, 'chf')
+    expect(result).toContain('105')
+  })
 })
 
 describe('fmtVolume', () => {
@@ -49,6 +64,14 @@ describe('fmtVolume', () => {
 
   it('uses GBP symbol for millions', () => {
     expect(fmtVolume(2_000_000, 'gbp')).toBe('£2M')
+  })
+
+  it('uses EUR symbol for billions', () => {
+    expect(fmtVolume(35_000_000_000, 'eur')).toBe('€35.0B')
+  })
+
+  it('uses CAD symbol for trillions', () => {
+    expect(fmtVolume(2_000_000_000_000, 'cad')).toBe('C$2.0T')
   })
 })
 

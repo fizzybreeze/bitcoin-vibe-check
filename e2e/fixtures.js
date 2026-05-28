@@ -67,3 +67,25 @@ export const mempoolFixture = {
   total_fee: 950000000,
   fee_histogram: [],
 }
+
+export const TX_ID = 'a'.repeat(64)
+
+export const txFixture = {
+  txid: TX_ID,
+  status: { confirmed: true, block_height: 895000 },
+  vsize: 250,
+  fee: 3750,
+  vout: [{ value: 150_000_000 }],  // 1.5000 BTC
+}
+
+export const ADDRESS = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'
+
+export const addressFixture = {
+  address: ADDRESS,
+  chain_stats: {
+    funded_txo_sum: 100_000_000,
+    spent_txo_sum: 40_000_000,  // balance = 60_000_000 sats → 0.6000 BTC
+    tx_count: 15,
+  },
+  mempool_stats: { tx_count: 0 },
+}

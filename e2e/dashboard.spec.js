@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
+  txFixture, TX_ID, addressFixture, ADDRESS,
 } from './fixtures.js'
 
 async function mockApis(page) {
@@ -166,6 +167,53 @@ test.describe('Bitcoin Dashboard', () => {
     await expect(page.getByText('Looking up…')).not.toBeAttached()
     // In idle state there is no result section in the DOM
     await expect(page.getByText('Nothing found.')).not.toBeAttached()
+  })
+
+  // Network Pulse card
+  test('Network Pulse shows Fear & Greed score and classification', async ({ page }) => {
+    // fngFixture: value = '72', value_classification = 'Greed'
+    await expect(page.getByText('72')).toBeVisible()
+    await expect(page.getByText('Greed', { exact: true })).toBeVisible()
+  })
+
+  test('Network Pulse shows difficulty adjustment percentage and interpretation', async ({ page }) => {
+    // difficultyFixture: difficultyChange = 3.2 → "+3.2%", "Miners Speeding Up"
+    await expect(page.getByText('+3.2%')).toBeVisible()
+    await expect(page.getByText('Miners Speeding Up')).toBeVisible()
+  })
+
+  // Volume card
+  test('Volume card shows BTC dominance percentage', async ({ page }) => {
+    // globalFixture: btc dominance = 64.5
+    await expect(page.getByText(/BTC dominance 64\.5%/)).toBeVisible()
+  })
+
+  // Currency selector
+  test('switching currency to GBP updates the price display', async ({ page }) => {
+    await page.selectOption('select', 'gbp')
+    await expect(page.getByText('£82,000')).toBeVisible()
+  })
+
+  // Transaction lookup happy path
+  test('transaction lookup shows confirmed result for a valid tx ID', async ({ page }) => {
+    await page.route(`https://mempool.space/api/tx/${TX_ID}`, route =>
+      route.fulfill({ json: txFixture })
+    )
+    await page.getByPlaceholder('Enter transaction ID or address…').fill(TX_ID)
+    await page.getByRole('button', { name: 'Look up' }).click()
+    await expect(page.getByText('Confirmed')).toBeVisible()
+    await expect(page.getByText('1.5000 BTC')).toBeVisible()
+  })
+
+  // Address lookup happy path
+  test('address lookup shows wallet balance for a valid address', async ({ page }) => {
+    await page.route(`https://mempool.space/api/address/${ADDRESS}`, route =>
+      route.fulfill({ json: addressFixture })
+    )
+    await page.getByPlaceholder('Enter transaction ID or address…').fill(ADDRESS)
+    await page.getByRole('button', { name: 'Look up' }).click()
+    await expect(page.getByText('Balance')).toBeVisible()
+    await expect(page.getByText('0.6000 BTC')).toBeVisible()
   })
 })
 
