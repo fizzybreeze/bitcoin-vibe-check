@@ -20,6 +20,17 @@ const RANGES = [
   { label: '1Y', days: 365 },
 ]
 
+const QUOTES = [
+  { text: "If you don't believe it or don't get it, I don't have the time to try to convince you, sorry.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "The root problem with conventional currency is all the trust that's required to make it work.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "It might make sense just to get some in case it catches on.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "Writing a description for this thing for general audiences is bloody hard. There's nothing to relate it to.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "In a few decades when the reward gets too small, the transaction fee will become the main compensation for nodes.", attribution: 'Satoshi Nakamoto, Bitcoin Whitepaper' },
+  { text: "The nature of Bitcoin is such that once version 0.1 was released, the core design was set in stone for the rest of its lifetime.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+  { text: "Governments are good at cutting off the heads of centrally controlled networks like Napster, but pure P2P networks like Gnutella and Tor seem to be holding their own.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
+]
+
 const FNG_COLOR = {
   'Extreme Fear': 'text-red-400',
   'Fear':         'text-amber-400',
@@ -752,6 +763,33 @@ function TxLookup({ price, currency }) {
   )
 }
 
+function SatoshiQuote() {
+  const timeoutRef        = useRef(null)
+  const [index, setIndex] = useState(() => Math.floor(Math.random() * QUOTES.length))
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisible(false)
+      timeoutRef.current = setTimeout(() => {
+        setIndex(i => (i + 1) % QUOTES.length)
+        setVisible(true)
+      }, 500)
+    }, 12000)
+    return () => { clearInterval(id); clearTimeout(timeoutRef.current) }
+  }, [])
+
+  const quote = QUOTES[index]
+  return (
+    <footer className="py-10 text-center">
+      <div className={`transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+        <p className="text-sm italic text-white">"{quote.text}"</p>
+        <p className="mt-2 text-xs text-orange-400">— {quote.attribution}</p>
+      </div>
+    </footer>
+  )
+}
+
 function mempoolCongestion(vsize) {
   if (vsize == null) return null
   if (vsize < 5_000_000)  return { label: 'Low',      cls: 'text-green-400',  bar: 'bg-green-400'  }
@@ -1217,6 +1255,8 @@ export default function App() {
 
       {/* Transaction Lookup */}
       <TxLookup price={price} currency={currency} />
+
+      <SatoshiQuote />
 
     </div>
   )
