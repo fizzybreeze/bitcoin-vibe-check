@@ -66,7 +66,7 @@ function parseChartData(json, days) {
 }
 
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
@@ -74,6 +74,7 @@ async function loadData() {
     fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
     fetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
     fetch('https://mempool.space/api/mempool').then(r => r.json()),
+    fetch('https://mempool.space/api/v1/blocks').then(r => r.json()),
   ])
 
   const btc        = priceRes.status  === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
@@ -95,7 +96,10 @@ async function loadData() {
     fng:            fngRes.status     === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
     difficulty:     diffRes.status    === 'fulfilled' ? diffRes.value             : null,
     btcDominance:   globalData?.market_cap_percentage?.btc ?? null,
-    mempool:        mempoolRes.status === 'fulfilled' ? mempoolRes.value           : null,
+    mempool:        mempoolRes.status  === 'fulfilled' ? mempoolRes.value           : null,
+    lastBlockTs:    blocksRes.status   === 'fulfilled' && Array.isArray(blocksRes.value) && blocksRes.value.length > 0
+                      ? (blocksRes.value[0].timestamp ?? null)
+                      : null,
   }
 }
 
@@ -129,6 +133,7 @@ function writeCache(data) {
   if (data.fees           != null) patch.fees           = data.fees
   if (data.btcDominance   != null) patch.btcDominance   = data.btcDominance
   if (data.mempool        != null) patch.mempool        = data.mempool
+  if (data.lastBlockTs    != null) patch.lastBlockTs    = data.lastBlockTs
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
@@ -393,17 +398,68 @@ function HalvingCountdown({ blockHeight }) {
   )
 }
 
-function BlockHeightCard({ blockHeight, loading }) {
+function blockTimeColors(mins) {
+  if (mins == null || (mins >= 9 && mins <= 11)) return { text: 'text-orange-400', bg: 'bg-orange-400' }
+  if (mins < 9) return { text: 'text-green-400', bg: 'bg-green-400' }
+  return              { text: 'text-red-400',    bg: 'bg-red-400'   }
+}
+
+function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading }) {
+  const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
+  const colors = blockTimeColors(avgBlockMins)
+  const lastBlockMinsAgo = lastBlockTs != null
+    ? Math.max(0, Math.floor((Date.now() / 1000 - lastBlockTs) / 60))
+    : null
+
   return (
     <div className="rounded-2xl bg-gray-900 p-6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Block Height</p>
-      <div className="mt-3">
-        {loading || blockHeight == null
-          ? <Skeleton className="h-9 w-32" />
-          : <p className="text-2xl font-bold text-orange-400 md:text-3xl">
-              {blockHeight.toLocaleString('en-US')}
-            </p>
-        }
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Heartbeat</p>
+
+      {/* Two-column interior */}
+      <div className="mt-3 flex gap-3">
+
+        {/* Block height */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Block Height</p>
+          <div className="mt-1">
+            {loading || blockHeight == null
+              ? <Skeleton className="h-7 w-16" />
+              : <p className="text-sm font-bold text-orange-400 tabular-nums md:text-2xl">
+                  {blockHeight.toLocaleString('en-US')}
+                </p>
+            }
+          </div>
+        </div>
+
+        {/* Avg block time */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Avg Block Time</p>
+          <div className="mt-1">
+            {loading || avgBlockMins == null
+              ? <Skeleton className="h-7 w-12" />
+              : <p className={`text-sm font-bold tabular-nums md:text-2xl ${colors.text}`}>
+                  {avgBlockMins.toFixed(1)} min
+                </p>
+            }
+          </div>
+        </div>
+
+      </div>
+
+      {/* Last block line with breathing dot */}
+      <div className="mt-3 flex items-center justify-center gap-1.5">
+        {!loading && (
+          <span key={blockHeight ?? 'init'} className="relative inline-flex h-2 w-2 shrink-0">
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colors.bg}`} />
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
+          </span>
+        )}
+        <p className="text-xs text-gray-500">
+          {lastBlockMinsAgo != null
+            ? `Last block: ${lastBlockMinsAgo} min ago`
+            : 'Last block: unknown'
+          }
+        </p>
       </div>
     </div>
   )
@@ -546,6 +602,7 @@ export default function App() {
         fees:           result.fees           ?? cache.fees           ?? null,
         btcDominance:   result.btcDominance   ?? cache.btcDominance   ?? null,
         mempool:        result.mempool        ?? cache.mempool        ?? null,
+        lastBlockTs:    result.lastBlockTs    ?? cache.lastBlockTs    ?? null,
       })
       setLastUpdated(new Date())
       setLoading(false)
@@ -571,6 +628,7 @@ export default function App() {
         if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
         if (result.btcDominance  != null) patch.btcDominance  = result.btcDominance
         if (result.mempool       != null) patch.mempool       = result.mempool
+        if (result.lastBlockTs   != null) patch.lastBlockTs   = result.lastBlockTs
         return { ...prev, ...patch }
       })
       setLastUpdated(new Date())
@@ -654,7 +712,7 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -716,7 +774,12 @@ export default function App() {
         <div className="col-span-2 md:col-span-1">
           <NetworkPulseCard fng={fng} difficulty={difficulty} loading={loading} />
         </div>
-        <BlockHeightCard blockHeight={blockHeight} loading={loading} />
+        <NetworkHeartbeatCard
+          blockHeight={blockHeight}
+          difficulty={difficulty}
+          lastBlockTs={lastBlockTs}
+          loading={loading}
+        />
         <VolumeCard
           volumeUsd={volumeUsd}
           volume={volume}

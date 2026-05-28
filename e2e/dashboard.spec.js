@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
-  globalFixture, difficultyFixture, mempoolFixture,
+  globalFixture, difficultyFixture, mempoolFixture, blocksFixture,
 } from './fixtures.js'
 
 async function mockApis(page) {
@@ -27,6 +27,9 @@ async function mockApis(page) {
   )
   await page.route('https://mempool.space/api/mempool', route =>
     route.fulfill({ json: mempoolFixture })
+  )
+  await page.route('https://mempool.space/api/v1/blocks', route =>
+    route.fulfill({ json: blocksFixture })
   )
   await page.route('https://api.alternative.me/fng/**', route =>
     route.fulfill({ json: fngFixture })
@@ -102,6 +105,18 @@ test.describe('Bitcoin Dashboard', () => {
     // Fixture 7D: hi = $103,500, lo = $100,000
     await expect(page.getByText(/H: \$/).first()).toBeVisible()
     await expect(page.getByText(/L: \$/).first()).toBeVisible()
+  })
+
+  // Network Heartbeat card
+  test('Network Heartbeat card shows block height and avg block time', async ({ page }) => {
+    // blockHeightFixture = 897000; difficultyFixture timeAvg = 600000ms → 10.0 min
+    await expect(page.getByText('897,000')).toBeVisible()
+    await expect(page.getByText('10.0 min')).toBeVisible()
+  })
+
+  test('Network Heartbeat card shows last block time', async ({ page }) => {
+    // blocksFixture timestamp = 5 min ago
+    await expect(page.getByText(/Last block: 5 min ago/)).toBeVisible()
   })
 
   // Mempool congestion indicator

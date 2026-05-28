@@ -45,7 +45,12 @@ export const globalFixture = {
 export const difficultyFixture = {
   difficultyChange: 3.2,
   remainingBlocks: 1440,
+  timeAvg: 600000,  // 10 minutes in ms → "10.0 min"
 }
+
+export const blocksFixture = [
+  { timestamp: Math.floor(Date.now() / 1000) - 5 * 60 },  // 5 minutes ago
+]
 
 export const mempoolFixture = {
   count: 14203,
