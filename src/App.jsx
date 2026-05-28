@@ -237,7 +237,7 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
     : null
   const diffInterp     = diffInterpretation(diffChange)
   return (
-    <div className="rounded-2xl bg-gray-900 p-6">
+    <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
       <div className="mt-3 flex gap-4">
 
@@ -448,7 +448,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
     : null
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-6">
+    <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Heartbeat</p>
 
       {/* Two-column interior */}
@@ -508,7 +508,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
     : null
   const domLabel = btcDominanceLabel(btcDominance)
   return (
-    <div className="rounded-2xl bg-gray-900 p-6">
+    <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">24h Volume</p>
       <div className="mt-3">
         {volume == null
