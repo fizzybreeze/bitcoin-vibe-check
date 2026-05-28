@@ -66,13 +66,14 @@ function parseChartData(json, days) {
 }
 
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes] = await Promise.allSettled([
+  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes] = await Promise.allSettled([
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
     fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
     fetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
+    fetch('https://mempool.space/api/mempool').then(r => r.json()),
   ])
 
   const btc        = priceRes.status  === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
@@ -89,11 +90,12 @@ async function loadData() {
     volumeCad:      btc.cad_24h_vol      ?? null,
     volumeChf:      btc.chf_24h_vol      ?? null,
     priceChange24h: btc.usd_24h_change   ?? null,
-    fees:           feesRes.status  === 'fulfilled' ? feesRes.value              : null,
-    blockHeight:    heightRes.status === 'fulfilled' ? heightRes.value           : null,
-    fng:            fngRes.status   === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
-    difficulty:     diffRes.status  === 'fulfilled' ? diffRes.value             : null,
+    fees:           feesRes.status    === 'fulfilled' ? feesRes.value              : null,
+    blockHeight:    heightRes.status  === 'fulfilled' ? heightRes.value            : null,
+    fng:            fngRes.status     === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
+    difficulty:     diffRes.status    === 'fulfilled' ? diffRes.value             : null,
     btcDominance:   globalData?.market_cap_percentage?.btc ?? null,
+    mempool:        mempoolRes.status === 'fulfilled' ? mempoolRes.value           : null,
   }
 }
 
@@ -126,6 +128,7 @@ function writeCache(data) {
   if (data.difficulty     != null) patch.difficulty     = data.difficulty
   if (data.fees           != null) patch.fees           = data.fees
   if (data.btcDominance   != null) patch.btcDominance   = data.btcDominance
+  if (data.mempool        != null) patch.mempool        = data.mempool
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
@@ -471,6 +474,13 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
 }
 
 
+function mempoolCongestion(vsize) {
+  if (vsize == null) return null
+  if (vsize < 5_000_000)  return { label: 'Low',      cls: 'text-green-400',  bar: 'bg-green-400'  }
+  if (vsize <= 50_000_000) return { label: 'Moderate', cls: 'text-orange-400', bar: 'bg-orange-400' }
+  return                           { label: 'High',     cls: 'text-red-400',    bar: 'bg-red-400'    }
+}
+
 function ChartTooltip({ active, payload, label, currency }) {
   if (!active || !payload?.length) return null
   const priceEntry  = payload.find(p => p.dataKey === 'price')
@@ -535,6 +545,7 @@ export default function App() {
         difficulty:     result.difficulty     ?? cache.difficulty     ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
         btcDominance:   result.btcDominance   ?? cache.btcDominance   ?? null,
+        mempool:        result.mempool        ?? cache.mempool        ?? null,
       })
       setLastUpdated(new Date())
       setLoading(false)
@@ -559,6 +570,7 @@ export default function App() {
         if (result.blockHeight   != null) patch.blockHeight   = result.blockHeight
         if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
         if (result.btcDominance  != null) patch.btcDominance  = result.btcDominance
+        if (result.mempool       != null) patch.mempool       = result.mempool
         return { ...prev, ...patch }
       })
       setLastUpdated(new Date())
@@ -642,7 +654,7 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -822,26 +834,46 @@ export default function App() {
           }
         </div>
 
-        {/* Network fees */}
-        <div className="flex flex-col">
-          <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-gray-500">
-            Network Fees
-          </p>
-          <div className="flex flex-1 flex-row gap-3 md:flex-col">
+        {/* Mempool + Network fees */}
+        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Fees</p>
+
+          {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
+          {mempool != null && (() => {
+            const cg = mempoolCongestion(mempool.vsize)
+            const pct = Math.min(100, (mempool.vsize / 100_000_000) * 100)
+            return (
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Mempool Congestion</p>
+                  <span className={`text-xs font-semibold ${cg.cls}`}>{cg.label}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+                  <div className={`h-full rounded-full ${cg.bar}`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  {mempool.count.toLocaleString('en-US')} unconfirmed transactions
+                </p>
+              </div>
+            )
+          })()}
+
+          {/* Fee tiers */}
+          <div className="grid grid-cols-3 gap-2">
             {loading || !fees
-              ? [0, 1, 2].map(i => <Skeleton key={i} className="flex-1" />)
+              ? [0, 1, 2].map(i => <Skeleton key={i} className="h-20" />)
               : [
                   { label: 'Slow',   time: '~1 hour',  value: fees.hourFee     },
                   { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
                   { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
                 ].map(({ label, time, value }) => (
-                  <div key={label} className="flex flex-1 flex-col justify-center rounded-2xl bg-gray-900 px-3 py-4 md:px-6 md:py-5">
+                  <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
                     <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                    <div className="mt-2 flex items-baseline gap-1 md:gap-2">
-                      <span className="text-xl font-bold text-orange-400 md:text-3xl">{value}</span>
-                      <span className="text-sm text-gray-500">sat/vB</span>
+                    <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
+                      <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
+                      <span className="text-xs text-gray-500">sat/vB</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-600">{time}</p>
+                    <p className="mt-0.5 text-xs text-gray-600">{time}</p>
                   </div>
                 ))
             }

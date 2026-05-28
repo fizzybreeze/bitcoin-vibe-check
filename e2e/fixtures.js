@@ -46,3 +46,10 @@ export const difficultyFixture = {
   difficultyChange: 3.2,
   remainingBlocks: 1440,
 }
+
+export const mempoolFixture = {
+  count: 14203,
+  vsize: 25_000_000,  // Moderate (5M–50M)
+  total_fee: 950000000,
+  fee_histogram: [],
+}

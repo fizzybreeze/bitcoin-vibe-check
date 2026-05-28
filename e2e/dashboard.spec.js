@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
-  globalFixture, difficultyFixture,
+  globalFixture, difficultyFixture, mempoolFixture,
 } from './fixtures.js'
 
 async function mockApis(page) {
@@ -24,6 +24,9 @@ async function mockApis(page) {
   )
   await page.route('https://mempool.space/api/v1/difficulty-adjustment', route =>
     route.fulfill({ json: difficultyFixture })
+  )
+  await page.route('https://mempool.space/api/mempool', route =>
+    route.fulfill({ json: mempoolFixture })
   )
   await page.route('https://api.alternative.me/fng/**', route =>
     route.fulfill({ json: fngFixture })
@@ -99,6 +102,18 @@ test.describe('Bitcoin Dashboard', () => {
     // Fixture 7D: hi = $103,500, lo = $100,000
     await expect(page.getByText(/H: \$/).first()).toBeVisible()
     await expect(page.getByText(/L: \$/).first()).toBeVisible()
+  })
+
+  // Mempool congestion indicator
+  test('mempool congestion bar and label are visible', async ({ page }) => {
+    // mempoolFixture vsize = 25M → Moderate
+    await expect(page.getByText('Moderate')).toBeVisible()
+    await expect(page.getByText(/unconfirmed transactions/)).toBeVisible()
+  })
+
+  test('mempool transaction count is formatted with commas', async ({ page }) => {
+    // mempoolFixture count = 14203 → "14,203 unconfirmed transactions"
+    await expect(page.getByText(/14,203 unconfirmed transactions/)).toBeVisible()
   })
 
   // Change 5: no footer attribution
