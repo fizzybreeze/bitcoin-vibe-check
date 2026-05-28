@@ -1089,8 +1089,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
-      <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none', backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 2px, transparent 2px, transparent 4px)' }} />
-
       {/* Header */}
       <header className="mb-8 flex items-center justify-between">
         <div>
