@@ -404,9 +404,11 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
   )
 }
 
+const CORS_PROXY = 'https://corsproxy.io/?'
+
 async function fetchNews() {
   try {
-    const res = await fetch('https://cryptocurrency.cv/api/v2/news?coin=bitcoin&limit=8')
+    const res = await fetch(CORS_PROXY + encodeURIComponent('https://cryptocurrency.cv/api/v2/news?coin=bitcoin&limit=8'))
     if (!res.ok) throw new Error('primary failed')
     const data = await res.json()
     if (!Array.isArray(data) || data.length === 0) throw new Error('empty')
@@ -418,7 +420,7 @@ async function fetchNews() {
     }))
   } catch {
     try {
-      const res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=BTC')
+      const res = await fetch(CORS_PROXY + encodeURIComponent('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=BTC'))
       if (!res.ok) throw new Error('fallback failed')
       const json = await res.json()
       const articles = json?.Data ?? []
