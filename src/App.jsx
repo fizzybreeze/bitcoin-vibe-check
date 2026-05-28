@@ -859,6 +859,7 @@ export default function App() {
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
+  const [chartNonce, setChartNonce]   = useState(0)
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
   const chartCache   = useRef(new Map())
@@ -1009,7 +1010,7 @@ export default function App() {
     }
     run()
     return () => { active = false }
-  }, [range, currency])
+  }, [range, currency, chartNonce])
 
   // Initialise AudioContext on first user interaction when sound is enabled
   useEffect(() => {
@@ -1054,6 +1055,11 @@ export default function App() {
     }
     prevPriceUsdRef.current = p
   }, [data?.priceUsd, soundEnabled])
+
+  function refreshChart() {
+    chartCache.current.delete(`${range}-${currency}`)
+    setChartNonce(n => n + 1)
+  }
 
   function handleSoundToggle() {
     const next = !soundEnabled
@@ -1190,7 +1196,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <div className="flex gap-1 overflow-x-auto">
+            <div className="flex items-center gap-1 overflow-x-auto">
               {RANGES.map(({ label }) => (
                 <button
                   key={label}
@@ -1204,6 +1210,23 @@ export default function App() {
                   {label}
                 </button>
               ))}
+              <button
+                onClick={refreshChart}
+                disabled={chartLoading}
+                aria-label="Refresh chart"
+                className="ml-1 rounded-full p-1 text-gray-600 transition-colors hover:text-gray-300 disabled:opacity-30"
+              >
+                <svg
+                  width="13" height="13" viewBox="0 0 13 13"
+                  fill="none" stroke="currentColor" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  className={chartLoading ? 'animate-spin' : ''}
+                  aria-hidden="true"
+                >
+                  <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
+                  <polyline points="11.5 1.5 11.5 5 8 5"/>
+                </svg>
+              </button>
             </div>
           </div>
 
