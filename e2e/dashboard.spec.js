@@ -149,6 +149,24 @@ test.describe('Bitcoin Dashboard', () => {
   test('footer attribution text is not present', async ({ page }) => {
     await expect(page.getByText(/CoinGecko · mempool\.space/)).not.toBeAttached()
   })
+
+  // Transaction Lookup section
+  test('lookup input and button are visible', async ({ page }) => {
+    await expect(page.getByPlaceholder('Enter transaction ID or address…')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Look up' })).toBeVisible()
+  })
+
+  test('invalid input shows validation message', async ({ page }) => {
+    await page.getByPlaceholder('Enter transaction ID or address…').fill('not-valid-123')
+    await page.getByRole('button', { name: 'Look up' }).click()
+    await expect(page.getByText('Please enter a valid Bitcoin transaction ID or address.')).toBeVisible()
+  })
+
+  test('result panel is not visible before any lookup', async ({ page }) => {
+    await expect(page.getByText('Looking up…')).not.toBeAttached()
+    // In idle state there is no result section in the DOM
+    await expect(page.getByText('Nothing found.')).not.toBeAttached()
+  })
 })
 
 // Halving Countdown card — desktop

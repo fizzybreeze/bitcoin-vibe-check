@@ -44,6 +44,31 @@ export function epochProgressBar(pct) {
   return '▓'.repeat(filled) + '░'.repeat(10 - filled)
 }
 
+export function sanitiseInput(input) {
+  return (input ?? '').replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
+}
+
+export function detectInputType(input) {
+  if (!input) return null
+  if (/^[0-9a-fA-F]{64}$/.test(input)) return 'tx'
+  const startsWithAddr = input.startsWith('1') || input.startsWith('3') || input.startsWith('bc1')
+  if (startsWithAddr && input.length >= 25 && input.length <= 62 && /^[a-zA-Z0-9]+$/.test(input)) return 'address'
+  return null
+}
+
+export function satsToBtc(sats) {
+  return sats / 1e8
+}
+
+export function calcFeeRate(fee, vsize) {
+  if (!vsize || fee == null) return null
+  return fee / vsize
+}
+
+export function btcToFiat(btc, price) {
+  return price != null ? btc * price : null
+}
+
 export function btcDominanceLabel(dominance) {
   if (dominance == null) return null
   if (dominance > 60)  return { text: 'Bitcoin season', cls: 'text-orange-400' }

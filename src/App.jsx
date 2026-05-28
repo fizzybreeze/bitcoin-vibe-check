@@ -6,6 +6,7 @@ import './App.css'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
   blocksToNextHalving, epochPercentage, btcDominanceLabel,
+  sanitiseInput, detectInputType, satsToBtc, calcFeeRate, btcToFiat,
 } from './utils.js'
 
 const ORANGE = '#fb923c'
@@ -560,6 +561,190 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
 }
 
 
+function TxResult({ data, price, currency }) {
+  const confirmed   = data.status?.confirmed ?? false
+  const blockHeight = data.status?.block_height ?? null
+  const vsize       = data.vsize ?? (data.weight ? Math.ceil(data.weight / 4) : null)
+  const fee         = data.fee ?? null
+  const feeRate     = calcFeeRate(fee, vsize)
+  const totalSats   = data.vout?.reduce((sum, o) => sum + (o.value ?? 0), 0) ?? 0
+  const totalBtc    = satsToBtc(totalSats)
+  const totalFiat   = btcToFiat(totalBtc, price)
+  const sym         = CURRENCY_META[currency]?.sym ?? '$'
+
+  return (
+    <div className="mt-4">
+      <p className={`text-lg font-bold ${confirmed ? 'text-green-400' : 'text-orange-400'}`}>
+        {confirmed ? 'Confirmed' : 'Unconfirmed'}
+        {confirmed && blockHeight != null && (
+          <span className="ml-2 text-sm font-normal text-gray-500">
+            block {blockHeight.toLocaleString('en-US')}
+          </span>
+        )}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Value</p>
+          <p className="mt-1 text-sm font-bold text-orange-400">{totalBtc.toFixed(4)} BTC</p>
+          {totalFiat != null && (
+            <p className="text-xs text-gray-500">
+              {sym}{totalFiat.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            </p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Fee</p>
+          <p className="mt-1 text-sm font-bold text-white">
+            {fee != null ? fee.toLocaleString('en-US') : '—'} sat
+          </p>
+          {feeRate != null && (
+            <p className="text-xs text-gray-500">{feeRate.toFixed(1)} sat/vB</p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Size</p>
+          <p className="mt-1 text-sm font-bold text-white">
+            {vsize != null ? vsize.toLocaleString('en-US') : '—'} vB
+          </p>
+        </div>
+        {confirmed && blockHeight != null && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Block</p>
+            <p className="mt-1 text-sm font-bold text-white">{blockHeight.toLocaleString('en-US')}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AddressResult({ data, price, currency }) {
+  const fundedSum      = data.chain_stats?.funded_txo_sum ?? 0
+  const spentSum       = data.chain_stats?.spent_txo_sum  ?? 0
+  const balanceSats    = fundedSum - spentSum
+  const balanceBtc     = satsToBtc(balanceSats)
+  const balanceFiat    = btcToFiat(balanceBtc, price)
+  const txCount        = data.chain_stats?.tx_count       ?? 0
+  const mempoolTxCount = data.mempool_stats?.tx_count     ?? 0
+  const sym            = CURRENCY_META[currency]?.sym ?? '$'
+
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Balance</p>
+        <p className="mt-1 text-sm font-bold text-orange-400">{balanceBtc.toFixed(4)} BTC</p>
+        {balanceFiat != null && (
+          <p className="text-xs text-gray-500">
+            {sym}{balanceFiat.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
+          </p>
+        )}
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Transactions</p>
+        <p className="mt-1 text-sm font-bold text-white">{txCount.toLocaleString('en-US')}</p>
+      </div>
+      {mempoolTxCount > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Unconfirmed</p>
+          <p className="mt-1 text-sm font-bold text-orange-400">{mempoolTxCount.toLocaleString('en-US')}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TxLookup({ price, currency }) {
+  const [input, setInput]               = useState('')
+  const [validationErr, setValidationErr] = useState(null)
+  const [status, setStatus]             = useState('idle') // idle | loading | result | notfound | error
+  const [result, setResult]             = useState(null)   // { type, data }
+
+  function handleInputChange(e) {
+    setInput(e.target.value)
+    if (validationErr) setValidationErr(null)
+  }
+
+  async function handleLookup() {
+    const cleaned = sanitiseInput(input)
+    const type    = detectInputType(cleaned)
+    if (!type) {
+      setValidationErr('Please enter a valid Bitcoin transaction ID or address.')
+      return
+    }
+    setValidationErr(null)
+    setResult(null)
+    setStatus('loading')
+    try {
+      const url = type === 'tx'
+        ? `https://mempool.space/api/tx/${cleaned}`
+        : `https://mempool.space/api/address/${cleaned}`
+      const res = await fetch(url)
+      if (!res.ok) { setStatus('notfound'); return }
+      const data = await res.json()
+      setResult({ type, data })
+      setStatus('result')
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') handleLookup()
+  }
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Transaction Lookup</p>
+      <p className="mt-1 text-xs text-gray-600">Look up a Bitcoin transaction ID or wallet address.</p>
+
+      {/* Input row */}
+      <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+        <input
+          type="text"
+          value={input}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Enter transaction ID or address…"
+          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        />
+        <button
+          onClick={handleLookup}
+          disabled={status === 'loading'}
+          className="rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 disabled:opacity-50 md:shrink-0"
+        >
+          Look up
+        </button>
+      </div>
+
+      {/* Validation error */}
+      {validationErr && (
+        <p className="mt-2 text-xs text-red-400">{validationErr}</p>
+      )}
+
+      {/* Loading */}
+      {status === 'loading' && (
+        <p className="mt-3 text-xs text-gray-500">Looking up…</p>
+      )}
+
+      {/* Not found / error */}
+      {(status === 'notfound' || status === 'error') && (
+        <p className="mt-3 text-xs text-red-400">Nothing found. Check the transaction ID or address and try again.</p>
+      )}
+
+      {/* Result panel */}
+      {status === 'result' && result && (
+        <>
+          <div className="mt-4 h-px bg-gray-800" />
+          {result.type === 'tx'
+            ? <TxResult data={result.data} price={price} currency={currency} />
+            : <AddressResult data={result.data} price={price} currency={currency} />
+          }
+        </>
+      )}
+    </div>
+  )
+}
+
 function mempoolCongestion(vsize) {
   if (vsize == null) return null
   if (vsize < 5_000_000)  return { label: 'Low',      cls: 'text-green-400',  bar: 'bg-green-400'  }
@@ -1022,6 +1207,9 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Transaction Lookup */}
+      <TxLookup price={price} currency={currency} />
 
     </div>
   )
