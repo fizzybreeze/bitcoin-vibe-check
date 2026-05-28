@@ -404,6 +404,83 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
   )
 }
 
+async function fetchNews() {
+  try {
+    const res = await fetch('https://cryptocurrency.cv/api/v2/news?coin=bitcoin&limit=8')
+    if (!res.ok) throw new Error('primary failed')
+    const data = await res.json()
+    if (!Array.isArray(data) || data.length === 0) throw new Error('empty')
+    return data.slice(0, 8).map(item => ({
+      title:       item.title,
+      source:      item.source,
+      publishedAt: new Date(item.published_at),
+      url:         item.url,
+    }))
+  } catch {
+    try {
+      const res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&categories=BTC')
+      if (!res.ok) throw new Error('fallback failed')
+      const json = await res.json()
+      const articles = json?.Data ?? []
+      if (!articles.length) throw new Error('empty fallback')
+      return articles.slice(0, 8).map(item => ({
+        title:       item.title,
+        source:      item.source_info?.name ?? 'Unknown',
+        publishedAt: new Date(item.published_on * 1000),
+        url:         item.url,
+      }))
+    } catch {
+      return null
+    }
+  }
+}
+
+function timeAgo(date) {
+  const diffMs  = Date.now() - date.getTime()
+  const minutes = Math.max(1, Math.floor(diffMs / 60_000))
+  const hours   = Math.floor(diffMs / 3_600_000)
+  const days    = Math.floor(diffMs / 86_400_000)
+  if (days >= 1)  return `${days} day${days === 1 ? '' : 's'} ago`
+  if (hours >= 1) return `${hours} hr${hours === 1 ? '' : 's'} ago`
+  return `${minutes} min ago`
+}
+
+function NewsCard({ news, loading }) {
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6">
+      <p className="mb-5 text-xs font-semibold uppercase tracking-widest text-gray-500">
+        Bitcoin News
+      </p>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-16" />)}
+        </div>
+      ) : !news || news.length === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-500">News unavailable</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {news.slice(0, 6).map((item, i) => (
+            <a
+              key={i}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-gray-800 px-4 py-3 transition-colors hover:bg-gray-700"
+            >
+              <p className="line-clamp-2 text-sm font-normal leading-snug text-white">
+                {item.title}
+              </p>
+              <p className="mt-1.5 text-xs text-gray-500">
+                {item.source} · {timeAgo(item.publishedAt)}
+              </p>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ChartTooltip({ active, payload, label, currency }) {
   if (!active || !payload?.length) return null
   const priceEntry  = payload.find(p => p.dataKey === 'price')
@@ -437,6 +514,8 @@ export default function App() {
   const [chartChange, setChartChange] = useState(null)
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
+  const [news, setNews]               = useState(null)
+  const [newsLoading, setNewsLoading] = useState(true)
   const chartCache   = useRef(new Map())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
@@ -543,6 +622,20 @@ export default function App() {
       clearTimeout(reconnectRef.current)
       wsRef.current?.close()
     }
+  }, [])
+
+  // News feed — load on mount, refresh every 5 minutes
+  useEffect(() => {
+    let active = true
+    async function run() {
+      const result = await fetchNews()
+      if (!active) return
+      setNews(result)
+      setNewsLoading(false)
+    }
+    run()
+    const id = setInterval(() => { if (active) run() }, 5 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
   }, [])
 
   // Load chart whenever range or currency changes; cache by "range-currency"
@@ -778,6 +871,11 @@ export default function App() {
           </div>
         </div>
 
+      </div>
+
+      {/* News feed */}
+      <div className="mt-4">
+        <NewsCard news={news} loading={newsLoading} />
       </div>
 
     </div>
