@@ -1169,7 +1169,7 @@ export default function App() {
               title="Latest block hash"
               className="hidden md:block font-mono text-xs text-orange-700"
             >
-              #{tipHash.slice(0, 8)}
+              #…{tipHash.slice(-8)}
             </span>
           )}
         </div>
