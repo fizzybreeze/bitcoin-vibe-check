@@ -705,7 +705,7 @@ function TxLookup({ price, currency }) {
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder="Enter transaction ID or address…"
-          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-sm text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
         />
         <button
           onClick={handleLookup}
