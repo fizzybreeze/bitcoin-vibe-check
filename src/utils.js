@@ -25,3 +25,27 @@ export function computeChartChange(chartData) {
   const last  = chartData[chartData.length - 1].price
   return ((last - first) / first) * 100
 }
+
+export function blocksToNextHalving(blockHeight) {
+  return 1_050_000 - blockHeight
+}
+
+export function halvingEstimatedDate(blocksRemaining, now = Date.now()) {
+  return new Date(now + blocksRemaining * 10 * 60 * 1000)
+}
+
+export function epochPercentage(blockHeight) {
+  return ((blockHeight % 210000) / 210000) * 100
+}
+
+export function epochProgressBar(pct) {
+  const filled = Math.max(0, Math.min(10, Math.round(pct / 10)))
+  return '▓'.repeat(filled) + '░'.repeat(10 - filled)
+}
+
+export function btcDominanceLabel(dominance) {
+  if (dominance == null) return null
+  if (dominance > 60)  return { text: 'Bitcoin season', cls: 'text-orange-400' }
+  if (dominance < 45)  return { text: 'Altcoin season', cls: 'text-purple-400' }
+  return                      { text: 'Mixed market',   cls: 'text-gray-500'   }
+}

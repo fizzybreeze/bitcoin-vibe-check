@@ -35,3 +35,14 @@ export const blockHeightFixture = 897000
 export const fngFixture = {
   data: [{ value: '72', value_classification: 'Greed' }],
 }
+
+export const globalFixture = {
+  data: {
+    market_cap_percentage: { btc: 64.5 },
+  },
+}
+
+export const difficultyFixture = {
+  difficultyChange: 3.2,
+  remainingBlocks: 1440,
+}
