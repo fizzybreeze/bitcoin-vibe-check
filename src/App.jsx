@@ -67,7 +67,7 @@ function parseChartData(json, days) {
 
 async function loadData() {
   const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes] = await Promise.allSettled([
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true').then(r => r.json()),
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/').then(r => r.json()),
@@ -91,6 +91,7 @@ async function loadData() {
     volumeCad:      btc.cad_24h_vol      ?? null,
     volumeChf:      btc.chf_24h_vol      ?? null,
     priceChange24h: btc.usd_24h_change   ?? null,
+    marketCapUsd:   btc.usd_market_cap   ?? null,
     fees:           feesRes.status    === 'fulfilled' ? feesRes.value              : null,
     blockHeight:    heightRes.status  === 'fulfilled' ? heightRes.value            : null,
     fng:            fngRes.status     === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
@@ -128,6 +129,7 @@ function writeCache(data) {
   if (data.volumeCad      != null) patch.volumeCad      = data.volumeCad
   if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
+  if (data.marketCapUsd   != null) patch.marketCapUsd   = data.marketCapUsd
   if (data.fng            != null) patch.fng            = data.fng
   if (data.difficulty     != null) patch.difficulty     = data.difficulty
   if (data.fees           != null) patch.fees           = data.fees
@@ -334,63 +336,82 @@ function HalvingCountdown({ blockHeight }) {
     ? new Date(Date.now() + secsLeft * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : null
 
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 mb-4">
-      <div className="flex flex-col gap-6 md:flex-row md:gap-0">
+  const epochBarContent = epochPct != null ? (
+    <>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+        <div className="h-full rounded-full bg-orange-400" style={{ width: `${epochPct}%` }} />
+      </div>
+      <p className="mt-1 text-xs text-gray-400">
+        <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
+        <span className="ml-1 text-gray-500">of current epoch complete</span>
+      </p>
+    </>
+  ) : <Skeleton className="h-2 w-full" />
 
-        {/* Blocks remaining */}
-        <div className="flex-1 md:pr-8">
+  return (
+    <div className="rounded-2xl bg-gray-900 p-4 mb-4">
+
+      {/* Mobile: two columns top row + epoch bar below */}
+      <div className="flex md:hidden flex-col gap-2">
+        <div className="flex gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+            {blocksRemaining != null
+              ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
+                  {blocksRemaining.toLocaleString('en-US')}
+                </p>
+              : <Skeleton className="mt-1 h-7 w-20" />
+            }
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Estimated Time</p>
+            {secsLeft != null
+              ? <>
+                  <p className="mt-1 text-xl font-bold text-white tabular-nums">
+                    {days}d {hours}h {mins}m
+                  </p>
+                  {estStr && <p className="text-xs text-gray-500">est. {estStr}</p>}
+                </>
+              : <Skeleton className="mt-1 h-7 w-28" />
+            }
+          </div>
+        </div>
+        <div>{epochBarContent}</div>
+      </div>
+
+      {/* Desktop: three columns side by side */}
+      <div className="hidden md:flex gap-0">
+
+        <div className="flex-1 pr-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
           {blocksRemaining != null
-            ? <p className="mt-2 text-3xl font-bold text-orange-400 md:text-5xl tabular-nums">
+            ? <p className="mt-1.5 text-2xl font-bold text-orange-400 tabular-nums">
                 {blocksRemaining.toLocaleString('en-US')}
               </p>
-            : <Skeleton className="mt-2 h-10 w-32" />
+            : <Skeleton className="mt-1.5 h-8 w-28" />
           }
         </div>
 
-        <div className="hidden md:block w-px self-stretch bg-gray-800" />
+        <div className="w-px self-stretch bg-gray-800" />
 
-        {/* Time remaining */}
-        <div className="flex-1 md:px-8">
+        <div className="flex-1 px-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Estimated Time</p>
           {secsLeft != null
-            ? (
-              <>
-                <p className="mt-2 text-3xl font-bold text-white md:text-5xl tabular-nums">
+            ? <>
+                <p className="mt-1.5 text-2xl font-bold text-white tabular-nums">
                   {days}d {hours}h {mins}m
                 </p>
-                {estStr && (
-                  <p className="mt-1.5 text-sm text-gray-500">est. {estStr}</p>
-                )}
+                {estStr && <p className="mt-1 text-sm text-gray-500">est. {estStr}</p>}
               </>
-            )
-            : <Skeleton className="mt-2 h-10 w-48" />
+            : <Skeleton className="mt-1.5 h-8 w-40" />
           }
         </div>
 
-        <div className="hidden md:block w-px self-stretch bg-gray-800" />
+        <div className="w-px self-stretch bg-gray-800" />
 
-        {/* Epoch progress */}
-        <div className="flex-1 md:pl-8">
+        <div className="flex-1 pl-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Epoch Progress</p>
-          {epochPct != null
-            ? (
-              <div className="mt-3">
-                <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
-                  <div
-                    className="h-full rounded-full bg-orange-400"
-                    style={{ width: `${epochPct}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-sm text-gray-400">
-                  <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
-                  <span className="ml-1 text-gray-500">of current epoch complete</span>
-                </p>
-              </div>
-            )
-            : <Skeleton className="mt-3 h-3 w-full" />
-          }
+          <div className="mt-2">{epochBarContent}</div>
         </div>
 
       </div>
@@ -465,7 +486,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
-function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory }) {
+function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
     ? ((volumeUsd - vol7dAvg) / vol7dAvg) * 100
@@ -497,6 +518,12 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory }) {
             {domLabel && (
               <p className={`hidden md:block mt-0.5 text-xs ${domLabel.cls}`}>
                 {domLabel.text}
+              </p>
+            )}
+            {/* Line 4: market cap — desktop only */}
+            {marketCapUsd != null && (
+              <p className="hidden md:block mt-0.5 text-xs text-gray-500">
+                Mkt cap {fmtVolume(marketCapUsd, 'usd')}
               </p>
             )}
           </>
@@ -597,6 +624,7 @@ export default function App() {
         volumeCad:      result.volumeCad      ?? cache.volumeCad      ?? null,
         volumeChf:      result.volumeChf      ?? cache.volumeChf      ?? null,
         priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
+        marketCapUsd:   result.marketCapUsd   ?? cache.marketCapUsd   ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
         difficulty:     result.difficulty     ?? cache.difficulty     ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
@@ -626,6 +654,7 @@ export default function App() {
         if (result.fees          != null) patch.fees          = result.fees
         if (result.blockHeight   != null) patch.blockHeight   = result.blockHeight
         if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
+        if (result.marketCapUsd   != null) patch.marketCapUsd   = result.marketCapUsd
         if (result.btcDominance  != null) patch.btcDominance  = result.btcDominance
         if (result.mempool       != null) patch.mempool       = result.mempool
         if (result.lastBlockTs   != null) patch.lastBlockTs   = result.lastBlockTs
@@ -712,7 +741,8 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs,
+          marketCapUsd } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
 
@@ -774,19 +804,24 @@ export default function App() {
         <div className="col-span-2 md:col-span-1">
           <NetworkPulseCard fng={fng} difficulty={difficulty} loading={loading} />
         </div>
-        <NetworkHeartbeatCard
-          blockHeight={blockHeight}
-          difficulty={difficulty}
-          lastBlockTs={lastBlockTs}
-          loading={loading}
-        />
-        <VolumeCard
-          volumeUsd={volumeUsd}
-          volume={volume}
-          currency={currency}
-          btcDominance={btcDominance}
-          volHistory={volHistory}
-        />
+        <div className="col-span-2 md:col-span-1">
+          <NetworkHeartbeatCard
+            blockHeight={blockHeight}
+            difficulty={difficulty}
+            lastBlockTs={lastBlockTs}
+            loading={loading}
+          />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <VolumeCard
+            volumeUsd={volumeUsd}
+            volume={volume}
+            currency={currency}
+            btcDominance={btcDominance}
+            volHistory={volHistory}
+            marketCapUsd={marketCapUsd}
+          />
+        </div>
       </div>
 
       {/* Halving countdown */}
@@ -796,7 +831,7 @@ export default function App() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
         {/* Price chart */}
-        <div className="rounded-2xl bg-gray-900 p-6 md:col-span-2">
+        <div className="rounded-2xl bg-gray-900 p-6 md:col-span-2 h-full">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
@@ -898,7 +933,7 @@ export default function App() {
         </div>
 
         {/* Mempool + Network fees */}
-        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4">
+        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Fees</p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}

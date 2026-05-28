@@ -21,6 +21,7 @@ export const priceFixture = {
     cad_24h_vol: 47_000_000_000,
     chf_24h_vol: 31_000_000_000,
     usd_24h_change: 2.5,
+    usd_market_cap: 2_100_000_000_000,
   },
 }
 

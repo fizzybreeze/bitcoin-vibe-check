@@ -138,6 +138,8 @@ test.describe('Bitcoin Dashboard', () => {
 })
 
 // Halving Countdown card — desktop
+// Note: component renders both a mobile layout (flex md:hidden) and a desktop layout
+// (hidden md:flex). On desktop the desktop element is .last() in the DOM.
 test.describe('Halving Countdown on desktop (1280px)', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
@@ -148,19 +150,20 @@ test.describe('Halving Countdown on desktop (1280px)', () => {
 
   test('shows blocks-to-halving number', async ({ page }) => {
     // blockHeightFixture = 897000; 1050000 - 897000 = 153,000
-    await expect(page.getByText('153,000').first()).toBeVisible()
+    // .last() targets the desktop layout element (second in DOM)
+    await expect(page.getByText('153,000').last()).toBeVisible()
   })
 
   test('shows time remaining in days/hours/minutes format', async ({ page }) => {
-    await expect(page.getByText(/\d+d \d+h \d+m/)).toBeVisible()
+    await expect(page.getByText(/\d+d \d+h \d+m/).last()).toBeVisible()
   })
 
   test('shows estimated halving date', async ({ page }) => {
-    await expect(page.getByText(/est\. /)).toBeVisible()
+    await expect(page.getByText(/est\. /).last()).toBeVisible()
   })
 
   test('shows epoch progress percentage', async ({ page }) => {
-    await expect(page.getByText(/of current epoch complete/)).toBeVisible()
+    await expect(page.getByText(/of current epoch complete/).last()).toBeVisible()
   })
 })
 
@@ -173,11 +176,11 @@ test.describe('Halving Countdown on mobile (375px)', () => {
     await page.goto('/')
   })
 
-  test('shows all three sections stacked on mobile', async ({ page }) => {
-    // All sections are visible on mobile (stacked, not hidden)
+  test('shows all three sections on mobile', async ({ page }) => {
+    // Mobile layout is .first() in DOM; desktop layout is hidden on mobile
     await expect(page.getByText('153,000').first()).toBeVisible()
-    await expect(page.getByText(/\d+d \d+h \d+m/)).toBeVisible()
-    await expect(page.getByText(/of current epoch complete/)).toBeVisible()
+    await expect(page.getByText(/\d+d \d+h \d+m/).first()).toBeVisible()
+    await expect(page.getByText(/of current epoch complete/).first()).toBeVisible()
   })
 
   test('page is functional at 375px width', async ({ page }) => {

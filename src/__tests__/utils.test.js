@@ -35,6 +35,10 @@ describe('fmtVolume', () => {
     expect(fmtVolume(null, 'usd')).toBeNull()
   })
 
+  it('formats trillions', () => {
+    expect(fmtVolume(1_400_000_000_000, 'usd')).toBe('$1.4T')
+  })
+
   it('formats billions', () => {
     expect(fmtVolume(35_000_000_000, 'usd')).toBe('$35.0B')
   })

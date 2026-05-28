@@ -14,8 +14,9 @@ export const fmtCurrency = (n, currency) =>
 export const fmtVolume = (n, currency) => {
   if (n == null) return null
   const sym = CURRENCY_META[currency]?.sym ?? '$'
-  if (n >= 1e9) return `${sym}${(n / 1e9).toFixed(1)}B`
-  if (n >= 1e6) return `${sym}${(n / 1e6).toFixed(0)}M`
+  if (n >= 1e12) return `${sym}${(n / 1e12).toFixed(1)}T`
+  if (n >= 1e9)  return `${sym}${(n / 1e9).toFixed(1)}B`
+  if (n >= 1e6)  return `${sym}${(n / 1e6).toFixed(0)}M`
   return fmtCurrency(n, currency)
 }
 
