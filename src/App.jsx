@@ -881,6 +881,7 @@ export default function App() {
   const [chartNonce, setChartNonce]   = useState(0)
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
+  const [tipHash, setTipHash]         = useState(null)
   const chartCache   = useRef(new Map())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
@@ -1031,6 +1032,13 @@ export default function App() {
     return () => { active = false }
   }, [range, currency, chartNonce])
 
+  useEffect(() => {
+    fetch('https://mempool.space/api/blocks/tip/hash')
+      .then(r => r.text())
+      .then(h => setTipHash(h.trim()))
+      .catch(() => setTipHash(null))
+  }, [data?.blockHeight])
+
   // Initialise AudioContext on first user interaction when sound is enabled
   useEffect(() => {
     if (!soundEnabled || audioCtxRef.current) return
@@ -1156,6 +1164,14 @@ export default function App() {
               : loading ? 'Loading…' : ''
             }
           </p>
+          {tipHash && (
+            <span
+              title="Latest block hash"
+              className="hidden md:block font-mono text-xs text-orange-700"
+            >
+              #{tipHash.slice(0, 8)}
+            </span>
+          )}
         </div>
       </header>
 
