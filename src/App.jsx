@@ -12,6 +12,7 @@ import {
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 const VOL_HISTORY_KEY = 'btc-vol-history'
+const SOUND_KEY = 'btc-vibe-sound-enabled'
 
 const RANGES = [
   { label: '1D', days: 1   },
@@ -225,6 +226,36 @@ function diffInterpretation(change) {
   if (change <= 1)  return { text: 'Stable',                cls: 'text-gray-500' }
   if (change <= 4)  return { text: 'Miners Speeding Up',    cls: 'text-gray-500' }
   return                   { text: 'Miners Speeding Up Fast', cls: 'text-gray-500' }
+}
+
+function playBlockThud(ctx) {
+  const now = ctx.currentTime
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(80, now)
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(0.4, now + 0.01)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+  osc.start(now)
+  osc.stop(now + 0.3)
+}
+
+function playPriceTick(ctx, up) {
+  const now = ctx.currentTime
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(up ? 880 : 440, now)
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(0.15, now + 0.005)
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+  osc.start(now)
+  osc.stop(now + 0.08)
 }
 
 function NetworkPulseCard({ fng, difficulty, loading }) {
@@ -834,6 +865,12 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
+  const audioCtxRef       = useRef(null)
+  const prevBlockHtRef    = useRef(null)
+  const prevPriceUsdRef   = useRef(null)
+  const lastTickRef       = useRef(0)
+
   // Load KPI data on mount
   useEffect(() => {
     let active = true
@@ -974,6 +1011,60 @@ export default function App() {
     return () => { active = false }
   }, [range, currency])
 
+  // Initialise AudioContext on first user interaction when sound is enabled
+  useEffect(() => {
+    if (!soundEnabled || audioCtxRef.current) return
+    function init() {
+      if (audioCtxRef.current) return
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      document.removeEventListener('click',      init, true)
+      document.removeEventListener('keydown',    init, true)
+      document.removeEventListener('touchstart', init, true)
+    }
+    document.addEventListener('click',      init, true)
+    document.addEventListener('keydown',    init, true)
+    document.addEventListener('touchstart', init, true)
+    return () => {
+      document.removeEventListener('click',      init, true)
+      document.removeEventListener('keydown',    init, true)
+      document.removeEventListener('touchstart', init, true)
+    }
+  }, [soundEnabled])
+
+  // New block sound
+  useEffect(() => {
+    const bh = data?.blockHeight ?? null
+    if (bh == null) return
+    if (soundEnabled && audioCtxRef.current && prevBlockHtRef.current != null && bh !== prevBlockHtRef.current) {
+      playBlockThud(audioCtxRef.current)
+    }
+    prevBlockHtRef.current = bh
+  }, [data?.blockHeight, soundEnabled])
+
+  // Price tick sound (debounced to max 1 per second)
+  useEffect(() => {
+    const p = data?.priceUsd ?? null
+    if (p == null) return
+    if (soundEnabled && audioCtxRef.current && prevPriceUsdRef.current != null && p !== prevPriceUsdRef.current) {
+      const now = Date.now()
+      if (now - lastTickRef.current >= 1000) {
+        lastTickRef.current = now
+        playPriceTick(audioCtxRef.current, p > prevPriceUsdRef.current)
+      }
+    }
+    prevPriceUsdRef.current = p
+  }, [data?.priceUsd, soundEnabled])
+
+  function handleSoundToggle() {
+    const next = !soundEnabled
+    setSoundEnabled(next)
+    localStorage.setItem(SOUND_KEY, next ? 'true' : 'false')
+    if (next && !audioCtxRef.current) {
+      // The button click is a user gesture — safe to create AudioContext immediately
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    }
+  }
+
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
           priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs,
@@ -999,6 +1090,24 @@ export default function App() {
           <p className="mt-0.5 text-xs text-gray-500">Read the room.</p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleSoundToggle}
+            aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
+            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-orange-400' : 'text-gray-600 hover:text-gray-400'}`}
+          >
+            {soundEnabled ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M1 5.5v5h3l4 3v-11l-4 3H1z"/>
+                <path d="M11.5 5.5a4 4 0 010 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M1 5.5v5h3l4 3v-11l-4 3H1z"/>
+                <line x1="10.5" y1="6" x2="14.5" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="14.5" y1="6" x2="10.5" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            )}
+          </button>
           <div className="relative">
             <select
               value={currency}
