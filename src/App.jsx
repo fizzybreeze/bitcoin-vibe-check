@@ -870,26 +870,28 @@ function ChartTooltip({ active, payload, label, currency }) {
   )
 }
 
-function SupporterTickerDesktop({ donors }) {
-  if (!donors.length) {
-    return (
-      <div className="bg-gray-900 py-2 px-4">
-        <p className="font-mono text-xs text-gray-600">Be the first to support Bitcoin Vibe Check ⚡</p>
-      </div>
-    )
-  }
-  const content = `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
+function SupporterTickerCard({ donors }) {
+  const content = donors.length
+    ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
+    : null
   return (
-    <div className="bg-gray-900 overflow-hidden">
-      <div
-        className="flex whitespace-nowrap"
-        style={{ animation: 'ticker-scroll 30s linear infinite' }}
-        onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
-        onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
-      >
-        <span className="font-mono text-xs text-orange-400 py-2 inline-block shrink-0 px-4">{content}</span>
-        <span className="font-mono text-xs text-orange-400 py-2 inline-block shrink-0 px-4">{content}</span>
-      </div>
+    <div className="hidden md:block rounded-2xl bg-gray-900 p-4 mt-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
+      {content ? (
+        <div className="overflow-hidden">
+          <div
+            className="flex whitespace-nowrap"
+            style={{ animation: 'ticker-scroll 30s linear infinite' }}
+            onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
+            onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
+          >
+            <span className="font-mono text-xs text-orange-400 py-1 inline-block shrink-0 pr-8">{content}</span>
+            <span className="font-mono text-xs text-orange-400 py-1 inline-block shrink-0 pr-8">{content}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="font-mono text-xs text-gray-600 py-1">Be the first to support Bitcoin Vibe Check ⚡</p>
+      )}
     </div>
   )
 }
@@ -1290,11 +1292,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Desktop supporter ticker: full-width, flush below header, hidden on mobile */}
-      <div className="hidden md:block -mx-8 -mt-8 mb-8">
-        <SupporterTickerDesktop donors={donors} />
-      </div>
-
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         {/* BTC Price: full-width on mobile, one col on desktop */}
@@ -1542,6 +1539,9 @@ export default function App() {
 
       {/* Transaction Lookup */}
       <TxLookup price={price} currency={currency} />
+
+      {/* Desktop supporters ticker card: shown in footer area, hidden on mobile */}
+      <SupporterTickerCard donors={donors} />
 
       {/* Mobile supporters card: shown on mobile only, above donation card */}
       <MobileSupportersCard donors={donors} />
