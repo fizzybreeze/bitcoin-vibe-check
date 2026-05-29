@@ -3,7 +3,7 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
 import './App.css'
-import BeehiivForm from './components/BeehiivForm.jsx'
+import BeehiivEmbed from './components/BeehiivEmbed.jsx'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -822,7 +822,7 @@ function NewsletterCard() {
       <p className="mt-3 text-lg font-bold text-white">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
       <p className="mt-1 text-xs text-gray-500">Join the newsletter. Unsubscribe any time.</p>
       <div className="mt-4">
-        <BeehiivForm />
+        <BeehiivEmbed />
       </div>
       <p className="mt-3 text-xs text-gray-600">
         Having trouble with the form? Subscribe directly at{' '}
@@ -868,7 +868,7 @@ function NewsletterModal() {
         <h2 className="text-2xl font-bold text-white">Satoshi's Weekly Brief</h2>
         <p className="mt-2 text-sm text-gray-400">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
         <div className="mt-4">
-          <BeehiivForm />
+          <BeehiivEmbed />
         </div>
         <button
           onClick={dismiss}
