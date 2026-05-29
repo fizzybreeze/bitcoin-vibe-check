@@ -957,14 +957,14 @@ function SupporterTickerCard({ donors }) {
     <div className="hidden md:block rounded-2xl bg-gray-900 p-4 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
       {content ? (
-        <div className="overflow-hidden">
+        <div className="relative w-full overflow-hidden">
           <span
-            className="font-mono text-xs text-orange-400 py-1 inline-block whitespace-nowrap"
-            style={{ animation: 'ticker-scroll 30s linear infinite' }}
+            className="inline-block whitespace-nowrap font-mono text-xs text-orange-400 py-1"
+            style={{ animation: 'ticker-scroll 30s linear infinite', willChange: 'transform' }}
             onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
             onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
           >
-            {content}
+            {content}{content}
           </span>
         </div>
       ) : (
