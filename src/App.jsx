@@ -915,11 +915,13 @@ function MobileSupportersCard({ donors }) {
 }
 
 function DonationCard() {
-  const [name, setName]         = useState('')
-  const [validErr, setValidErr] = useState(null)
-  const [status, setStatus]     = useState('idle') // idle | loading | success | error
+  const [name, setName]           = useState('')
+  const [validErr, setValidErr]   = useState(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [status, setStatus]       = useState('idle') // idle | loading | success | error
 
   async function handleSubmit() {
+    setSubmitted(true)
     const trimmed = name.trim()
     if (trimmed.length < 2)  { setValidErr('Name must be at least 2 characters.'); return }
     if (trimmed.length > 50) { setValidErr('Name must be 50 characters or less.'); return }
@@ -932,6 +934,7 @@ function DonationCard() {
     } else {
       setStatus('success')
       setName('')
+      setSubmitted(false)
     }
   }
 
@@ -944,6 +947,20 @@ function DonationCard() {
   return (
     <div className="rounded-2xl bg-gray-900 p-6 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Support Bitcoin Vibe Check</p>
+      <div className="mt-3 space-y-1">
+        <p className="text-sm text-gray-500">
+          1. Send any amount to Strike:{' '}
+          <a
+            href="https://strike.me/fizzybreeze"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-400 hover:text-orange-300"
+          >
+            Open Strike to pay ⚡₿
+          </a>
+        </p>
+        <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
+      </div>
       <div className="mt-4">
         <input
           type="text"
@@ -954,18 +971,9 @@ function DonationCard() {
           maxLength={50}
           className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
         />
-        {validErr && <p className="mt-2 text-xs text-red-400">{validErr}</p>}
+        {submitted && validErr && <p className="mt-2 text-xs text-red-400">{validErr}</p>}
       </div>
-      <div className="mt-3 flex flex-col gap-2 md:flex-row">
-        <a
-          href="https://strike.me/fizzybreeze"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-full border border-orange-500/50 px-5 py-2.5 text-sm font-semibold text-orange-400 transition-colors hover:bg-orange-500/10"
-        >
-          <span>⚡ Tip via Lightning</span>
-          <span className="text-xs font-normal text-gray-500">Open Strike to pay ⚡₿</span>
-        </a>
+      <div className="mt-3">
         <button
           onClick={handleSubmit}
           disabled={status === 'loading'}
