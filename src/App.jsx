@@ -923,6 +923,7 @@ function DonationCard() {
     if (trimmed.length > 50) { setValidErr('Name must be 50 characters or less.'); return }
     setValidErr(null)
     setStatus('loading')
+    if (!supabase) { setStatus('error'); return }
     const { error } = await supabase.from('donors').insert({ name: trimmed, approved: false })
     if (error) {
       setStatus('error')
@@ -1119,6 +1120,7 @@ export default function App() {
   // Fetch approved donors on mount; refresh every 5 minutes
   useEffect(() => {
     async function fetchDonors() {
+      if (!supabase) return
       const { data } = await supabase
         .from('donors')
         .select('id, name')
