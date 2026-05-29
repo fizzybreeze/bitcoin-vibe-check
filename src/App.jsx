@@ -853,6 +853,18 @@ function NewsletterModal() {
     setShow(false)
   }
 
+  useEffect(() => {
+    let timerId
+    function handleSubscribe() {
+      timerId = setTimeout(dismiss, 2500)
+    }
+    window.addEventListener('beehiiv:subscribe', handleSubscribe)
+    return () => {
+      window.removeEventListener('beehiiv:subscribe', handleSubscribe)
+      clearTimeout(timerId)
+    }
+  }, [])
+
   if (!show) return null
 
   return (
