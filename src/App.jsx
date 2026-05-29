@@ -819,7 +819,7 @@ function NewsletterCard() {
   return (
     <div className="rounded-2xl bg-gray-900 p-6 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Satoshi's Weekly Brief</p>
-      <p className="mt-3 text-lg font-bold text-white">Bitcoin's vibe, once a week. No noise.</p>
+      <p className="mt-3 text-lg font-bold text-white">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
       <p className="mt-1 text-xs text-gray-500">Join the newsletter. Unsubscribe any time.</p>
       <div className="mt-4">
         <BeehiivForm />
@@ -865,8 +865,8 @@ function NewsletterModal() {
         >
           ✕
         </button>
-        <h2 className="text-2xl font-bold text-white">Read the room.</h2>
-        <p className="mt-2 text-sm text-gray-400">Satoshi's Weekly Brief. Bitcoin's vibe, once a week. No noise.</p>
+        <h2 className="text-2xl font-bold text-white">Satoshi's Weekly Brief</h2>
+        <p className="mt-2 text-sm text-gray-400">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
         <div className="mt-4">
           <BeehiivForm />
         </div>
