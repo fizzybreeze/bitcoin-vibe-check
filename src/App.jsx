@@ -1637,7 +1637,7 @@ export default function App() {
       <p className="mt-2 text-center text-xs text-gray-600">
         By subscribing you agree to our{' '}
         <a
-          href="https://satoshi-weekly-brief.beehiiv.com/privacy"
+          href="https://www.beehiiv.com/privacy?utm_source=satoshi%27s_weekly_brief"
           target="_blank"
           rel="noopener noreferrer"
           className="text-orange-400 hover:text-orange-300"
