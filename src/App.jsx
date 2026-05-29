@@ -3,6 +3,7 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
 import './App.css'
+import BeehiivForm from './components/BeehiivForm.jsx'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -814,25 +815,6 @@ function TxLookup({ price, currency }) {
   )
 }
 
-function BeehiivEmbed() {
-  const containerRef = useRef(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    const script = document.createElement('script')
-    script.src = 'https://subscribe-forms.beehiiv.com/v3/loader.js'
-    script.async = true
-    script.setAttribute('data-beehiiv-form', '2f92f769-e2ce-4532-b1b6-ccd02017b0ec')
-    container.appendChild(script)
-    return () => {
-      if (container.contains(script)) container.removeChild(script)
-    }
-  }, [])
-
-  return <div className="beehiiv-wrapper" ref={containerRef} />
-}
-
 function NewsletterCard() {
   return (
     <div className="rounded-2xl bg-gray-900 p-6 mt-4">
@@ -840,7 +822,7 @@ function NewsletterCard() {
       <p className="mt-3 text-lg font-bold text-white">Bitcoin's vibe, once a week. No noise.</p>
       <p className="mt-1 text-xs text-gray-500">Join the newsletter. Unsubscribe any time.</p>
       <div className="mt-4">
-        <BeehiivEmbed />
+        <BeehiivForm />
       </div>
       <p className="mt-3 text-xs text-gray-600">
         Having trouble with the form? Subscribe directly at{' '}
@@ -886,7 +868,7 @@ function NewsletterModal() {
         <h2 className="text-2xl font-bold text-white">Read the room.</h2>
         <p className="mt-2 text-sm text-gray-400">Satoshi's Weekly Brief. Bitcoin's vibe, once a week. No noise.</p>
         <div className="mt-4">
-          <BeehiivEmbed />
+          <BeehiivForm />
         </div>
         <button
           onClick={dismiss}
