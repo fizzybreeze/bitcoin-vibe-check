@@ -16,3 +16,25 @@ body {
   from { transform: translateX(100%); }
   to   { transform: translateX(-100%); }
 }
+
+/* Beehiiv embed overrides — may not penetrate shadow DOM or iframe */
+.beehiiv-wrapper input,
+.beehiiv-wrapper input[type="email"] {
+  background-color: #1f2937 !important;
+  color: white !important;
+  border: 1px solid #374151 !important;
+  border-radius: 9999px !important;
+}
+
+.beehiiv-wrapper button,
+.beehiiv-wrapper button[type="submit"] {
+  background-color: #f97316 !important;
+  color: white !important;
+  border-radius: 9999px !important;
+}
+
+.beehiiv-wrapper > div,
+.beehiiv-wrapper > form {
+  background: transparent !important;
+  background-color: transparent !important;
+}

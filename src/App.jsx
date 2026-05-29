@@ -814,6 +814,91 @@ function TxLookup({ price, currency }) {
   )
 }
 
+function BeehiivEmbed() {
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const script = document.createElement('script')
+    script.src = 'https://subscribe-forms.beehiiv.com/v3/loader.js'
+    script.async = true
+    script.setAttribute('data-beehiiv-form', '2f92f769-e2ce-4532-b1b6-ccd02017b0ec')
+    container.appendChild(script)
+    return () => {
+      if (container.contains(script)) container.removeChild(script)
+    }
+  }, [])
+
+  return <div className="beehiiv-wrapper" ref={containerRef} />
+}
+
+function NewsletterCard() {
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Satoshi's Weekly Brief</p>
+      <p className="mt-3 text-lg font-bold text-white">Bitcoin's vibe, once a week. No noise.</p>
+      <p className="mt-1 text-xs text-gray-500">Join the newsletter. Unsubscribe any time.</p>
+      <div className="mt-4">
+        <BeehiivEmbed />
+      </div>
+      <p className="mt-3 text-xs text-gray-600">
+        Having trouble with the form? Subscribe directly at{' '}
+        <a
+          href="https://satoshi-weekly-brief.beehiiv.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-orange-400 hover:text-orange-300"
+        >
+          satoshi-weekly-brief.beehiiv.com
+        </a>
+      </p>
+    </div>
+  )
+}
+
+function NewsletterModal() {
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem('btc-vibe-newsletter-prompted')) return
+    const id = setTimeout(() => setShow(true), 5000)
+    return () => clearTimeout(id)
+  }, [])
+
+  function dismiss() {
+    localStorage.setItem('btc-vibe-newsletter-prompted', 'true')
+    setShow(false)
+  }
+
+  if (!show) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="relative w-full max-w-[480px] rounded-2xl bg-gray-900 border border-orange-500/30 p-6">
+        <button
+          onClick={dismiss}
+          aria-label="Close"
+          className="absolute top-4 right-4 text-sm text-gray-500 hover:text-gray-300"
+        >
+          ✕
+        </button>
+        <h2 className="text-2xl font-bold text-white">Read the room.</h2>
+        <p className="mt-2 text-sm text-gray-400">Satoshi's Weekly Brief. Bitcoin's vibe, once a week. No noise.</p>
+        <div className="mt-4">
+          <BeehiivEmbed />
+        </div>
+        <button
+          onClick={dismiss}
+          className="mt-4 text-xs text-gray-500 underline hover:text-gray-400"
+        >
+          No thanks, I'll stick to the dashboard
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SatoshiQuote() {
   const timeoutRef        = useRef(null)
   const [index, setIndex] = useState(() => Math.floor(Math.random() * QUOTES.length))
@@ -1547,10 +1632,24 @@ export default function App() {
       {/* Transaction Lookup */}
       <TxLookup price={price} currency={currency} />
 
-      {/* Desktop supporters ticker card: shown in footer area, hidden on mobile */}
-      <SupporterTickerCard donors={donors} />
+      {/* Newsletter signup */}
+      <NewsletterCard />
 
-      {/* Mobile supporters card: shown on mobile only, above donation card */}
+      {/* Privacy note */}
+      <p className="mt-2 text-center text-xs text-gray-600">
+        By subscribing you agree to our{' '}
+        <a
+          href="https://satoshi-weekly-brief.beehiiv.com/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-orange-400 hover:text-orange-300"
+        >
+          Privacy Policy
+        </a>
+      </p>
+
+      {/* Supporters ticker */}
+      <SupporterTickerCard donors={donors} />
       <MobileSupportersCard donors={donors} />
 
       {/* Donation card */}
@@ -1559,6 +1658,9 @@ export default function App() {
       <SatoshiQuote />
 
       <p className="py-4 text-center text-xs text-gray-700">© 2026 Bitcoin Vibe Check · MIT Licence</p>
+
+      {/* First-visit newsletter modal */}
+      <NewsletterModal />
 
     </div>
   )
