@@ -3,6 +3,7 @@ import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
 import './App.css'
+import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
   blocksToNextHalving, epochPercentage, btcDominanceLabel,
@@ -869,6 +870,117 @@ function ChartTooltip({ active, payload, label, currency }) {
   )
 }
 
+function SupporterTickerDesktop({ donors }) {
+  if (!donors.length) {
+    return (
+      <div className="bg-gray-900 py-2 px-4">
+        <p className="font-mono text-xs text-gray-600">Be the first to support Bitcoin Vibe Check ⚡</p>
+      </div>
+    )
+  }
+  const content = `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
+  return (
+    <div className="bg-gray-900 overflow-hidden">
+      <div
+        className="flex whitespace-nowrap"
+        style={{ animation: 'ticker-scroll 30s linear infinite' }}
+        onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
+        onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
+      >
+        <span className="font-mono text-xs text-orange-400 py-2 inline-block shrink-0 px-4">{content}</span>
+        <span className="font-mono text-xs text-orange-400 py-2 inline-block shrink-0 px-4">{content}</span>
+      </div>
+    </div>
+  )
+}
+
+function MobileSupportersCard({ donors }) {
+  return (
+    <div className="md:hidden rounded-2xl bg-gray-900 p-4 mt-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        {donors.length > 0
+          ? donors.map(d => (
+              <span key={d.id} className="font-mono text-xs text-orange-400 bg-gray-800 rounded-full px-3 py-1">
+                {d.name}
+              </span>
+            ))
+          : <p className="text-xs text-gray-600">Be the first to support Bitcoin Vibe Check ⚡</p>
+        }
+      </div>
+    </div>
+  )
+}
+
+function DonationCard() {
+  const [name, setName]         = useState('')
+  const [validErr, setValidErr] = useState(null)
+  const [status, setStatus]     = useState('idle') // idle | loading | success | error
+
+  async function handleSubmit() {
+    const trimmed = name.trim()
+    if (trimmed.length < 2)  { setValidErr('Name must be at least 2 characters.'); return }
+    if (trimmed.length > 50) { setValidErr('Name must be 50 characters or less.'); return }
+    setValidErr(null)
+    setStatus('loading')
+    const { error } = await supabase.from('donors').insert({ name: trimmed, approved: false })
+    if (error) {
+      setStatus('error')
+    } else {
+      setStatus('success')
+      setName('')
+    }
+  }
+
+  function handleNameChange(e) {
+    setName(e.target.value)
+    if (validErr) setValidErr(null)
+    if (status !== 'idle') setStatus('idle')
+  }
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Support Bitcoin Vibe Check</p>
+      <div className="mt-4">
+        <input
+          type="text"
+          value={name}
+          onChange={handleNameChange}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="Your name or handle…"
+          maxLength={50}
+          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        />
+        {validErr && <p className="mt-2 text-xs text-red-400">{validErr}</p>}
+      </div>
+      <div className="mt-3 flex flex-col gap-2 md:flex-row">
+        <a
+          href="https://strike.me/fizzybreeze"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-full border border-orange-500/50 px-5 py-2.5 text-sm font-semibold text-orange-400 transition-colors hover:bg-orange-500/10"
+        >
+          <span>⚡ Tip via Lightning</span>
+          <span className="text-xs font-normal text-gray-500">Open Strike to pay ⚡₿</span>
+        </a>
+        <button
+          onClick={handleSubmit}
+          disabled={status === 'loading'}
+          className="flex-1 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 disabled:opacity-50"
+        >
+          Submit my name
+        </button>
+      </div>
+      {status === 'success' && (
+        <p className="mt-3 text-xs text-green-400">Thanks! You'll appear in the banner within 24 hours.</p>
+      )}
+      {status === 'error' && (
+        <p className="mt-3 text-xs text-red-400">Something went wrong. Please try again.</p>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
@@ -881,6 +993,7 @@ export default function App() {
   const [chartNonce, setChartNonce]   = useState(0)
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
+  const [donors, setDonors]           = useState([])
   const chartCache   = useRef(new Map())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
@@ -1001,6 +1114,21 @@ export default function App() {
       clearTimeout(reconnectRef.current)
       wsRef.current?.close()
     }
+  }, [])
+
+  // Fetch approved donors on mount; refresh every 5 minutes
+  useEffect(() => {
+    async function fetchDonors() {
+      const { data } = await supabase
+        .from('donors')
+        .select('id, name')
+        .eq('approved', true)
+        .order('created_at', { ascending: true })
+      if (data) setDonors(data)
+    }
+    fetchDonors()
+    const id = setInterval(fetchDonors, 5 * 60 * 1000)
+    return () => clearInterval(id)
   }, [])
 
   // Load chart whenever range or currency changes; cache by "range-currency"
@@ -1159,6 +1287,11 @@ export default function App() {
           </p>
         </div>
       </header>
+
+      {/* Desktop supporter ticker: full-width, flush below header, hidden on mobile */}
+      <div className="hidden md:block -mx-8 -mt-8 mb-8">
+        <SupporterTickerDesktop donors={donors} />
+      </div>
 
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -1407,6 +1540,12 @@ export default function App() {
 
       {/* Transaction Lookup */}
       <TxLookup price={price} currency={currency} />
+
+      {/* Mobile supporters card: shown on mobile only, above donation card */}
+      <MobileSupportersCard donors={donors} />
+
+      {/* Donation card */}
+      <DonationCard />
 
       <SatoshiQuote />
 
