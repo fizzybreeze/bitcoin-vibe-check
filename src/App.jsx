@@ -879,15 +879,14 @@ function SupporterTickerCard({ donors }) {
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
       {content ? (
         <div className="overflow-hidden">
-          <div
-            className="flex whitespace-nowrap"
+          <span
+            className="font-mono text-xs text-orange-400 py-1 inline-block whitespace-nowrap"
             style={{ animation: 'ticker-scroll 30s linear infinite' }}
             onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
             onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
           >
-            <span className="font-mono text-xs text-orange-400 py-1 inline-block shrink-0 pr-8">{content}</span>
-            <span className="font-mono text-xs text-orange-400 py-1 inline-block shrink-0 pr-8">{content}</span>
-          </div>
+            {content}
+          </span>
         </div>
       ) : (
         <p className="font-mono text-xs text-gray-600 py-1">Be the first to support Bitcoin Vibe Check ⚡</p>
