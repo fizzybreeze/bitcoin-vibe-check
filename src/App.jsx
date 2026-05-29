@@ -1055,7 +1055,7 @@ function DonationCard() {
         <button
           onClick={handleSubmit}
           disabled={status === 'loading'}
-          className="flex-1 rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 disabled:opacity-50"
+          className="rounded-full border border-orange-500 bg-transparent px-6 py-2 text-sm font-semibold text-orange-500 transition-colors hover:bg-orange-500 hover:text-white disabled:opacity-50"
         >
           Submit my name
         </button>
@@ -1626,6 +1626,10 @@ export default function App() {
       {/* Transaction Lookup */}
       <TxLookup price={price} currency={currency} />
 
+      {/* Supporters ticker */}
+      <SupporterTickerCard donors={donors} />
+      <MobileSupportersCard donors={donors} />
+
       {/* Newsletter signup */}
       <NewsletterCard />
 
@@ -1641,10 +1645,6 @@ export default function App() {
           Privacy Policy
         </a>
       </p>
-
-      {/* Supporters ticker */}
-      <SupporterTickerCard donors={donors} />
-      <MobileSupportersCard donors={donors} />
 
       {/* Donation card */}
       <DonationCard />
