@@ -121,10 +121,13 @@ async function loadData() {
   }
 }
 
+// Fix 3: throw on non-OK so callers can handle rate-limit / server errors
 async function fetchChart(days, currency) {
-  const json = await fetch(
+  const res = await fetch(
     `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=${currency}&days=${days}`
-  ).then(r => r.json())
+  )
+  if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
+  const json = await res.json()
   return parseChartData(json, days)
 }
 
@@ -1080,10 +1083,14 @@ export default function App() {
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
   const [chartNonce, setChartNonce]   = useState(0)
+  const [chartError, setChartError]   = useState(null) // null | 'temp' | 'permanent'
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
   const [donors, setDonors]           = useState([])
   const chartCache   = useRef(new Map())
+  const debounceRef  = useRef(null)
+  const retryRef     = useRef(null)
+  const fetchIdRef   = useRef(0)
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
@@ -1221,12 +1228,17 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
-  // Load chart whenever range or currency changes; cache by "range-currency"
+  // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
-    let active = true
     const days = RANGES.find(r => r.label === range)?.days ?? 7
     const cacheKey = `${range}-${currency}`
 
+    // Cancel any pending debounce or retry timer
+    clearTimeout(debounceRef.current)
+    clearTimeout(retryRef.current)
+    setChartError(null)
+
+    // Serve immediately from cache if available
     if (chartCache.current.has(cacheKey)) {
       const cached = chartCache.current.get(cacheKey)
       setChart(cached)
@@ -1237,16 +1249,45 @@ export default function App() {
 
     setChartLoading(true)
     setChartChange(null)
-    async function run() {
-      const result = await fetchChart(days, currency)
-      if (!active) return
-      if (result !== null) chartCache.current.set(cacheKey, result)
-      setChart(result)
-      setChartChange(computeChartChange(result))
-      setChartLoading(false)
+
+    // Stamp this fetch so stale responses from cancelled requests are discarded
+    const myId = ++fetchIdRef.current
+
+    async function doFetch() {
+      try {
+        const result = await fetchChart(days, currency)
+        if (fetchIdRef.current !== myId) return
+        chartCache.current.set(cacheKey, result)
+        setChart(result)
+        setChartChange(computeChartChange(result))
+        setChartLoading(false)
+      } catch {
+        if (fetchIdRef.current !== myId) return
+        // Keep existing chart visible; show temp warning then auto-retry once
+        setChartLoading(false)
+        setChartError('temp')
+        retryRef.current = setTimeout(async () => {
+          try {
+            const result = await fetchChart(days, currency)
+            if (fetchIdRef.current !== myId) return
+            chartCache.current.set(cacheKey, result)
+            setChart(result)
+            setChartChange(computeChartChange(result))
+            setChartError(null)
+          } catch {
+            if (fetchIdRef.current !== myId) return
+            setChartError('permanent')
+          }
+        }, 3000)
+      }
     }
-    run()
-    return () => { active = false }
+
+    // Debounce: wait 400ms before firing so rapid toggle clicks only produce one request
+    debounceRef.current = setTimeout(doFetch, 400)
+    return () => {
+      clearTimeout(debounceRef.current)
+      clearTimeout(retryRef.current)
+    }
   }, [range, currency, chartNonce])
 
 
@@ -1468,70 +1509,103 @@ export default function App() {
             </div>
           </div>
 
-          {loading && !chart
+          {/* Fix 3: error messages below toggles */}
+          {chartError === 'temp' && (
+            <p className="mb-4 text-xs text-red-500/70">Data temporarily unavailable. Retrying...</p>
+          )}
+          {chartError === 'permanent' && (
+            <div className="mb-4 flex items-center gap-2">
+              <p className="text-xs text-red-500/70">Unable to load chart data. Try again shortly.</p>
+              <button
+                onClick={refreshChart}
+                aria-label="Retry chart"
+                className="text-gray-600 transition-colors hover:text-gray-400"
+              >
+                <svg
+                  width="13" height="13" viewBox="0 0 13 13"
+                  fill="none" stroke="currentColor" strokeWidth="1.5"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
+                  <polyline points="11.5 1.5 11.5 5 8 5"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Fix 4: skeleton when no data yet; dim + "Loading..." overlay while fetching new range */}
+          {chartLoading && !chart
             ? <Skeleton className="h-64" />
             : (
-              <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-                <ResponsiveContainer width="100%" height={264}>
-                  <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
-                        <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      interval={xInterval}
-                      tick={{ fill: '#6b7280', fontSize: 11 }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      yAxisId="price"
-                      domain={[lo - pad, hi + pad]}
-                      tick={{ fill: '#6b7280', fontSize: 11 }}
-                      axisLine={false} tickLine={false}
-                      tickFormatter={v => `${currencySym}${Math.round(v / 1000)}k`}
-                      width={52}
-                    />
-                    <YAxis yAxisId="volume" hide />
-                    <Tooltip content={<ChartTooltip currency={currency} />} />
-                    <Bar
-                      yAxisId="volume" dataKey="volume"
-                      fill={ORANGE} fillOpacity={0.15}
-                      strokeWidth={0} legendType="none"
-                      isAnimationActive={false}
-                    />
-                    <Area
-                      yAxisId="price"
-                      type="monotone" dataKey="price"
-                      stroke={ORANGE} strokeWidth={2}
-                      fill="url(#priceGrad)" dot={false}
-                      activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
-                    />
-                    {chartPrices.length > 0 && (
-                      <>
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={hi}
-                          stroke="#4ade80"
-                          strokeDasharray="3 3"
-                          strokeWidth={1}
-                          label={{ value: `H: ${currencySym}${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
-                        />
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={lo}
-                          stroke="#f87171"
-                          strokeDasharray="3 3"
-                          strokeWidth={1}
-                          label={{ value: `L: ${currencySym}${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
-                        />
-                      </>
-                    )}
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div className="relative">
+                <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                  <ResponsiveContainer width="100%" height={264}>
+                    <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
+                          <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        interval={xInterval}
+                        tick={{ fill: '#6b7280', fontSize: 11 }}
+                        axisLine={false} tickLine={false}
+                      />
+                      <YAxis
+                        yAxisId="price"
+                        domain={[lo - pad, hi + pad]}
+                        tick={{ fill: '#6b7280', fontSize: 11 }}
+                        axisLine={false} tickLine={false}
+                        tickFormatter={v => `${currencySym}${Math.round(v / 1000)}k`}
+                        width={52}
+                      />
+                      <YAxis yAxisId="volume" hide />
+                      <Tooltip content={<ChartTooltip currency={currency} />} />
+                      <Bar
+                        yAxisId="volume" dataKey="volume"
+                        fill={ORANGE} fillOpacity={0.15}
+                        strokeWidth={0} legendType="none"
+                        isAnimationActive={false}
+                      />
+                      <Area
+                        yAxisId="price"
+                        type="monotone" dataKey="price"
+                        stroke={ORANGE} strokeWidth={2}
+                        fill="url(#priceGrad)" dot={false}
+                        activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
+                      />
+                      {chartPrices.length > 0 && (
+                        <>
+                          <ReferenceLine
+                            yAxisId="price"
+                            y={hi}
+                            stroke="#4ade80"
+                            strokeDasharray="3 3"
+                            strokeWidth={1}
+                            label={{ value: `H: ${currencySym}${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
+                          />
+                          <ReferenceLine
+                            yAxisId="price"
+                            y={lo}
+                            stroke="#f87171"
+                            strokeDasharray="3 3"
+                            strokeWidth={1}
+                            label={{ value: `L: ${currencySym}${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
+                          />
+                        </>
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                {chartLoading && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <p className="text-xs text-gray-500">Loading...</p>
+                  </div>
+                )}
               </div>
             )
           }
