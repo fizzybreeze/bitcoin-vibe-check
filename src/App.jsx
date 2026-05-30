@@ -827,17 +827,6 @@ function NewsletterCard() {
       <div className="mt-4">
         <BeehiivEmbed />
       </div>
-      <p className="mt-3 text-xs text-gray-600">
-        Having trouble with the form? Subscribe directly at{' '}
-        <a
-          href="https://satoshi-weekly-brief.beehiiv.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-orange-400 hover:text-orange-300"
-        >
-          satoshi-weekly-brief.beehiiv.com
-        </a>
-      </p>
     </div>
   )
 }
