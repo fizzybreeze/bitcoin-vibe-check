@@ -65,6 +65,17 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Service worker** (Workbox) with NetworkFirst caching for all API calls and CacheFirst for static assets
 - The last-fetched dashboard state is shown when offline — no blank screen
 
+### Newsletter
+
+- **Satoshi's Weekly Brief** — Beehiiv-powered newsletter signup embedded in the sidebar and surfaced as a modal 5 seconds after a first visit
+- Modal is shown once per browser (suppressed via `localStorage`); auto-dismisses after a successful subscribe event
+
+### Lightning Donations & Supporters
+
+- **Donate via Strike** — one-click link to `strike.me/fizzybreeze` for Lightning payments
+- After paying, visitors submit their name or handle; entries are stored in **Supabase** with `approved: false` and go live within 24 hours once approved
+- Approved donors are displayed in a scrolling ticker on desktop and as pill badges on mobile
+
 ### Quality of Life
 - **Satoshi quote rotator** in the footer — eight quotes cycling every 12 seconds with a fade transition
 - All KPI data is written to `localStorage` so the last known values appear immediately on subsequent loads rather than showing skeletons for the full fetch duration
@@ -84,6 +95,8 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app) + [Workbox](https://developer.chrome.com/docs/workbox) |
 | Unit tests | [Vitest](https://vitest.dev) + [Testing Library](https://testing-library.com) |
 | E2E tests | [Playwright](https://playwright.dev) |
+| Backend | [Supabase](https://supabase.com) (donor name storage) |
+| Newsletter | [Beehiiv](https://beehiiv.com) (embedded signup form) |
 
 ---
 
@@ -110,8 +123,8 @@ All APIs are free and require no authentication.
 ### Installation
 
 ```bash
-git clone https://github.com/fizzybreeze/bitcoin-dashboard.git
-cd bitcoin-dashboard
+git clone https://github.com/fizzybreeze/bitcoin-vibe-check.git
+cd bitcoin-vibe-check
 npm install
 ```
 

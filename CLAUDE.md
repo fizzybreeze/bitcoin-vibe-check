@@ -24,6 +24,9 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/App.jsx` | All React components and data-fetching logic |
 | `src/utils.js` | Pure helpers: formatting, halving math, dominance labels, tx/address utils |
 | `src/index.css` | Tailwind v4 import and dark-mode variant |
+| `src/components/BeehiivEmbed.jsx` | Beehiiv newsletter embed wrapper |
+| `src/components/BeehiivForm.jsx` | Beehiiv form component |
+| `src/lib/supabase.js` | Supabase client (donor name submissions) |
 | `src/__tests__/` | Vitest unit tests (utils, KpiCard, txLookup) |
 | `e2e/` | Playwright dashboard smoke tests |
 
@@ -53,6 +56,11 @@ Chart data (`fetchChart`) is fetched separately whenever the selected range or c
 | `TxLookup` | Transaction ID / address lookup via mempool.space |
 | `SatoshiQuote` | Auto-rotating Satoshi quotes in the footer |
 | `KpiCard` | Generic labelled stat card (also exported for tests) |
+| `NewsletterCard` | "Satoshi's Weekly Brief" newsletter signup (Beehiiv embed, shown in sidebar) |
+| `NewsletterModal` | Newsletter modal shown 5 s after first visit; dismissed via localStorage flag |
+| `DonationCard` | Lightning donation CTA (Strike link + name/handle submission to Supabase) |
+| `SupporterTickerCard` | Desktop scrolling ticker of approved donor names fetched from Supabase |
+| `MobileSupportersCard` | Mobile pill-badge list of approved donor names |
 
 ### Sound
 
