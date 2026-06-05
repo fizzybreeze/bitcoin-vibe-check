@@ -10,6 +10,10 @@ import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
   blocksToNextHalving, epochPercentage, btcDominanceLabel,
 } from './utils.js'
+import {
+  computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
+  computeVibeLabel, computeHashRateTrend,
+} from './lib/calculations.js'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -199,22 +203,6 @@ function computeVol7dAvg(history) {
   return history.reduce((sum, h) => sum + h.volume, 0) / history.length
 }
 
-function computeIssuedSupply(blockHeight) {
-  if (blockHeight == null) return null
-  const epochs = [
-    { start: 0,         end: 209_999,   reward: 50 },
-    { start: 210_000,   end: 419_999,   reward: 25 },
-    { start: 420_000,   end: 629_999,   reward: 12.5 },
-    { start: 630_000,   end: 839_999,   reward: 6.25 },
-    { start: 840_000,   end: 1_049_999, reward: 3.125 },
-  ]
-  let total = 0
-  for (const { start, end, reward } of epochs) {
-    if (blockHeight < start) break
-    total += (Math.min(blockHeight, end) - start + 1) * reward
-  }
-  return total
-}
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
@@ -322,14 +310,8 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
     fetch('https://mempool.space/api/v1/mining/hashrate/1m')
       .then(r => r.json())
       .then(json => {
-        const rates = json?.hashrates
-        if (Array.isArray(rates) && rates.length >= 2) {
-          const first = rates[0].avgHashrate
-          const last  = rates[rates.length - 1].avgHashrate
-          if (first > 0) {
-            setHashRateTrend(((last - first) / first) * 100)
-          }
-        }
+        const trend = computeHashRateTrend(json?.hashrates)
+        if (trend != null) setHashRateTrend(trend)
       })
       .catch(() => {})
   }, [])
@@ -823,7 +805,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
                 <div className="mt-3 border-t border-gray-700" />
                 <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Sats per fiat</p>
                 <p className="mt-1 text-lg font-bold text-white">
-                  {Math.round(1e8 / price).toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
+                  {computeSatsPerFiat(price).toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
                 </p>
               </>
             )}
@@ -1471,7 +1453,7 @@ export default function App() {
           marketCapUsd, lightning, athUsd } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
-  const athPct = athUsd != null && priceUsd != null ? ((priceUsd - athUsd) / athUsd) * 100 : null
+  const athPct = computeAthDistance(priceUsd, athUsd)
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -1483,21 +1465,7 @@ export default function App() {
 
   const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
   const diffChange = difficulty?.difficultyChange ?? null
-  const vibeLabel  = (() => {
-    if (priceChange24h == null || fngScore == null || diffChange == null) return null
-    const priceStr = Math.abs(priceChange24h) <= 0.2 ? 'price is flat'
-      : priceChange24h > 0 ? 'price is up' : 'price is down'
-    const sentStr = fngScore <= 24 ? 'market is in extreme fear'
-      : fngScore <= 44 ? 'market is fearful'
-      : fngScore <= 55 ? 'market is neutral'
-      : fngScore <= 74 ? 'market is greedy'
-      : 'market is in extreme greed'
-    const minerStr = diffChange < -3 ? 'miners are slowing'
-      : diffChange > 3 ? 'miners are speeding up'
-      : 'miners are steady'
-    const sentence = `${sentStr}, ${priceStr}, ${minerStr}.`
-    return sentence.charAt(0).toUpperCase() + sentence.slice(1)
-  })()
+  const vibeLabel = computeVibeLabel(priceChange24h, fngScore, diffChange)
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">

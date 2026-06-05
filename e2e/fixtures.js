@@ -31,6 +31,7 @@ export const feesFixture = {
   hourFee: 10,
 }
 
+// Used both as the block height state value and as the height in blocksFixture
 export const blockHeightFixture = 897000
 
 export const fngFixture = {
@@ -50,7 +51,14 @@ export const difficultyFixture = {
 }
 
 export const blocksFixture = [
-  { timestamp: Math.floor(Date.now() / 1000) - 5 * 60 },  // 5 minutes ago
+  {
+    id: '000000000000000000029cf58b7a4badc83aa720ecdfa0c15c8e07dc5b7c3f3b',
+    height: blockHeightFixture,
+    tx_count: 2341,
+    size: 1_500_000,
+    timestamp: Math.floor(now / 1000) - 5 * 60,  // 5 minutes ago
+    extras: { totalFees: 12_345_678, avgFeeRate: 8 },
+  },
 ]
 
 export const lightningFixture = {
@@ -63,9 +71,23 @@ export const lightningFixture = {
 
 export const mempoolFixture = {
   count: 14203,
-  vsize: 25_000_000,  // Moderate (5M–50M)
+  vsize: 25_000_000,  // Moderate congestion (5M–50M vbytes)
   total_fee: 950000000,
   fee_histogram: [],
+}
+
+// /coins/markets — price 105,000 is ~3.7% below ATH of 109,000
+export const marketsFixture = [{ ath: 109000 }]
+
+// /mining/hashrate/3d — current network hash rate
+export const hashrate3dFixture = { currentHashrate: 800e18 }
+
+// /mining/hashrate/1m — two entries so the trend calculation has a first and last
+export const hashrate1mFixture = {
+  hashrates: [
+    { avgHashrate: 780e18 },
+    { avgHashrate: 800e18 },
+  ],
 }
 
 export const TX_ID = 'a'.repeat(64)
@@ -84,20 +106,8 @@ export const addressFixture = {
   address: ADDRESS,
   chain_stats: {
     funded_txo_sum: 100_000_000,
-    spent_txo_sum: 40_000_000,  // balance = 60_000_000 sats → 0.6000 BTC
+    spent_txo_sum: 40_000_000,  // balance = 60,000,000 sats → 0.6000 BTC
     tx_count: 15,
   },
   mempool_stats: { tx_count: 0 },
-}
-
-// /coins/markets — used for ATH; price 105000 is 3.7% below ATH of 109000
-export const marketsFixture = [{ ath: 109000 }]
-
-// /mining/hashrate — used by NetworkPulseCard; not checked by any assertion
-export const hashrate3dFixture = { currentHashrate: 800e18 }
-export const hashrate1mFixture = {
-  hashrates: [
-    { avgHashrate: 780e18 },
-    { avgHashrate: 800e18 },
-  ],
 }
