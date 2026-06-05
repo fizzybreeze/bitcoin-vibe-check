@@ -1440,7 +1440,7 @@ export default function App() {
           />
         </div>
         <div className="col-span-2 md:col-span-1">
-          <WhaleWatchCard />
+          <RecentBlocksCard blockHeight={blockHeight} />
         </div>
         <div className="col-span-2 md:col-span-1">
           <VolumeCard
