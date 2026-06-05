@@ -199,6 +199,23 @@ function computeVol7dAvg(history) {
   return history.reduce((sum, h) => sum + h.volume, 0) / history.length
 }
 
+function computeIssuedSupply(blockHeight) {
+  if (blockHeight == null) return null
+  const epochs = [
+    { start: 0,         end: 209_999,   reward: 50 },
+    { start: 210_000,   end: 419_999,   reward: 25 },
+    { start: 420_000,   end: 629_999,   reward: 12.5 },
+    { start: 630_000,   end: 839_999,   reward: 6.25 },
+    { start: 840_000,   end: 1_049_999, reward: 3.125 },
+  ]
+  let total = 0
+  for (const { start, end, reward } of epochs) {
+    if (blockHeight < start) break
+    total += (Math.min(blockHeight, end) - start + 1) * reward
+  }
+  return total
+}
+
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
 }
@@ -760,7 +777,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
-function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, mempool }) {
+function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, blockHeight }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
     ? ((volumeUsd - vol7dAvg) / vol7dAvg) * 100
@@ -810,29 +827,18 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
                 </p>
               </>
             )}
-            {/* Mempool pressure — desktop only */}
-            {mempool?.count != null && (() => {
-              const pct = Math.min(100, (mempool.count / 200_000) * 100)
-              const [label, colour] = pct <= 33
-                ? ['Low',      'text-green-400']
-                : pct <= 66
-                ? ['Moderate', 'text-orange-400']
-                : ['High',     'text-red-400']
-              const fill = pct <= 33 ? 'bg-green-400' : pct <= 66 ? 'bg-orange-400' : 'bg-red-400'
+            {/* Supply issued */}
+            {blockHeight != null && (() => {
+              const supply = computeIssuedSupply(blockHeight)
               return (
-                <div className="hidden lg:block mt-4">
-                  <div className="mt-3 border-t border-gray-700 mb-3" />
-                  <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Mempool pressure</p>
-                    <p className={`text-xs font-semibold ${colour}`}>{label}</p>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full animate-pulse ${fill}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
+                <>
+                  <div className="mt-3 border-t border-gray-700" />
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Supply issued</p>
+                  <p className="mt-1 text-lg font-bold text-white">
+                    {supply.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
+                </>
               )
             })()}
           </>
@@ -1590,7 +1596,7 @@ export default function App() {
             volHistory={volHistory}
             marketCapUsd={marketCapUsd}
             price={price}
-            mempool={mempool}
+            blockHeight={blockHeight}
           />
         </div>
       </div>

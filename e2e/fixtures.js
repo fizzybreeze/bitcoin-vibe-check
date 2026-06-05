@@ -89,3 +89,15 @@ export const addressFixture = {
   },
   mempool_stats: { tx_count: 0 },
 }
+
+// /coins/markets — used for ATH; price 105000 is 3.7% below ATH of 109000
+export const marketsFixture = [{ ath: 109000 }]
+
+// /mining/hashrate — used by NetworkPulseCard; not checked by any assertion
+export const hashrate3dFixture = { currentHashrate: 800e18 }
+export const hashrate1mFixture = {
+  hashrates: [
+    { avgHashrate: 780e18 },
+    { avgHashrate: 800e18 },
+  ],
+}

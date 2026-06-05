@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test'
 import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
-  txFixture, TX_ID, addressFixture, ADDRESS,
+  txFixture, TX_ID, addressFixture, ADDRESS, marketsFixture,
+  hashrate3dFixture, hashrate1mFixture,
 } from './fixtures.js'
 
 async function mockApis(page) {
@@ -37,6 +38,15 @@ async function mockApis(page) {
   )
   await page.route('https://api.alternative.me/fng/**', route =>
     route.fulfill({ json: fngFixture })
+  )
+  await page.route('https://api.coingecko.com/api/v3/coins/markets*', route =>
+    route.fulfill({ json: marketsFixture })
+  )
+  await page.route('https://mempool.space/api/v1/mining/hashrate/3d', route =>
+    route.fulfill({ json: hashrate3dFixture })
+  )
+  await page.route('https://mempool.space/api/v1/mining/hashrate/1m', route =>
+    route.fulfill({ json: hashrate1mFixture })
   )
   // Block the Kraken WebSocket so fixture price values are not overwritten
   await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())
