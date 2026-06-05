@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Version history
+
+| Version | Changes |
+|---|---|
+| v1.3.0 | ATH distance indicator, Fear & Greed sparkline, hash rate with 30d trend, Network Pulse card restructure (gauge removed, 2x2 grid, full-width sparkline and adjustment bar), Recent Blocks card replacing Whale Watch and Transaction Lookup, sentiment summary line in header replacing static tagline, sats per fiat indicator, live supply issued indicator, desktop 3-column layout, Network Heartbeat merged into Recent Blocks on desktop, chart currency locked to USD with label, CoinGecko Demo API key integrated, Alternative.me calls consolidated to single 30-day fetch, calculation functions extracted to `src/lib/calculations.js`, full test suite rewritten for v1.3.0 |
+
 ## Commands
 
 ```bash
@@ -27,7 +33,8 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/components/BeehiivEmbed.jsx` | Beehiiv newsletter embed wrapper |
 | `src/components/BeehiivForm.jsx` | Beehiiv form component |
 | `src/lib/supabase.js` | Supabase client (donor name submissions) |
-| `src/__tests__/` | Vitest unit tests (utils, KpiCard, txLookup) |
+| `src/lib/calculations.js` | Pure calculation functions (ATH distance, sats per fiat, supply issued, sentiment summary, hash rate trend, mempool pressure) |
+| `src/__tests__/` | Vitest unit tests (calculations) |
 | `e2e/` | Playwright dashboard smoke tests |
 
 ### Data flow
@@ -70,11 +77,17 @@ Optional audio feedback via Web Audio API (`btc-vibe-sound-enabled` in localStor
 
 Tailwind CSS v4 via the `@tailwindcss/vite` plugin — **not** PostCSS. The import in `src/index.css` is `@import "tailwindcss"`. No `tailwind.config.js` needed. The dark-mode variant is defined via `@custom-variant dark` in `index.css`.
 
-### External APIs (no auth required)
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `VITE_COINGECKO_API_KEY` | CoinGecko Demo API key, required for all CoinGecko calls |
+
+### External APIs
 
 | API | Endpoint purpose |
 |---|---|
-| `api.coingecko.com` | Price, volume, market cap, dominance, historical charts |
+| `api.coingecko.com` | Price, volume, market cap, dominance, historical charts — Demo API key header sent on all calls |
 | `mempool.space` | Fee tiers, block height, difficulty, mempool, Lightning stats, tx/address lookup |
-| `api.alternative.me/fng` | Fear & Greed index |
+| `api.alternative.me/fng` | Fear & Greed index — single `?limit=30` call used for both current value and 30-day sparkline |
 | `wss://ws.kraken.com/v2` | Real-time BTC price ticker (WebSocket) |
