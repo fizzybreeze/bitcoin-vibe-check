@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
+  LineChart, Line,
 } from 'recharts'
 import './App.css'
 import BeehiivEmbed from './components/BeehiivEmbed.jsx'
@@ -80,21 +81,31 @@ function parseChartData(json, days) {
   }))
 }
 
+const CG_KEY = import.meta.env.VITE_COINGECKO_API_KEY
+function cgFetch(url, init) {
+  return fetch(url, CG_KEY
+    ? { ...init, headers: { 'x-cg-demo-api-key': CG_KEY, ...init?.headers } }
+    : init
+  )
+}
+
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes, lightningRes] = await Promise.allSettled([
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true').then(r => r.json()),
+  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes, lightningRes, marketsRes] = await Promise.allSettled([
+    cgFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
-    fetch('https://api.alternative.me/fng/').then(r => r.json()),
+    fetch('https://api.alternative.me/fng/?limit=30').then(r => r.json()),
     fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
-    fetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
+    cgFetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
     fetch('https://mempool.space/api/mempool').then(r => r.json()),
     fetch('https://mempool.space/api/v1/blocks').then(r => r.json()),
     fetch('https://mempool.space/api/v1/lightning/statistics/latest').then(r => r.json()),
+    cgFetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin').then(r => r.json()),
   ])
 
-  const btc        = priceRes.status  === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
-  const globalData = globalRes.status === 'fulfilled' ? (globalRes.value?.data      ?? null) : null
+  const btc        = priceRes.status   === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
+  const globalData = globalRes.status  === 'fulfilled' ? (globalRes.value?.data      ?? null) : null
+  const marketsData = marketsRes.status === 'fulfilled' && Array.isArray(marketsRes.value) ? (marketsRes.value[0] ?? null) : null
   return {
     priceUsd:       btc.usd              ?? null,
     priceGbp:       btc.gbp              ?? null,
@@ -111,6 +122,9 @@ async function loadData() {
     fees:           feesRes.status    === 'fulfilled' ? feesRes.value              : null,
     blockHeight:    heightRes.status  === 'fulfilled' ? heightRes.value            : null,
     fng:            fngRes.status     === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
+    fngHistory:     fngRes.status     === 'fulfilled' && Array.isArray(fngRes.value.data) && fngRes.value.data.length
+                      ? [...fngRes.value.data].reverse().map(d => ({ v: parseInt(d.value, 10) }))
+                      : null,
     difficulty:     diffRes.status    === 'fulfilled' ? diffRes.value             : null,
     btcDominance:   globalData?.market_cap_percentage?.btc ?? null,
     mempool:        mempoolRes.status  === 'fulfilled' ? mempoolRes.value           : null,
@@ -118,12 +132,12 @@ async function loadData() {
                       ? (blocksRes.value[0].timestamp ?? null)
                       : null,
     lightning:      lightningRes.status === 'fulfilled' ? lightningRes.value : null,
+    athUsd:         marketsData?.ath ?? null,
   }
 }
 
-// Fix 3: throw on non-OK so callers can handle rate-limit / server errors
 async function fetchChart(days, currency) {
-  const res = await fetch(
+  const res = await cgFetch(
     `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=${currency}&days=${days}`
   )
   if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
@@ -151,12 +165,14 @@ function writeCache(data) {
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
   if (data.marketCapUsd   != null) patch.marketCapUsd   = data.marketCapUsd
   if (data.fng            != null) patch.fng            = data.fng
+  if (data.fngHistory     != null) patch.fngHistory     = data.fngHistory
   if (data.difficulty     != null) patch.difficulty     = data.difficulty
   if (data.fees           != null) patch.fees           = data.fees
   if (data.btcDominance   != null) patch.btcDominance   = data.btcDominance
   if (data.mempool        != null) patch.mempool        = data.mempool
   if (data.lastBlockTs    != null) patch.lastBlockTs    = data.lastBlockTs
   if (data.lightning      != null) patch.lightning      = data.lightning
+  if (data.athUsd         != null) patch.athUsd         = data.athUsd
   localStorage.setItem(CACHE_KEY, JSON.stringify({ ...prev, ...patch }))
 }
 
@@ -263,7 +279,7 @@ function playPriceTick(ctx, up) {
   osc.stop(now + 0.08)
 }
 
-function NetworkPulseCard({ fng, difficulty, loading }) {
+function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
   const fngClass       = fng?.value_classification ?? null
   const diffChange     = difficulty?.difficultyChange ?? null
@@ -272,13 +288,26 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
     ? Math.round(remainingBlocks * 10 / 60 / 24)
     : null
   const diffInterp     = diffInterpretation(diffChange)
+
+  const [hashRate, setHashRate] = useState(null)
+  useEffect(() => {
+    fetch('https://mempool.space/api/v1/mining/hashrate/3d')
+      .then(r => r.json())
+      .then(json => {
+        if (json?.currentHashrate != null) {
+          setHashRate((json.currentHashrate / 1e18).toFixed(1))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
-      <div className="mt-3 flex gap-4">
 
-        {/* Fear & Greed column */}
-        <div className="flex-1 min-w-0">
+      {/* Row 1: Fear & Greed | Difficulty */}
+      <div className="mt-3 grid grid-cols-2 gap-4">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear &amp; Greed</p>
           <div className="mt-2">
             {loading || fngScore == null
@@ -288,14 +317,9 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
             <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
               {fngClass ?? (loading ? ' ' : '—')}
             </p>
-            <FngArc score={loading ? null : fngScore} classification={fngClass} />
           </div>
         </div>
-
-        <div className="w-px self-stretch bg-gray-800" />
-
-        {/* Difficulty column */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty</p>
           <div className="mt-2">
             {loading
@@ -317,27 +341,66 @@ function NetworkPulseCard({ fng, difficulty, loading }) {
                   : ' '
               }
             </p>
-            <DifficultyBar change={loading ? null : diffChange} />
           </div>
         </div>
-
       </div>
+
+      {/* Row 2: Hash Rate | (empty) */}
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Hash Rate</p>
+          <div className="mt-2">
+            {hashRate != null
+              ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
+              : <Skeleton className="h-8 w-20" />
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mt-4 border-t border-gray-700" />
+
+      {/* Row 3: Adjustment bar (full width) */}
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty Adjustment</p>
+        <DifficultyBar change={loading ? null : diffChange} />
+      </div>
+
+      {/* Row 4: F&G sparkline (full width) */}
+      {fngHistory && (
+        <div className="mt-3">
+          <ResponsiveContainer width="100%" height={40}>
+            <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+              <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <p className="mt-1 text-xs text-gray-600">SENTIMENT TREND (30D)</p>
+        </div>
+      )}
     </div>
   )
 }
 
-export function BtcPriceCard({ value, change, sub }) {
+export function BtcPriceCard({ value, change, sub, athPct }) {
   const changePositive = change != null && change >= 0
+  const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">BTC Price</p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
-      <div className="mt-3 md:mt-[30px] flex items-center justify-between md:block">
+      <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
           {value == null
             ? <Skeleton className="h-9 w-32" />
             : <p className="text-2xl font-bold text-orange-400 md:text-3xl">{value}</p>
           }
+          {/* ATH distance — left column, all breakpoints */}
+          {athPct != null && value != null && (
+            isAtATH
+              ? <p className="mt-1 text-xs font-medium text-green-400 md:mt-1.5 md:text-sm">AT ATH</p>
+              : <p className="mt-1 text-xs text-gray-500 md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
+          )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (
             <p className={`hidden md:block mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
@@ -349,7 +412,7 @@ export function BtcPriceCard({ value, change, sub }) {
             <p className="hidden md:block mt-1.5 text-sm text-gray-400">{sub}</p>
           )}
         </div>
-        {/* Mobile-only: change + sub on right, vertically centred via parent items-center */}
+        {/* Mobile-only: change + sub on right */}
         {change != null && value != null && (
           <div className="md:hidden text-right shrink-0 ml-3">
             <p className={`text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
@@ -359,6 +422,101 @@ export function BtcPriceCard({ value, change, sub }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function WhaleWatchCard() {
+  const [whales, setWhales] = useState([])
+  const [now, setNow] = useState(Date.now())
+  const wsRef = useRef(null)
+  const reconnectRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+
+    function connect() {
+      if (!active) return
+      const ws = new WebSocket('wss://ws.blockchain.info/inv')
+      wsRef.current = ws
+
+      ws.onopen = () => ws.send(JSON.stringify({ op: 'unconfirmed_sub' }))
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.op !== 'utx') return
+          const tx = msg.x
+          const totalSats = (tx.out ?? []).reduce((sum, o) => sum + (o.value ?? 0), 0)
+          if (totalSats <= 10_000_000_000) return
+          setWhales(prev => [
+            { hash: tx.hash, btc: totalSats / 1e8, ts: Date.now() },
+            ...prev,
+          ].slice(0, 20))
+        } catch {}
+      }
+
+      ws.onclose = () => {
+        if (active) reconnectRef.current = setTimeout(connect, 5000)
+      }
+
+      ws.onerror = () => ws.close()
+    }
+
+    connect()
+    const tickId = setInterval(() => setNow(Date.now()), 30_000)
+
+    return () => {
+      active = false
+      clearTimeout(reconnectRef.current)
+      if (wsRef.current) {
+        wsRef.current.onclose = null
+        wsRef.current.close()
+      }
+      clearInterval(tickId)
+    }
+  }, [])
+
+  function timeAgo(ts) {
+    const secs = Math.floor((now - ts) / 1000)
+    if (secs < 60) return `${secs}s ago`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins} min ago`
+    return `${Math.floor(mins / 60)}h ago`
+  }
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Whale Watch 🐋</p>
+      {whales.length === 0 ? (
+        <p className="mt-3 text-sm text-gray-600">Watching for transactions above 10 BTC...</p>
+      ) : (
+        <div className="mt-3 max-h-[280px] overflow-y-auto space-y-3 pb-1">
+          {whales.slice(0, 5).map(w => (
+            <div key={w.hash} className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-orange-400 leading-tight">{w.btc.toFixed(2)} BTC</p>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <span className="font-mono text-xs text-gray-600">{w.hash.slice(0, 8)}...</span>
+                  <a
+                    href={`https://mempool.space/tx/${w.hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-600 hover:text-gray-400 transition-colors"
+                    aria-label="View on mempool.space"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 2H2a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1V6" />
+                      <path d="M7 1h2v2M5.5 4.5L9 1" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 shrink-0 pt-0.5">{timeAgo(w.ts)}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1076,10 +1234,11 @@ export default function App() {
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
   const [donors, setDonors]           = useState([])
-  const chartCache   = useRef(new Map())
-  const debounceRef  = useRef(null)
-  const retryRef     = useRef(null)
-  const fetchIdRef   = useRef(0)
+  const chartCache      = useRef(new Map())
+  const debounceRef     = useRef(null)
+  const retryRef        = useRef(null)
+  const fetchIdRef      = useRef(0)
+  const prevCacheKeyRef = useRef(null)
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
@@ -1114,12 +1273,14 @@ export default function App() {
         priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
         marketCapUsd:   result.marketCapUsd   ?? cache.marketCapUsd   ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
+        fngHistory:     result.fngHistory     ?? cache.fngHistory     ?? null,
         difficulty:     result.difficulty     ?? cache.difficulty     ?? null,
         fees:           result.fees           ?? cache.fees           ?? null,
         btcDominance:   result.btcDominance   ?? cache.btcDominance   ?? null,
         mempool:        result.mempool        ?? cache.mempool        ?? null,
         lastBlockTs:    result.lastBlockTs    ?? cache.lastBlockTs    ?? null,
         lightning:      result.lightning      ?? cache.lightning      ?? null,
+        athUsd:         result.athUsd         ?? cache.athUsd         ?? null,
       })
       setLastUpdated(new Date())
       setLoading(false)
@@ -1139,6 +1300,7 @@ export default function App() {
         if (!prev) return prev
         const patch = {}
         if (result.fng           != null) patch.fng           = result.fng
+        if (result.fngHistory    != null) patch.fngHistory    = result.fngHistory
         if (result.difficulty    != null) patch.difficulty    = result.difficulty
         if (result.fees          != null) patch.fees          = result.fees
         if (result.blockHeight   != null) patch.blockHeight   = result.blockHeight
@@ -1148,6 +1310,7 @@ export default function App() {
         if (result.mempool       != null) patch.mempool       = result.mempool
         if (result.lastBlockTs   != null) patch.lastBlockTs   = result.lastBlockTs
         if (result.lightning     != null) patch.lightning     = result.lightning
+        if (result.athUsd        != null) patch.athUsd        = result.athUsd
         return { ...prev, ...patch }
       })
       setLastUpdated(new Date())
@@ -1221,6 +1384,8 @@ export default function App() {
   useEffect(() => {
     const days = RANGES.find(r => r.label === range)?.days ?? 7
     const cacheKey = `${range}-${currency}`
+    const prevCacheKey = prevCacheKeyRef.current
+    prevCacheKeyRef.current = cacheKey
 
     // Cancel any pending debounce or retry timer
     clearTimeout(debounceRef.current)
@@ -1236,6 +1401,9 @@ export default function App() {
       return
     }
 
+    // Clear stale chart when switching to an uncached range so skeleton shows.
+    // On refresh (same cacheKey), keep old chart visible behind the opacity overlay.
+    if (prevCacheKey !== cacheKey) setChart(null)
     setChartLoading(true)
     setChartChange(null)
 
@@ -1267,7 +1435,7 @@ export default function App() {
             if (fetchIdRef.current !== myId) return
             setChartError('permanent')
           }
-        }, 3000)
+        }, 5000)
       }
     }
 
@@ -1279,6 +1447,26 @@ export default function App() {
     }
   }, [range, currency, chartNonce])
 
+  // Prefetch all four chart ranges concurrently on mount (and on currency change)
+  useEffect(() => {
+    let mounted = true
+    const ranges = [
+      { label: '1D', days: 1   },
+      { label: '7D', days: 7   },
+      { label: '1M', days: 30  },
+      { label: '1Y', days: 365 },
+    ]
+    Promise.allSettled(
+      ranges.map(async ({ label, days }) => {
+        const cacheKey = `${label}-${currency}`
+        if (chartCache.current.has(cacheKey)) return
+        const result = await fetchChart(days, currency)
+        if (!mounted) return
+        chartCache.current.set(cacheKey, result)
+      })
+    )
+    return () => { mounted = false }
+  }, [currency])
 
   // Initialise AudioContext on first user interaction when sound is enabled
   useEffect(() => {
@@ -1341,10 +1529,11 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng, difficulty, btcDominance, mempool, lastBlockTs,
-          marketCapUsd, lightning } = data ?? {}
+          priceChange24h, fees, blockHeight, fng, fngHistory, difficulty, btcDominance, mempool, lastBlockTs,
+          marketCapUsd, lightning, athUsd } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
+  const athPct = athUsd != null && priceUsd != null ? ((priceUsd - athUsd) / athUsd) * 100 : null
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -1416,11 +1605,12 @@ export default function App() {
             value={price != null ? fmtCurrency(price, currency) : null}
             change={priceChange24h}
             sub={priceChange24h != null ? '24h change' : null}
+            athPct={athPct}
           />
         </div>
         {/* Network Pulse: full-width on mobile, one col on desktop */}
         <div className="col-span-2 md:col-span-1">
-          <NetworkPulseCard fng={fng} difficulty={difficulty} loading={loading} />
+          <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
         </div>
         <div className="col-span-2 md:col-span-1">
           <NetworkHeartbeatCard
@@ -1429,6 +1619,9 @@ export default function App() {
             lastBlockTs={lastBlockTs}
             loading={loading}
           />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <WhaleWatchCard />
         </div>
         <div className="col-span-2 md:col-span-1">
           <VolumeCard
