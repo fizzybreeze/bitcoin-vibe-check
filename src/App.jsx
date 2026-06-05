@@ -135,9 +135,9 @@ async function loadData() {
   }
 }
 
-async function fetchChart(days, currency) {
+async function fetchChart(days) {
   const res = await cgFetch(
-    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=${currency}&days=${days}`
+    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
   )
   if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
   const json = await res.json()
@@ -391,11 +391,13 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 4: F&G sparkline (full width) */}
       {fngHistory && (
         <div className="mt-3">
-          <ResponsiveContainer width="100%" height={40}>
-            <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-              <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="h-10 lg:h-16">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+                <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
           <p className="mt-1 text-xs text-gray-600">SENTIMENT TREND (30D)</p>
         </div>
       )}
@@ -508,12 +510,20 @@ function RecentBlocksCard({ blockHeight }) {
                   >
                     {block.height.toLocaleString('en-US')}
                   </a>
-                  <p className="mt-0.5 text-xs text-gray-600">
-                    {block.tx_count.toLocaleString('en-US')} txs
-                    &nbsp;·&nbsp;
-                    {block.extras?.totalFees != null
-                      ? `${(block.extras.totalFees / 1e8).toFixed(3)} BTC in fees`
-                      : '—'}
+                  <p className="mt-0.5 text-xs text-gray-600 flex flex-wrap items-center gap-x-1">
+                    <span>{block.tx_count.toLocaleString('en-US')} txs</span>
+                    <span className="text-gray-700">·</span>
+                    <span>
+                      {block.extras?.totalFees != null
+                        ? `${(block.extras.totalFees / 1e8).toFixed(3)} BTC in fees`
+                        : '—'}
+                    </span>
+                    {block.extras?.avgFeeRate > 0 && (
+                      <>
+                        <span className="text-gray-700">·</span>
+                        <span>avg {block.extras.avgFeeRate} sat/vB</span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <p className="text-xs text-gray-600 shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
@@ -700,7 +710,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
-function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd }) {
+function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, mempool }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
     ? ((volumeUsd - vol7dAvg) / vol7dAvg) * 100
@@ -740,6 +750,41 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
                 Mkt cap {fmtVolume(marketCapUsd, 'usd')}
               </p>
             )}
+            {/* Sats per fiat */}
+            {price != null && (
+              <>
+                <div className="mt-3 border-t border-gray-700" />
+                <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Sats per fiat</p>
+                <p className="mt-1 text-lg font-bold text-white">
+                  {Math.round(1e8 / price).toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
+                </p>
+              </>
+            )}
+            {/* Mempool pressure — desktop only */}
+            {mempool?.count != null && (() => {
+              const pct = Math.min(100, (mempool.count / 150_000) * 100)
+              const [label, colour] = pct <= 33
+                ? ['Low',      'text-green-400']
+                : pct <= 66
+                ? ['Moderate', 'text-orange-400']
+                : ['High',     'text-red-400']
+              const fill = pct <= 33 ? 'bg-green-400' : pct <= 66 ? 'bg-orange-400' : 'bg-red-400'
+              return (
+                <div className="hidden lg:block mt-4">
+                  <div className="mt-3 border-t border-gray-700 mb-3" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Mempool pressure</p>
+                    <p className={`text-xs font-semibold ${colour}`}>{label}</p>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full animate-pulse ${fill}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
       </div>
@@ -1039,6 +1084,10 @@ function DonationCard() {
   )
 }
 
+// Singleton: ensures loadData() fires only once on mount even under React StrictMode
+// (StrictMode double-invokes effects in development; both runs share the same promise).
+let _initialLoadPromise = null
+
 export default function App() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
@@ -1053,11 +1102,12 @@ export default function App() {
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
   const [donors, setDonors]           = useState([])
-  const chartCache      = useRef(new Map())
-  const debounceRef     = useRef(null)
-  const retryRef        = useRef(null)
-  const fetchIdRef      = useRef(0)
-  const prevCacheKeyRef = useRef(null)
+  const chartCache       = useRef(new Map())
+  const debounceRef      = useRef(null)
+  const retryRef         = useRef(null)
+  const fetchIdRef       = useRef(0)
+  const prevCacheKeyRef  = useRef(null)
+  const prefetchingRef   = useRef(new Set())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
@@ -1071,7 +1121,8 @@ export default function App() {
   useEffect(() => {
     let active = true
     async function run() {
-      const result = await loadData()
+      if (!_initialLoadPromise) _initialLoadPromise = loadData()
+      const result = await _initialLoadPromise
       if (!active) return
       writeCache(result)
       const history = updateVolumeHistory(result.volumeUsd)
@@ -1106,6 +1157,21 @@ export default function App() {
     }
     run()
     return () => { active = false }
+  }, [])
+
+  // Prefetch all four chart ranges on mount so the main chart effect hits cache.
+  // prefetchingRef deduplication prevents StrictMode run 2 from firing duplicate requests;
+  // chartCache is a ref so writes from run 1 survive the mock unmount/remount.
+  useEffect(() => {
+    RANGES.forEach(({ label, days }) => {
+      const key = label
+      if (chartCache.current.has(key) || prefetchingRef.current.has(key)) return
+      prefetchingRef.current.add(key)
+      fetchChart(days)
+        .then(r  => { chartCache.current.set(key, r) })
+        .catch(() => {})
+        .finally(() => { prefetchingRef.current.delete(key) })
+    })
   }, [])
 
   // 60-second refresh cycle for KPI data (prices handled by WebSocket)
@@ -1202,7 +1268,7 @@ export default function App() {
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
     const days = RANGES.find(r => r.label === range)?.days ?? 7
-    const cacheKey = `${range}-${currency}`
+    const cacheKey = range
     const prevCacheKey = prevCacheKeyRef.current
     prevCacheKeyRef.current = cacheKey
 
@@ -1229,14 +1295,31 @@ export default function App() {
     // Stamp this fetch so stale responses from cancelled requests are discarded
     const myId = ++fetchIdRef.current
 
+    // After loading the active range, silently cache the other three ranges.
+    // Fire-and-forget: errors are swallowed, prefetchingRef prevents duplicate concurrent fetches.
+    function startBackgroundPrefetch() {
+      RANGES
+        .filter(r => r.label !== range)
+        .forEach(({ label, days: d }) => {
+          const key = label
+          if (chartCache.current.has(key) || prefetchingRef.current.has(key)) return
+          prefetchingRef.current.add(key)
+          fetchChart(d)
+            .then(r  => { chartCache.current.set(key, r) })
+            .catch(() => {})
+            .finally(() => { prefetchingRef.current.delete(key) })
+        })
+    }
+
     async function doFetch() {
       try {
-        const result = await fetchChart(days, currency)
+        const result = await fetchChart(days)
         if (fetchIdRef.current !== myId) return
         chartCache.current.set(cacheKey, result)
         setChart(result)
         setChartChange(computeChartChange(result))
         setChartLoading(false)
+        startBackgroundPrefetch()
       } catch {
         if (fetchIdRef.current !== myId) return
         // Keep existing chart visible; show temp warning then auto-retry once
@@ -1244,12 +1327,13 @@ export default function App() {
         setChartError('temp')
         retryRef.current = setTimeout(async () => {
           try {
-            const result = await fetchChart(days, currency)
+            const result = await fetchChart(days)
             if (fetchIdRef.current !== myId) return
             chartCache.current.set(cacheKey, result)
             setChart(result)
             setChartChange(computeChartChange(result))
             setChartError(null)
+            startBackgroundPrefetch()
           } catch {
             if (fetchIdRef.current !== myId) return
             setChartError('permanent')
@@ -1264,28 +1348,7 @@ export default function App() {
       clearTimeout(debounceRef.current)
       clearTimeout(retryRef.current)
     }
-  }, [range, currency, chartNonce])
-
-  // Prefetch all four chart ranges concurrently on mount (and on currency change)
-  useEffect(() => {
-    let mounted = true
-    const ranges = [
-      { label: '1D', days: 1   },
-      { label: '7D', days: 7   },
-      { label: '1M', days: 30  },
-      { label: '1Y', days: 365 },
-    ]
-    Promise.allSettled(
-      ranges.map(async ({ label, days }) => {
-        const cacheKey = `${label}-${currency}`
-        if (chartCache.current.has(cacheKey)) return
-        const result = await fetchChart(days, currency)
-        if (!mounted) return
-        chartCache.current.set(cacheKey, result)
-      })
-    )
-    return () => { mounted = false }
-  }, [currency])
+  }, [range, chartNonce])
 
   // Initialise AudioContext on first user interaction when sound is enabled
   useEffect(() => {
@@ -1332,7 +1395,7 @@ export default function App() {
   }, [data?.priceUsd, soundEnabled])
 
   function refreshChart() {
-    chartCache.current.delete(`${range}-${currency}`)
+    chartCache.current.delete(range)
     setChartNonce(n => n + 1)
   }
 
@@ -1362,14 +1425,32 @@ export default function App() {
   const xInterval   = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
   const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 
+  const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
+  const diffChange = difficulty?.difficultyChange ?? null
+  const vibeLabel  = (() => {
+    if (priceChange24h == null || fngScore == null || diffChange == null) return null
+    const priceStr = Math.abs(priceChange24h) <= 0.2 ? 'price is flat'
+      : priceChange24h > 0 ? 'price is up' : 'price is down'
+    const sentStr = fngScore <= 24 ? 'market is in extreme fear'
+      : fngScore <= 44 ? 'market is fearful'
+      : fngScore <= 55 ? 'market is neutral'
+      : fngScore <= 74 ? 'market is greedy'
+      : 'market is in extreme greed'
+    const minerStr = diffChange < -3 ? 'miners are slowing'
+      : diffChange > 3 ? 'miners are speeding up'
+      : 'miners are steady'
+    const sentence = `${sentStr}, ${priceStr}, ${minerStr}.`
+    return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+  })()
+
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
       {/* Header */}
-      <header className="mb-8 flex items-center justify-between">
+      <header className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
-          <p className="mt-0.5 text-xs text-gray-500">Read the room.</p>
+          <p className="mt-0.5 text-xs text-gray-500">{vibeLabel ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -1416,10 +1497,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* KPI row */}
-      <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {/* BTC Price: full-width on mobile, one col on desktop */}
-        <div className="col-span-2 md:col-span-1">
+      {/* KPI grid — 1 col mobile, 3 col desktop (lg+) */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Col 1 Row 1 — BTC Price */}
+        <div className="lg:col-start-1 lg:row-start-1">
           <BtcPriceCard
             value={price != null ? fmtCurrency(price, currency) : null}
             change={priceChange24h}
@@ -1427,11 +1508,12 @@ export default function App() {
             athPct={athPct}
           />
         </div>
-        {/* Network Pulse: full-width on mobile, one col on desktop */}
-        <div className="col-span-2 md:col-span-1">
+        {/* Col 2 Rows 1–2 — Network Pulse (full column height) */}
+        <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
         </div>
-        <div className="col-span-2 md:col-span-1">
+        {/* Col 3 Row 1 — Network Heartbeat */}
+        <div className="lg:col-start-3 lg:row-start-1">
           <NetworkHeartbeatCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1439,10 +1521,12 @@ export default function App() {
             loading={loading}
           />
         </div>
-        <div className="col-span-2 md:col-span-1">
+        {/* Col 3 Row 2 — Recent Blocks */}
+        <div className="lg:col-start-3 lg:row-start-2">
           <RecentBlocksCard blockHeight={blockHeight} />
         </div>
-        <div className="col-span-2 md:col-span-1">
+        {/* Col 1 Row 2 — 24H Volume */}
+        <div className="lg:col-start-1 lg:row-start-2">
           <VolumeCard
             volumeUsd={volumeUsd}
             volume={volume}
@@ -1450,6 +1534,8 @@ export default function App() {
             btcDominance={btcDominance}
             volHistory={volHistory}
             marketCapUsd={marketCapUsd}
+            price={price}
+            mempool={mempool}
           />
         </div>
       </div>
@@ -1476,6 +1562,7 @@ export default function App() {
                 </span>
               )}
             </div>
+            <div className="flex flex-col items-start md:items-end gap-1">
             <div className="flex items-center gap-1 overflow-x-auto">
               {RANGES.map(({ label }) => (
                 <button
@@ -1507,6 +1594,8 @@ export default function App() {
                   <polyline points="11.5 1.5 11.5 5 8 5"/>
                 </svg>
               </button>
+            </div>
+            <p className="text-xs text-gray-500">Chart in USD</p>
             </div>
           </div>
 
@@ -1561,11 +1650,11 @@ export default function App() {
                         domain={[lo - pad, hi + pad]}
                         tick={{ fill: '#6b7280', fontSize: 11 }}
                         axisLine={false} tickLine={false}
-                        tickFormatter={v => `${currencySym}${Math.round(v / 1000)}k`}
+                        tickFormatter={v => `$${Math.round(v / 1000)}k`}
                         width={52}
                       />
                       <YAxis yAxisId="volume" hide />
-                      <Tooltip content={<ChartTooltip currency={currency} />} />
+                      <Tooltip content={<ChartTooltip currency="usd" />} />
                       <Bar
                         yAxisId="volume" dataKey="volume"
                         fill={ORANGE} fillOpacity={0.15}
@@ -1587,7 +1676,7 @@ export default function App() {
                             stroke="#4ade80"
                             strokeDasharray="3 3"
                             strokeWidth={1}
-                            label={{ value: `H: ${currencySym}${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
+                            label={{ value: `H: $${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
                           />
                           <ReferenceLine
                             yAxisId="price"
@@ -1595,7 +1684,7 @@ export default function App() {
                             stroke="#f87171"
                             strokeDasharray="3 3"
                             strokeWidth={1}
-                            label={{ value: `L: ${currencySym}${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
+                            label={{ value: `L: $${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
                           />
                         </>
                       )}

@@ -21,7 +21,7 @@ export default defineConfig({
               cacheName: 'api-coingecko',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 50, maxAgeSeconds: 3600 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -31,7 +31,7 @@ export default defineConfig({
               cacheName: 'api-mempool',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 50, maxAgeSeconds: 3600 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -41,7 +41,7 @@ export default defineConfig({
               cacheName: 'api-alternative',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 10, maxAgeSeconds: 3600 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],
