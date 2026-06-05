@@ -11,13 +11,21 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### Live Market Data
 - **Real-time BTC price** streamed via Kraken WebSocket v2, updating continuously without page refresh
 - **24-hour price change** with directional indicator, sourced from CoinGecko
+- **ATH distance indicator** — shows percentage below all-time high, or "AT ATH" when within 0.1%
 - **Multi-currency display** — switch between USD, GBP, EUR, CAD, and CHF at any time; all values update instantly
 - **24h trading volume** with comparison against the 7-day rolling average
 - **Market capitalisation** and **BTC dominance** with market season interpretation (Bitcoin season / Altcoin season / Mixed market)
+- **Sats per fiat** — live satoshis-per-unit-of-selected-currency, updating with every price tick
+- **Live Bitcoin supply issued** — total BTC issued to date derived from block height, with no extra API call
 
 ### Sentiment & Network Health
-- **Fear & Greed index** (0–100) from Alternative.me, with colour-coded arc gauge and classification label
+- **Live sentiment summary line** in the header — a human-readable sentence combining price direction, Fear & Greed, and mining difficulty; replaces the static tagline
+- **Fear & Greed index** (0–100) from Alternative.me, with colour-coded classification label and **30-day sparkline**
+- **Redesigned Network Pulse card** — 2×2 metric grid (Fear & Greed, Difficulty, Hash Rate), full-width difficulty adjustment bar, and full-width 30-day sentiment sparkline; arc gauge removed
+- **Hash rate** — current network hash rate in EH/s with a **30-day trend indicator** (▲/▼ percentage)
 - **Mining difficulty** — current epoch change percentage, time until next adjustment, and textual interpretation
+- **Recent Blocks feed** — live list of the five most recent blocks with transaction count, total fees, and average fee rate; replaces the Whale Watch card
+- **Network Heartbeat merged into Recent Blocks** on desktop — block height, average block time, and last-block breathing dot appear as a header above the block list on large screens
 - **Average block time** — colour-coded green/amber/red relative to the 10-minute target
 - **Current block height** with animated breathing dot showing the time since the last block
 
@@ -32,6 +40,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Four time ranges: **1D · 7D · 1M · 1Y**
 - Range percentage change displayed alongside the chart label
 - **High and low reference lines** for the selected period
+- **Chart locked to USD** with a clear "Chart in USD" label — avoids CoinGecko chart API limitations with other currencies
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
 - Chart data is cached per range/currency combination for the session to avoid redundant API requests
 
@@ -79,8 +88,8 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### Quality of Life
 - **Satoshi quote rotator** in the footer — eight quotes cycling every 12 seconds with a fade transition
 - All KPI data is written to `localStorage` so the last known values appear immediately on subsequent loads rather than showing skeletons for the full fetch duration
-- Fully **responsive** — single-column layout on mobile, four-column grid on desktop
-- No login, no account, no API keys required
+- Fully **responsive** — single-column layout on mobile, optimised **3-column grid on desktop** with Network Pulse spanning the full column height
+- No login, no account required
 
 ---
 
@@ -162,7 +171,15 @@ npm run test:e2e   # end-to-end tests (Playwright)
 
 ## Environment Variables
 
-None. All data sources are public APIs that do not require keys or tokens. No `.env` file is needed.
+| Variable | Description |
+|---|---|
+| `VITE_COINGECKO_API_KEY` | CoinGecko Demo API key (free — register at [coingecko.com/en/api](https://www.coingecko.com/en/api)). Required for all CoinGecko calls. Without it, requests fall back to the unauthenticated tier which has stricter rate limits. |
+
+Create a `.env` file in the project root and add:
+
+```
+VITE_COINGECKO_API_KEY=your_key_here
+```
 
 ---
 
