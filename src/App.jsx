@@ -300,6 +300,23 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       .catch(() => {})
   }, [])
 
+  const [hashRateTrend, setHashRateTrend] = useState(null)
+  useEffect(() => {
+    fetch('https://mempool.space/api/v1/mining/hashrate/1m')
+      .then(r => r.json())
+      .then(json => {
+        const rates = json?.hashrates
+        if (Array.isArray(rates) && rates.length >= 2) {
+          const first = rates[0].avgHashrate
+          const last  = rates[rates.length - 1].avgHashrate
+          if (first > 0) {
+            setHashRateTrend(((last - first) / first) * 100)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
@@ -353,6 +370,11 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
               ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
               : <Skeleton className="h-8 w-20" />
             }
+            {hashRate != null && hashRateTrend != null && (
+              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {hashRateTrend >= 0 ? '▲' : '▼'}&nbsp;{hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -425,93 +447,77 @@ export function BtcPriceCard({ value, change, sub, athPct }) {
   )
 }
 
-function WhaleWatchCard() {
-  const [whales, setWhales] = useState([])
-  const [now, setNow] = useState(Date.now())
-  const wsRef = useRef(null)
-  const reconnectRef = useRef(null)
+function RecentBlocksCard({ blockHeight }) {
+  const [blocks, setBlocks] = useState(null)
+  const [now, setNow]       = useState(Date.now())
 
+  // Fetch on mount and immediately when a new block is detected
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
+    fetch('https://mempool.space/api/v1/blocks', { signal: controller.signal })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { if (Array.isArray(data)) setBlocks(data.slice(0, 5)) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [blockHeight])
 
-    function connect() {
-      if (!active) return
-      const ws = new WebSocket('wss://ws.blockchain.info/inv')
-      wsRef.current = ws
+  // 60-second background poll
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch('https://mempool.space/api/v1/blocks')
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => { if (Array.isArray(data)) setBlocks(data.slice(0, 5)) })
+        .catch(() => {})
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [])
 
-      ws.onopen = () => ws.send(JSON.stringify({ op: 'unconfirmed_sub' }))
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data)
-          if (msg.op !== 'utx') return
-          const tx = msg.x
-          const totalSats = (tx.out ?? []).reduce((sum, o) => sum + (o.value ?? 0), 0)
-          if (totalSats <= 10_000_000_000) return
-          setWhales(prev => [
-            { hash: tx.hash, btc: totalSats / 1e8, ts: Date.now() },
-            ...prev,
-          ].slice(0, 20))
-        } catch {}
-      }
-
-      ws.onclose = () => {
-        if (active) reconnectRef.current = setTimeout(connect, 5000)
-      }
-
-      ws.onerror = () => ws.close()
-    }
-
-    connect()
-    const tickId = setInterval(() => setNow(Date.now()), 30_000)
-
-    return () => {
-      active = false
-      clearTimeout(reconnectRef.current)
-      if (wsRef.current) {
-        wsRef.current.onclose = null
-        wsRef.current.close()
-      }
-      clearInterval(tickId)
-    }
+  // Live timestamps — tick every second, no re-fetch needed
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
   }, [])
 
   function timeAgo(ts) {
-    const secs = Math.floor((now - ts) / 1000)
-    if (secs < 60) return `${secs}s ago`
+    const secs = Math.floor(now / 1000 - ts)
+    if (secs < 60)  return `${secs}s ago`
     const mins = Math.floor(secs / 60)
-    if (mins < 60) return `${mins} min ago`
+    if (mins < 60)  return `${mins} min ago`
     return `${Math.floor(mins / 60)}h ago`
   }
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Whale Watch 🐋</p>
-      {whales.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-600">Watching for transactions above 10 BTC...</p>
+    <div className="rounded-2xl bg-gray-900 p-6 h-full">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Recent Blocks</p>
+      {blocks == null ? (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-12" />)}
+        </div>
       ) : (
-        <div className="mt-3 max-h-[280px] overflow-y-auto space-y-3 pb-1">
-          {whales.slice(0, 5).map(w => (
-            <div key={w.hash} className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-lg font-bold text-orange-400 leading-tight">{w.btc.toFixed(2)} BTC</p>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className="font-mono text-xs text-gray-600">{w.hash.slice(0, 8)}...</span>
+        <div className="mt-3">
+          {blocks.map((block, i) => (
+            <div key={block.id}>
+              {i > 0 && <div className="border-t border-gray-700" />}
+              <div className="flex items-start justify-between gap-2 py-2.5">
+                <div className="min-w-0">
                   <a
-                    href={`https://mempool.space/tx/${w.hash}`}
+                    href={`https://mempool.space/block/${block.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-600 hover:text-gray-400 transition-colors"
-                    aria-label="View on mempool.space"
+                    className="text-base font-bold text-orange-400 hover:text-orange-300 transition-colors"
                   >
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 2H2a1 1 0 00-1 1v5a1 1 0 001 1h5a1 1 0 001-1V6" />
-                      <path d="M7 1h2v2M5.5 4.5L9 1" />
-                    </svg>
+                    {block.height.toLocaleString('en-US')}
                   </a>
+                  <p className="mt-0.5 text-xs text-gray-600">
+                    {block.tx_count.toLocaleString('en-US')} txs
+                    &nbsp;·&nbsp;
+                    {block.extras?.totalFees != null
+                      ? `${(block.extras.totalFees / 1e8).toFixed(3)} BTC in fees`
+                      : '—'}
+                  </p>
                 </div>
+                <p className="text-xs text-gray-600 shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
               </div>
-              <p className="text-xs text-gray-600 shrink-0 pt-0.5">{timeAgo(w.ts)}</p>
             </div>
           ))}
         </div>
