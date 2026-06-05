@@ -812,7 +812,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
             )}
             {/* Mempool pressure — desktop only */}
             {mempool?.count != null && (() => {
-              const pct = Math.min(100, (mempool.count / 150_000) * 100)
+              const pct = Math.min(100, (mempool.count / 200_000) * 100)
               const [label, colour] = pct <= 33
                 ? ['Low',      'text-green-400']
                 : pct <= 66
