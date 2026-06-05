@@ -391,10 +391,10 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 4: F&G sparkline (full width) */}
       {fngHistory && (
         <div className="mt-3">
-          <div className="h-10 lg:h-16">
+          <div className="h-20">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-                <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} activeDot={false} strokeWidth={1.5} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -449,7 +449,7 @@ export function BtcPriceCard({ value, change, sub, athPct }) {
   )
 }
 
-function RecentBlocksCard({ blockHeight }) {
+function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   const [blocks, setBlocks] = useState(null)
   const [now, setNow]       = useState(Date.now())
 
@@ -488,9 +488,59 @@ function RecentBlocksCard({ blockHeight }) {
     return `${Math.floor(mins / 60)}h ago`
   }
 
+  const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
+  const colors = blockTimeColors(avgBlockMins)
+  const lastBlockMinsAgo = lastBlockTs != null
+    ? Math.max(0, Math.floor((Date.now() / 1000 - lastBlockTs) / 60))
+    : null
+
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Recent Blocks</p>
+
+      {/* Heartbeat header — desktop only, merged above the block list */}
+      <div className="hidden lg:block">
+        <div className="mt-3 flex gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Block Height</p>
+            <div className="mt-1">
+              {loading || blockHeight == null
+                ? <Skeleton className="h-7 w-16" />
+                : <p className="text-sm font-bold text-orange-400 tabular-nums md:text-2xl">
+                    {blockHeight.toLocaleString('en-US')}
+                  </p>
+              }
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Avg Block Time</p>
+            <div className="mt-1">
+              {loading || avgBlockMins == null
+                ? <Skeleton className="h-7 w-12" />
+                : <p className={`text-sm font-bold tabular-nums md:text-2xl ${colors.text}`}>
+                    {avgBlockMins.toFixed(1)} min
+                  </p>
+              }
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-center gap-1.5">
+          {!loading && (
+            <span key={blockHeight ?? 'init'} className="relative inline-flex h-2 w-2 shrink-0">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colors.bg}`} />
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
+            </span>
+          )}
+          <p className="text-xs text-gray-500">
+            {lastBlockMinsAgo != null
+              ? `Last block: ${lastBlockMinsAgo} min ago`
+              : 'Last block: unknown'
+            }
+          </p>
+        </div>
+        <div className="mt-3 border-t border-gray-700" />
+      </div>
+
       {blocks == null ? (
         <div className="mt-3 space-y-2">
           {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-12" />)}
@@ -1512,8 +1562,8 @@ export default function App() {
         <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
         </div>
-        {/* Col 3 Row 1 — Network Heartbeat */}
-        <div className="lg:col-start-3 lg:row-start-1">
+        {/* Col 3 Row 1 — Network Heartbeat (mobile only; merged into Recent Blocks on desktop) */}
+        <div className="lg:hidden">
           <NetworkHeartbeatCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1521,9 +1571,14 @@ export default function App() {
             loading={loading}
           />
         </div>
-        {/* Col 3 Row 2 — Recent Blocks */}
-        <div className="lg:col-start-3 lg:row-start-2">
-          <RecentBlocksCard blockHeight={blockHeight} />
+        {/* Col 3 Rows 1–2 — Recent Blocks (heartbeat header merged in on desktop) */}
+        <div className="lg:col-start-3 lg:row-start-1 lg:row-span-2">
+          <RecentBlocksCard
+            blockHeight={blockHeight}
+            difficulty={difficulty}
+            lastBlockTs={lastBlockTs}
+            loading={loading}
+          />
         </div>
         {/* Col 1 Row 2 — 24H Volume */}
         <div className="lg:col-start-1 lg:row-start-2">
