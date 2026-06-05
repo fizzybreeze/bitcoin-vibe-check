@@ -9,7 +9,6 @@ import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
   blocksToNextHalving, epochPercentage, btcDominanceLabel,
-  sanitiseInput, detectInputType, satsToBtc, calcFeeRate, btcToFiat,
 } from './utils.js'
 
 const ORANGE = '#fb923c'
@@ -766,216 +765,6 @@ export function KpiCard({ label, value, sub, subClassName, change }) {
 }
 
 
-function TxResult({ data, price, currency }) {
-  const confirmed   = data.status?.confirmed ?? false
-  const blockHeight = data.status?.block_height ?? null
-  const vsize       = data.vsize ?? (data.weight ? Math.ceil(data.weight / 4) : null)
-  const fee         = data.fee ?? null
-  const feeRate     = calcFeeRate(fee, vsize)
-  const totalSats   = data.vout?.reduce((sum, o) => sum + (o.value ?? 0), 0) ?? 0
-  const totalBtc    = satsToBtc(totalSats)
-  const totalFiat   = btcToFiat(totalBtc, price)
-  const sym         = CURRENCY_META[currency]?.sym ?? '$'
-
-  return (
-    <div className="mt-4">
-      <p className={`text-lg font-bold ${confirmed ? 'text-green-400' : 'text-orange-400'}`}>
-        {confirmed ? 'Confirmed' : 'Unconfirmed'}
-        {confirmed && blockHeight != null && (
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            block {blockHeight.toLocaleString('en-US')}
-          </span>
-        )}
-      </p>
-      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Value</p>
-          <p className="mt-1 text-sm font-bold text-orange-400">{totalBtc.toFixed(4)} BTC</p>
-          {totalFiat != null && (
-            <p className="text-xs text-gray-500">
-              {sym}{totalFiat.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Fee</p>
-          <p className="mt-1 text-sm font-bold text-white">
-            {fee != null ? fee.toLocaleString('en-US') : '—'} sat
-          </p>
-          {feeRate != null && (
-            <p className="text-xs text-gray-500">{feeRate.toFixed(1)} sat/vB</p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Size</p>
-          <p className="mt-1 text-sm font-bold text-white">
-            {vsize != null ? vsize.toLocaleString('en-US') : '—'} vB
-          </p>
-        </div>
-        {confirmed && blockHeight != null && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Block</p>
-            <p className="mt-1 text-sm font-bold text-white">{blockHeight.toLocaleString('en-US')}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function AddressResult({ data, price, currency }) {
-  const fundedSum      = data.chain_stats?.funded_txo_sum ?? 0
-  const spentSum       = data.chain_stats?.spent_txo_sum  ?? 0
-  const balanceSats    = fundedSum - spentSum
-  const balanceBtc     = satsToBtc(balanceSats)
-  const balanceFiat    = btcToFiat(balanceBtc, price)
-  const txCount        = data.chain_stats?.tx_count       ?? 0
-  const mempoolTxCount = data.mempool_stats?.tx_count     ?? 0
-  const sym            = CURRENCY_META[currency]?.sym ?? '$'
-
-  return (
-    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Balance</p>
-        <p className="mt-1 text-sm font-bold text-orange-400">{balanceBtc.toFixed(4)} BTC</p>
-        {balanceFiat != null && (
-          <p className="text-xs text-gray-500">
-            {sym}{balanceFiat.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
-          </p>
-        )}
-      </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Transactions</p>
-        <p className="mt-1 text-sm font-bold text-white">{txCount.toLocaleString('en-US')}</p>
-      </div>
-      {mempoolTxCount > 0 && (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Unconfirmed</p>
-          <p className="mt-1 text-sm font-bold text-orange-400">{mempoolTxCount.toLocaleString('en-US')}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TxLookup({ price, currency }) {
-  const [input, setInput]               = useState('')
-  const [validationErr, setValidationErr] = useState(null)
-  const [status, setStatus]             = useState('idle') // idle | loading | result | notfound | error
-  const [result, setResult]             = useState(null)   // { type, data }
-  const resultRef = useRef(null)
-
-  useEffect(() => {
-    if (status === 'result' && resultRef.current) {
-      resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [status])
-
-  function handleInputChange(e) {
-    setInput(e.target.value)
-    if (validationErr) setValidationErr(null)
-  }
-
-  async function handleLookup() {
-    const cleaned = sanitiseInput(input)
-    const type    = detectInputType(cleaned)
-    if (!type) {
-      setValidationErr('Please enter a valid Bitcoin transaction ID or address.')
-      return
-    }
-    setValidationErr(null)
-    setResult(null)
-    if (cleaned === '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f') {
-      setStatus('genesis')
-      return
-    }
-    setStatus('loading')
-    try {
-      const url = type === 'tx'
-        ? `https://mempool.space/api/tx/${cleaned}`
-        : `https://mempool.space/api/address/${cleaned}`
-      const res = await fetch(url)
-      if (!res.ok) { setStatus('notfound'); return }
-      const data = await res.json()
-      setResult({ type, data })
-      setStatus('result')
-    } catch {
-      setStatus('error')
-    }
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter') handleLookup()
-  }
-
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Transaction Lookup</p>
-      <p className="mt-1 text-xs text-gray-600">Look up a Bitcoin transaction ID or wallet address.</p>
-
-      {/* Input row */}
-      <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
-        <input
-          type="text"
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Enter transaction ID or address…"
-          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-        />
-        <button
-          onClick={handleLookup}
-          disabled={status === 'loading'}
-          className="rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 disabled:opacity-50 md:shrink-0"
-        >
-          Look up
-        </button>
-      </div>
-
-      {/* Validation error */}
-      {validationErr && (
-        <p className="mt-2 text-xs text-red-400">{validationErr}</p>
-      )}
-
-      {/* Loading */}
-      {status === 'loading' && (
-        <p className="mt-3 text-xs text-gray-500">Looking up…</p>
-      )}
-
-      {/* Not found / error */}
-      {(status === 'notfound' || status === 'error') && (
-        <p className="mt-3 text-xs text-red-400">Nothing found. Check the transaction ID or address and try again.</p>
-      )}
-
-      {status === 'genesis' && (
-        <div ref={resultRef} className="mt-4 rounded-xl border border-orange-500/30 bg-gray-950 p-6">
-          <p className="font-mono text-2xl font-bold text-orange-400 md:text-3xl">GENESIS BLOCK</p>
-          <p className="mt-2 text-xs text-gray-500">Block 0 · 3 January 2009 · Mined by Satoshi Nakamoto</p>
-          <div className="mt-4 h-px bg-gray-800" />
-          <p className="mt-4 text-sm italic text-white">"Bitcoin: A Peer-to-Peer Electronic Cash System"</p>
-          <iframe
-            src="https://bitcoin.org/bitcoin.pdf"
-            className="mt-4 w-full rounded border border-gray-700 h-[400px] md:h-[600px]"
-            title="Bitcoin Whitepaper"
-          />
-          <p className="mt-4 text-xs text-gray-600">The Times 03/Jan/2009 Chancellor on brink of second bailout for banks.</p>
-        </div>
-      )}
-
-      {/* Result panel */}
-      {status === 'result' && result && (
-        <div ref={resultRef}>
-          <div className="mt-4 h-px bg-gray-800" />
-          {result.type === 'tx'
-            ? <TxResult data={result.data} price={price} currency={currency} />
-            : <AddressResult data={result.data} price={price} currency={currency} />
-          }
-        </div>
-      )}
-    </div>
-  )
-}
-
 function NewsletterCard() {
   return (
     <div className="rounded-2xl bg-gray-900 p-6 mt-4">
@@ -1043,20 +832,34 @@ function NewsletterModal() {
   )
 }
 
+const GENESIS_HASH = '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
+
 function SatoshiQuote() {
   const timeoutRef        = useRef(null)
-  const [index, setIndex] = useState(() => Math.floor(Math.random() * QUOTES.length))
-  const [visible, setVisible] = useState(true)
+  const genesisTimeoutRef = useRef(null)
+  const incrementRef      = useRef(0)
+  const [index, setIndex]           = useState(() => Math.floor(Math.random() * QUOTES.length))
+  const [visible, setVisible]       = useState(true)
+  const [showGenesis, setShowGenesis] = useState(false)
 
   useEffect(() => {
     const id = setInterval(() => {
       setVisible(false)
       timeoutRef.current = setTimeout(() => {
+        incrementRef.current += 1
         setIndex(i => (i + 1) % QUOTES.length)
         setVisible(true)
+        if (incrementRef.current % QUOTES.length === 0) {
+          setShowGenesis(true)
+          genesisTimeoutRef.current = setTimeout(() => setShowGenesis(false), 12000)
+        }
       }, 500)
     }, 12000)
-    return () => { clearInterval(id); clearTimeout(timeoutRef.current) }
+    return () => {
+      clearInterval(id)
+      clearTimeout(timeoutRef.current)
+      clearTimeout(genesisTimeoutRef.current)
+    }
   }, [])
 
   const quote = QUOTES[index]
@@ -1065,6 +868,16 @@ function SatoshiQuote() {
       <div className={`transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
         <p className="text-sm italic text-white">"{quote.text}"</p>
         <p className="mt-2 text-xs text-orange-400">— {quote.attribution}</p>
+        {showGenesis && (
+          <a
+            href="https://bitcoin.org/bitcoin.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors"
+          >
+            {GENESIS_HASH}
+          </a>
+        )}
       </div>
     </footer>
   )
@@ -1878,9 +1691,6 @@ export default function App() {
         </div>
 
       </div>
-
-      {/* Transaction Lookup */}
-      <TxLookup price={price} currency={currency} />
 
       {/* Supporters ticker */}
       <SupporterTickerCard donors={donors} />
