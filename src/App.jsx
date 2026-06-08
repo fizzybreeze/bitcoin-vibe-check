@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
   LineChart, Line,
@@ -1845,6 +1846,8 @@ export default function App() {
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
+
+      <Analytics />
 
     </div>
   )
