@@ -63,90 +63,95 @@ const WS_SYMBOL_MAP = {
   'BTC/CHF': 'priceChf',
 }
 
-function parseChartData(json, days) {
-  if (!json?.prices?.length) return null
+function parseBinanceKlines(klines, days) {
+  if (!klines?.length) return null
   if (days === 1) {
-    return json.prices.map(([ts, p], i) => ({
-      date: new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-      price: Math.round(p),
-      volume: json.total_volumes?.[i]?.[1] ?? 0,
+    return klines.map(k => ({
+      date: new Date(k[0]).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      price: Math.round(parseFloat(k[4])),
+      volume: parseFloat(k[7]),
     }))
   }
-  const bucketMap = new Map()
-  json.prices.forEach(([ts, p], i) => {
-    const d = new Date(ts)
-    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-    bucketMap.set(key, { ts, price: Math.round(p), volume: json.total_volumes?.[i]?.[1] ?? 0 })
-  })
-  return Array.from(bucketMap.values()).map(({ ts, price, volume }) => ({
-    date: new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-    price,
-    volume,
+  return klines.map(k => ({
+    date: new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    price: Math.round(parseFloat(k[4])),
+    volume: parseFloat(k[7]),
   }))
 }
 
-const CG_KEY = import.meta.env.VITE_COINGECKO_API_KEY
-function cgFetch(url, init) {
-  return fetch(url, CG_KEY
-    ? { ...init, headers: { 'x-cg-demo-api-key': CG_KEY, ...init?.headers } }
-    : init
-  )
-}
-
 async function loadData() {
-  const [priceRes, feesRes, heightRes, fngRes, diffRes, globalRes, mempoolRes, blocksRes, lightningRes, marketsRes] = await Promise.allSettled([
-    cgFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,gbp,eur,cad,chf&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true').then(r => r.json()),
+  const [paprikaTickerRes, feesRes, heightRes, fngRes, diffRes, paprikaGlobalRes, mempoolRes, blocksRes, lightningRes, krakenTickerRes] = await Promise.allSettled([
+    fetch('https://api.coinpaprika.com/v1/tickers/btc-bitcoin').then(r => r.json()),
     fetch('https://mempool.space/api/v1/fees/recommended').then(r => r.json()),
     fetch('https://mempool.space/api/blocks/tip/height').then(r => r.json()),
     fetch('https://api.alternative.me/fng/?limit=30').then(r => r.json()),
     fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
-    cgFetch('https://api.coingecko.com/api/v3/global').then(r => r.json()),
+    fetch('https://api.coinpaprika.com/v1/global').then(r => r.json()),
     fetch('https://mempool.space/api/mempool').then(r => r.json()),
     fetch('https://mempool.space/api/v1/blocks').then(r => r.json()),
     fetch('https://mempool.space/api/v1/lightning/statistics/latest').then(r => r.json()),
-    cgFetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin').then(r => r.json()),
+    fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD,XBTGBP,XBTEUR,XBTCAD,XBTCHF').then(r => r.json()),
   ])
 
-  const btc        = priceRes.status   === 'fulfilled' ? (priceRes.value.bitcoin     ?? {}) : {}
-  const globalData = globalRes.status  === 'fulfilled' ? (globalRes.value?.data      ?? null) : null
-  const marketsData = marketsRes.status === 'fulfilled' && Array.isArray(marketsRes.value) ? (marketsRes.value[0] ?? null) : null
+  const paprika      = paprikaTickerRes.status  === 'fulfilled' ? (paprikaTickerRes.value?.quotes?.USD  ?? {}) : {}
+  const paprikaGlobal = paprikaGlobalRes.status === 'fulfilled' ? (paprikaGlobalRes.value               ?? {}) : {}
+  const krakenResult = krakenTickerRes.status   === 'fulfilled' ? (krakenTickerRes.value?.result         ?? {}) : {}
+  const fngData      = fngRes.status            === 'fulfilled' ? fngRes.value                                  : null
+
+  const findKrakenPrice = (suffix) => {
+    const key = Object.keys(krakenResult).find(k => k.endsWith(suffix))
+    return key ? parseFloat(krakenResult[key].c[0]) : null
+  }
+
+  const priceUsd = parseFloat(paprika.price) || null
+  const priceGbp = findKrakenPrice('GBP')
+  const priceEur = findKrakenPrice('EUR')
+  const priceCad = findKrakenPrice('CAD')
+  const priceChf = findKrakenPrice('CHF')
+  const volumeUsd = paprika.volume_24h ?? null
+
   return {
-    priceUsd:       btc.usd              ?? null,
-    priceGbp:       btc.gbp              ?? null,
-    priceEur:       btc.eur              ?? null,
-    priceCad:       btc.cad              ?? null,
-    priceChf:       btc.chf              ?? null,
-    volumeUsd:      btc.usd_24h_vol      ?? null,
-    volumeGbp:      btc.gbp_24h_vol      ?? null,
-    volumeEur:      btc.eur_24h_vol      ?? null,
-    volumeCad:      btc.cad_24h_vol      ?? null,
-    volumeChf:      btc.chf_24h_vol      ?? null,
-    priceChange24h: btc.usd_24h_change   ?? null,
-    marketCapUsd:   btc.usd_market_cap   ?? null,
-    fees:           feesRes.status    === 'fulfilled' ? feesRes.value              : null,
-    blockHeight:    heightRes.status  === 'fulfilled' ? heightRes.value            : null,
-    fng:            fngRes.status     === 'fulfilled' ? (fngRes.value.data?.[0]   ?? null) : null,
-    fngHistory:     fngRes.status     === 'fulfilled' && Array.isArray(fngRes.value.data) && fngRes.value.data.length
-                      ? [...fngRes.value.data].reverse().map(d => ({ v: parseInt(d.value, 10) }))
+    priceUsd,
+    priceGbp,
+    priceEur,
+    priceCad,
+    priceChf,
+    volumeUsd,
+    volumeGbp:      (volumeUsd != null && priceUsd && priceGbp) ? volumeUsd * priceGbp / priceUsd : null,
+    volumeEur:      (volumeUsd != null && priceUsd && priceEur) ? volumeUsd * priceEur / priceUsd : null,
+    volumeCad:      (volumeUsd != null && priceUsd && priceCad) ? volumeUsd * priceCad / priceUsd : null,
+    volumeChf:      (volumeUsd != null && priceUsd && priceChf) ? volumeUsd * priceChf / priceUsd : null,
+    priceChange24h: paprika.percent_change_24h ?? null,
+    marketCapUsd:   paprika.market_cap         ?? null,
+    fees:           feesRes.status      === 'fulfilled' ? feesRes.value                                           : null,
+    blockHeight:    heightRes.status    === 'fulfilled' ? heightRes.value                                         : null,
+    fng:            fngData?.data?.[0]  ?? null,
+    fngHistory:     Array.isArray(fngData?.data) && fngData.data.length
+                      ? [...fngData.data].reverse().map(d => ({ v: parseInt(d.value, 10) }))
                       : null,
-    difficulty:     diffRes.status    === 'fulfilled' ? diffRes.value             : null,
-    btcDominance:   globalData?.market_cap_percentage?.btc ?? null,
-    mempool:        mempoolRes.status  === 'fulfilled' ? mempoolRes.value           : null,
+    difficulty:     diffRes.status      === 'fulfilled' ? diffRes.value                                           : null,
+    btcDominance:   paprikaGlobal.bitcoin_dominance_percentage ?? null,
+    mempool:        mempoolRes.status   === 'fulfilled' ? mempoolRes.value                                        : null,
     lastBlockTs:    blocksRes.status    === 'fulfilled' && Array.isArray(blocksRes.value) && blocksRes.value.length > 0
                       ? (blocksRes.value[0].timestamp ?? null)
                       : null,
-    lightning:      lightningRes.status === 'fulfilled' ? lightningRes.value : null,
-    athUsd:         marketsData?.ath ?? null,
+    lightning:      lightningRes.status === 'fulfilled' ? lightningRes.value                                      : null,
+    athUsd:         parseFloat(paprika.ath_price) || null,
   }
 }
 
 async function fetchChart(days) {
-  const res = await cgFetch(
-    `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`
+  const { interval, limit } =
+    days === 1   ? { interval: '1h',  limit: 24  } :
+    days === 7   ? { interval: '4h',  limit: 42  } :
+    days === 30  ? { interval: '1d',  limit: 30  } :
+                   { interval: '1d',  limit: 365 }
+  const res = await fetch(
+    `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
   )
   if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
-  const json = await res.json()
-  return parseChartData(json, days)
+  const klines = await res.json()
+  return parseBinanceKlines(klines, days)
 }
 
 function readCache() {
