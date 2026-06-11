@@ -2,6 +2,7 @@ import { fmtCurrency, fmtVolume, blocksToNextHalving, epochPercentage, CURRENCY_
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
 } from '../lib/calculations.js'
+import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculations.js'
 
 const ORANGE = '#fb923c'
 const CARD_BG = '#111827'
@@ -248,15 +249,112 @@ function FeesShareCard({ cardData }) {
   )
 }
 
+function accumulationSignalLabel(btcHeld, btcHeld7dAgo) {
+  if (btcHeld == null || btcHeld7dAgo == null) return null
+  const pct = ((btcHeld - btcHeld7dAgo) / btcHeld7dAgo) * 100
+  if (pct > 0.1)  return { text: '▲ Accumulating', color: '#4ade80' }
+  if (pct < -0.1) return { text: '▼ Distributing', color: '#f87171' }
+  return                  { text: '— Neutral',      color: '#facc15' }
+}
+
+function mvrvLabel(mvrv) {
+  if (mvrv == null) return null
+  if (mvrv < 1)    return { text: 'Deeply Undervalued',   color: '#4ade80'  }
+  if (mvrv < 1.5)  return { text: 'Undervalued',          color: '#a3e635'  }
+  if (mvrv < 2.4)  return { text: 'Fair Value',           color: '#facc15'  }
+  if (mvrv < 3.7)  return { text: 'Overvalued',           color: '#fbbf24'  }
+  return                   { text: 'Extremely Overvalued', color: '#f87171'  }
+}
+
+function mayerLabel(multiple) {
+  if (multiple == null) return null
+  if (multiple < 0.8) return { text: 'Historically Cheap', color: '#4ade80'  }
+  if (multiple < 1.0) return { text: 'Below Average',      color: '#a3e635'  }
+  if (multiple < 1.5) return { text: 'Normal Range',       color: '#facc15'  }
+  if (multiple < 2.4) return { text: 'Elevated',           color: '#fbbf24'  }
+  return                     { text: 'Overheated',         color: '#f87171'  }
+}
+
+function InstitutionalPulseShareCard({ cardData }) {
+  const etf   = cardData.chainData?.etf ?? null
+  const held  = etf?.btcHeld ?? null
+  const signal = accumulationSignalLabel(etf?.btcHeld, etf?.btcHeld7dAgo)
+  return (
+    <>
+      <p style={LABEL_STYLE}>Institutional Pulse</p>
+      <p style={{ ...SUB_STYLE, marginBottom: 6 }}>US Spot ETF Holdings</p>
+      <p style={VALUE_STYLE}>
+        {held != null ? held.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}
+      </p>
+      <p style={SUB_STYLE}>BTC held</p>
+      {signal && (
+        <p style={{ ...SUB_STYLE, marginTop: 8, color: signal.color, fontWeight: 600 }}>
+          {signal.text}
+        </p>
+      )}
+      {!held && <p style={{ ...SUB_STYLE, marginTop: 8 }}>Data unavailable</p>}
+    </>
+  )
+}
+
+function OnChainSignalsShareCard({ cardData }) {
+  const mvrv  = cardData.chainData?.mvrv?.value ?? null
+  const label = mvrvLabel(mvrv)
+  return (
+    <>
+      <p style={LABEL_STYLE}>On-Chain Signals</p>
+      <p style={{ ...SUB_STYLE, marginBottom: 6 }}>MVRV Ratio</p>
+      <p style={VALUE_STYLE}>{mvrv != null ? mvrv.toFixed(2) : '—'}</p>
+      {label && (
+        <p style={{ ...SUB_STYLE, color: label.color, fontWeight: 600 }}>{label.text}</p>
+      )}
+      {mvrv == null && <p style={SUB_STYLE}>Data unavailable</p>}
+    </>
+  )
+}
+
+function CycleIndicatorsShareCard({ cardData }) {
+  const ma200     = cardData.ma200 ?? null
+  const price     = cardData.priceUsd ?? null
+  const fairValue = calcPowerLawFairValue()
+  const mayer     = calcMayerMultiple(price, ma200)
+  const mLabel    = mayerLabel(mayer)
+  return (
+    <>
+      <p style={LABEL_STYLE}>Cycle Indicators</p>
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <p style={{ ...LABEL_STYLE, marginBottom: 2 }}>Power Law Fair Value</p>
+          <p style={{ ...VALUE_STYLE, fontSize: 18 }}>
+            {fairValue != null ? fmtCurrency(fairValue, 'usd') : '—'}
+          </p>
+        </div>
+        <div>
+          <p style={{ ...LABEL_STYLE, marginBottom: 2 }}>Mayer Multiple</p>
+          <p style={{ ...VALUE_STYLE, fontSize: 18 }}>
+            {mayer != null ? mayer.toFixed(2) : '—'}
+          </p>
+          {mLabel && (
+            <p style={{ ...SUB_STYLE, color: mLabel.color, fontWeight: 600 }}>{mLabel.text}</p>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
 function renderShareCard(key, cardData, currency) {
   switch (key) {
-    case 'btcPrice':     return <BtcPriceShareCard cardData={cardData} currency={currency} />
-    case 'networkPulse': return <NetworkPulseShareCard cardData={cardData} />
-    case 'volume':       return <VolumeShareCard cardData={cardData} currency={currency} />
-    case 'halving':      return <HalvingShareCard cardData={cardData} />
-    case 'recentBlocks': return <RecentBlocksShareCard cardData={cardData} />
-    case 'fees':         return <FeesShareCard cardData={cardData} />
-    default:             return null
+    case 'btcPrice':           return <BtcPriceShareCard cardData={cardData} currency={currency} />
+    case 'networkPulse':       return <NetworkPulseShareCard cardData={cardData} />
+    case 'volume':             return <VolumeShareCard cardData={cardData} currency={currency} />
+    case 'halving':            return <HalvingShareCard cardData={cardData} />
+    case 'recentBlocks':       return <RecentBlocksShareCard cardData={cardData} />
+    case 'fees':               return <FeesShareCard cardData={cardData} />
+    case 'institutionalPulse': return <InstitutionalPulseShareCard cardData={cardData} />
+    case 'onChainSignals':     return <OnChainSignalsShareCard cardData={cardData} />
+    case 'cycleIndicators':    return <CycleIndicatorsShareCard cardData={cardData} />
+    default:                   return null
   }
 }
 

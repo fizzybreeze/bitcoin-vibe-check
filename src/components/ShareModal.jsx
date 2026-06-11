@@ -3,12 +3,15 @@ import ShareCanvas from './ShareCanvas.jsx'
 import { useShareImage } from '../hooks/useShareImage.js'
 
 export const SHARE_CARDS = [
-  { key: 'btcPrice',     label: 'BTC Price' },
-  { key: 'networkPulse', label: 'Network Pulse' },
-  { key: 'volume',       label: '24h Volume' },
-  { key: 'halving',      label: 'Next Halving' },
-  { key: 'recentBlocks', label: 'Recent Blocks' },
-  { key: 'fees',         label: 'Network Fees' },
+  { key: 'btcPrice',            label: 'BTC Price' },
+  { key: 'networkPulse',        label: 'Network Pulse' },
+  { key: 'volume',              label: '24h Volume' },
+  { key: 'halving',             label: 'Next Halving' },
+  { key: 'recentBlocks',        label: 'Recent Blocks' },
+  { key: 'fees',                label: 'Network Fees' },
+  { key: 'institutionalPulse',  label: 'Institutional Pulse' },
+  { key: 'onChainSignals',      label: 'On-Chain Signals' },
+  { key: 'cycleIndicators',     label: 'Cycle Indicators' },
 ]
 
 export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary, currency }) {

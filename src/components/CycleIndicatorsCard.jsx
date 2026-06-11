@@ -7,7 +7,7 @@ function mayerInterpretation(multiple) {
   if (multiple == null) return null
   if (multiple < 0.8) return { label: 'Historically Cheap',  cls: 'text-green-400'  }
   if (multiple < 1.0) return { label: 'Below Average',       cls: 'text-lime-400'   }
-  if (multiple < 1.5) return { label: 'Normal Range',        cls: 'text-yellow-400' }
+  if (multiple < 1.5) return { label: 'Normal Range',        cls: 'text-gray-400' }
   if (multiple < 2.4) return { label: 'Elevated',            cls: 'text-amber-400'  }
   return                     { label: 'Overheated',          cls: 'text-red-400'    }
 }

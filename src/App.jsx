@@ -1519,6 +1519,7 @@ export default function App() {
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
+  const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -1536,12 +1537,13 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
       {/* Header */}
-      <header className="mb-8 flex items-start justify-between">
+      {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
+      <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
           <p className="mt-0.5 text-xs text-gray-500">{vibeLabel ?? 'Read the room.'}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 self-end md:self-auto">
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
@@ -1652,7 +1654,7 @@ export default function App() {
         <div className="lg:col-start-3 lg:row-start-3">
           <CycleIndicatorsCard
             currentPrice={priceUsd}
-            ma200={ohlcData200?.length ? calc200DMA(ohlcData200) : null}
+            ma200={ma200}
             ohlcLoading={ohlcLoading}
             ohlcError={ohlcError}
           />
@@ -1939,7 +1941,7 @@ export default function App() {
       <ShareModal
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
-        cardData={data ?? {}}
+        cardData={{ ...(data ?? {}), chainData, ma200 }}
         sentimentSummary={vibeLabel}
         currency={currency}
       />
