@@ -35,7 +35,7 @@ function MetricRow({ label, value, context, contextCls = 'text-gray-400', toolti
   )
 }
 
-export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, ohlcError }) {
+export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, ohlcError, currency = 'usd', fxRate = 1 }) {
   const fairValue   = calcPowerLawFairValue()
   const mayer       = calcMayerMultiple(currentPrice, ma200)
   const mayerInterp = mayerInterpretation(mayer)
@@ -49,7 +49,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
 
       <MetricRow
         label="Power Law Fair Value"
-        value={fairValue != null ? fmtCurrency(fairValue, 'usd') : '—'}
+        value={fairValue != null ? fmtCurrency(fairValue * fxRate, currency) : '—'}
         context={plInterp?.label}
         contextCls={plInterp?.cls ?? 'text-gray-400'}
         tooltip={POWER_LAW_TOOLTIP}
@@ -71,7 +71,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
         <>
           <MetricRow
             label="200-Day Moving Average"
-            value={fmtCurrency(ma200, 'usd')}
+            value={fmtCurrency(ma200 * fxRate, currency)}
             tooltip={MA200_TOOLTIP}
           />
 

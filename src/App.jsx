@@ -1670,6 +1670,8 @@ export default function App() {
             ma200={ma200}
             ohlcLoading={ohlcLoading}
             ohlcError={ohlcError}
+            currency={currency}
+            fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
           />
         </div>
       </div>
