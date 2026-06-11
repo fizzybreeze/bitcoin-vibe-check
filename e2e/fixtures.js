@@ -111,3 +111,18 @@ export const addressFixture = {
   },
   mempool_stats: { tx_count: 0 },
 }
+
+// /api/chain-data — serverless proxy response for BGeometrics data
+export const chainDataFixture = {
+  mvrv: { value: 2.15, date: '2026-06-10' },
+  etf:  { btcHeld: 1_100_000, btcHeld7dAgo: 1_085_000, date: '2026-06-10' },
+}
+
+// Binance klines — 200 daily candles at a fixed close of $103,000
+// Shape: [openTime, open, high, low, close, volume, closeTime, quoteVolume, ...]
+export const klines200dFixture = Array.from({ length: 200 }, (_, i) => [
+  now - (200 - i) * DAY_MS,
+  '100000', '105000', '95000', '103000', '500',
+  now - (200 - i) * DAY_MS + DAY_MS - 1,
+  '51500000000', '1000', '0', '0', '1',
+])

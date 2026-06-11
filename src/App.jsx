@@ -18,6 +18,10 @@ import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
   computeVibeLabel, computeHashRateTrend,
 } from './lib/calculations.js'
+import { calc200DMA } from './utils/cycleCalculations.js'
+import InstitutionalPulseCard from './components/InstitutionalPulseCard.jsx'
+import OnChainSignalsCard from './components/OnChainSignalsCard.jsx'
+import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -1158,6 +1162,12 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  const [chainData, setChainData]             = useState(null)
+  const [chainDataLoading, setChainDataLoading] = useState(true)
+  const [ohlcData200, setOhlcData200]         = useState(null)
+  const [ohlcLoading, setOhlcLoading]         = useState(true)
+  const [ohlcError, setOhlcError]             = useState(null)
+
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
@@ -1311,6 +1321,51 @@ export default function App() {
     fetchDonors()
     const id = setInterval(fetchDonors, 5 * 60 * 1000)
     return () => clearInterval(id)
+  }, [])
+
+  // Fetch BGeometrics chain data (MVRV + ETF) via serverless proxy; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchChainData() {
+      setChainDataLoading(true)
+      try {
+        const res = await fetch('/api/chain-data')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (active) setChainData(json)
+      } catch {
+        // silently fail — cards handle null data gracefully
+      } finally {
+        if (active) setChainDataLoading(false)
+      }
+    }
+    fetchChainData()
+    const id = setInterval(fetchChainData, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
+  // Fetch 200-day Binance klines for 200DMA and Mayer Multiple; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchOhlc200() {
+      setOhlcLoading(true)
+      setOhlcError(null)
+      try {
+        const res = await fetch(
+          'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (active) setOhlcData200(data)
+      } catch (err) {
+        if (active) setOhlcError(err.message)
+      } finally {
+        if (active) setOhlcLoading(false)
+      }
+    }
+    fetchOhlc200()
+    const id = setInterval(fetchOhlc200, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
   }, [])
 
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
@@ -1576,6 +1631,30 @@ export default function App() {
             marketCapUsd={marketCapUsd}
             price={price}
             blockHeight={blockHeight}
+          />
+        </div>
+        {/* Row 3 — Signal Cards */}
+        <div className="lg:col-start-1 lg:row-start-3">
+          <InstitutionalPulseCard
+            btcHeld={chainData?.etf?.btcHeld}
+            btcHeld7dAgo={chainData?.etf?.btcHeld7dAgo}
+            dataDate={chainData?.etf?.date}
+            isLoading={chainDataLoading}
+          />
+        </div>
+        <div className="lg:col-start-2 lg:row-start-3">
+          <OnChainSignalsCard
+            mvrv={chainData?.mvrv?.value}
+            dataDate={chainData?.mvrv?.date}
+            isLoading={chainDataLoading}
+          />
+        </div>
+        <div className="lg:col-start-3 lg:row-start-3">
+          <CycleIndicatorsCard
+            currentPrice={priceUsd}
+            ma200={ohlcData200?.length ? calc200DMA(ohlcData200) : null}
+            ohlcLoading={ohlcLoading}
+            ohlcError={ohlcError}
           />
         </div>
       </div>

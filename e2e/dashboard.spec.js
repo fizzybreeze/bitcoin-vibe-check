@@ -5,6 +5,7 @@ import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   marketsFixture, hashrate3dFixture, hashrate1mFixture,
+  chainDataFixture, klines200dFixture,
 } from './fixtures.js'
 
 const TIMEOUT = 10_000
@@ -53,6 +54,14 @@ async function mockApis(page) {
   )
   // Block the Kraken WebSocket so fixture price values are not overwritten by live data
   await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())
+  // BGeometrics proxy (Vercel serverless function)
+  await page.route('/api/chain-data', route =>
+    route.fulfill({ json: chainDataFixture })
+  )
+  // Binance 200-day klines for 200DMA / Mayer Multiple
+  await page.route('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200', route =>
+    route.fulfill({ json: klines200dFixture })
+  )
 }
 
 test.describe('Bitcoin Dashboard', () => {
@@ -145,6 +154,29 @@ test.describe('Bitcoin Dashboard', () => {
     }
 
     expect(errors).toHaveLength(0)
+  })
+
+  // ── Signal Cards (row 3) ────────────────────────────────────────────────────
+
+  test('Institutional Pulse card renders with ETF holdings label', async ({ page }) => {
+    await expect(page.getByText(/institutional pulse/i).first()).toBeVisible({ timeout: TIMEOUT })
+    await expect(page.getByText(/US Spot ETF Holdings/i).first()).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('On-Chain Signals card renders with MVRV value from fixture', async ({ page }) => {
+    await expect(page.getByText(/on-chain signals/i).first()).toBeVisible({ timeout: TIMEOUT })
+    // Fixture MVRV = 2.15 → rendered as "2.15"
+    await expect(page.getByText('2.15').first()).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('Cycle Indicators card renders Power Law Fair Value', async ({ page }) => {
+    await expect(page.getByText(/cycle indicators/i).first()).toBeVisible({ timeout: TIMEOUT })
+    await expect(page.getByText(/power law fair value/i).first()).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('Cycle Indicators card renders 200-Day Moving Average from fixture klines', async ({ page }) => {
+    // Fixture klines all close at 103,000 → 200DMA = $103,000
+    await expect(page.getByText(/200-day moving average/i).first()).toBeVisible({ timeout: TIMEOUT })
   })
 
   // ── Newsletter & footer ─────────────────────────────────────────────────────
