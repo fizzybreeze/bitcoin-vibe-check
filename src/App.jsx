@@ -6,6 +6,8 @@ import {
 } from 'recharts'
 import './App.css'
 import BeehiivEmbed from './components/BeehiivEmbed.jsx'
+import ShareButton from './components/ShareButton.jsx'
+import ShareModal from './components/ShareModal.jsx'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -1155,6 +1157,7 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  const [isShareOpen, setIsShareOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
   const prevBlockHtRef    = useRef(null)
@@ -1501,6 +1504,7 @@ export default function App() {
               </svg>
             )}
           </button>
+          <ShareButton onClick={() => setIsShareOpen(true)} />
           <div className="relative">
             <select
               value={currency}
@@ -1851,6 +1855,14 @@ export default function App() {
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
+
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        cardData={data ?? {}}
+        sentimentSummary={vibeLabel}
+        currency={currency}
+      />
 
       <Analytics />
 
