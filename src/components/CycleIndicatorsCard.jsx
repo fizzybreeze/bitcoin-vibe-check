@@ -1,7 +1,12 @@
 import { fmtCurrency } from '../utils.js'
 import { calcMayerMultiple, calcPowerLawFairValue } from '../utils/cycleCalculations.js'
+import CardTooltip from './CardTooltip.jsx'
 
 const LABEL = 'text-xs font-semibold uppercase tracking-widest text-gray-500'
+
+const POWER_LAW_TOOLTIP = "A long-term model treating adoption as a power function of time since Bitcoin's genesis block. Shows where price sits relative to a historical fair value range. A model, not a prediction — label it accordingly."
+const MA200_TOOLTIP     = 'The most widely cited long-term trend indicator. Price above the 200-day moving average suggests a bull trend; below suggests a bear trend. Many investors use it as a simple entry or exit signal.'
+const MAYER_TOOLTIP     = 'Price divided by the 200-day moving average. Above 2.4 has preceded corrections historically; below 1 has been rare and has often preceded recoveries. Long-run mean sits around 1.0–1.5.'
 
 function mayerInterpretation(multiple) {
   if (multiple == null) return null
@@ -20,10 +25,10 @@ function powerLawInterpretation(currentPrice, fairValue) {
   return { label: `${sign}${pct.toFixed(0)}% vs fair`, cls }
 }
 
-function MetricRow({ label, value, context, contextCls = 'text-gray-400' }) {
+function MetricRow({ label, value, context, contextCls = 'text-gray-400', tooltip }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className={LABEL}>{label}</p>
+      <p className={`${LABEL} flex items-center`}>{label}{tooltip && <CardTooltip text={tooltip} />}</p>
       <p className="text-xl font-bold text-orange-400">{value ?? '—'}</p>
       {context && <p className={`text-xs ${contextCls}`}>{context}</p>}
     </div>
@@ -47,6 +52,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
         value={fairValue != null ? fmtCurrency(fairValue, 'usd') : '—'}
         context={plInterp?.label}
         contextCls={plInterp?.cls ?? 'text-gray-400'}
+        tooltip={POWER_LAW_TOOLTIP}
       />
 
       <div className="h-px bg-gray-800" />
@@ -66,6 +72,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
           <MetricRow
             label="200-Day Moving Average"
             value={fmtCurrency(ma200, 'usd')}
+            tooltip={MA200_TOOLTIP}
           />
 
           <div className="h-px bg-gray-800" />
@@ -75,6 +82,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
             value={mayer != null ? mayer.toFixed(2) : '—'}
             context={mayerInterp?.label}
             contextCls={mayerInterp?.cls ?? 'text-gray-400'}
+            tooltip={MAYER_TOOLTIP}
           />
         </>
       )}

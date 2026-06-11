@@ -22,6 +22,7 @@ import { calc200DMA } from './utils/cycleCalculations.js'
 import InstitutionalPulseCard from './components/InstitutionalPulseCard.jsx'
 import OnChainSignalsCard from './components/OnChainSignalsCard.jsx'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
+import CardTooltip from './components/CardTooltip.jsx'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -296,6 +297,10 @@ function playPriceTick(ctx, up) {
   osc.stop(now + 0.08)
 }
 
+const FNG_TOOLTIP        = 'A composite sentiment score from 0 (extreme fear) to 100 (extreme greed). Values below 25 have historically preceded recoveries; above 75 have preceded corrections. Measures crowd psychology, not fundamentals.'
+const HASH_RATE_TOOLTIP  = 'Total computational power securing the Bitcoin network, measured in exahashes per second. Rising hash rate signals miner confidence; a sharp drop can signal miner stress or capitulation.'
+const DIFFICULTY_TOOLTIP = 'Adjusts every ~2,016 blocks (~2 weeks) to keep average block times near 10 minutes. A positive adjustment means blocks were found faster than target — network is growing. Negative means slower — miners left or difficulty was too high.'
+
 function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
   const fngClass       = fng?.value_classification ?? null
@@ -336,7 +341,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 1: Fear & Greed | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear &amp; Greed</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
           <div className="mt-2">
             {loading || fngScore == null
               ? <Skeleton className="h-8 w-10" />
@@ -348,7 +353,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
           <div className="mt-2">
             {loading
               ? <Skeleton className="h-8 w-16" />
@@ -376,7 +381,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 2: Hash Rate | (empty) */}
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Hash Rate</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
             {hashRate != null
               ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
@@ -417,12 +422,14 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   )
 }
 
+const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
+
 export function BtcPriceCard({ value, change, sub, athPct }) {
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">BTC Price</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
@@ -460,6 +467,8 @@ export function BtcPriceCard({ value, change, sub, athPct }) {
     </div>
   )
 }
+
+const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
 function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   const [blocks, setBlocks] = useState(null)
@@ -508,7 +517,7 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Recent Blocks</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
@@ -598,6 +607,8 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   )
 }
 
+const HALVING_TOOLTIP = 'Every 210,000 blocks (~4 years), the reward paid to miners is cut in half, reducing new BTC issuance. Each of the four previous halvings preceded significant price appreciation in the following 12–18 months. Past performance is not indicative of future results.'
+
 function HalvingCountdown({ blockHeight }) {
   const [secsLeft, setSecsLeft] = useState(null)
 
@@ -641,7 +652,7 @@ function HalvingCountdown({ blockHeight }) {
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
               ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
                   {blocksRemaining.toLocaleString('en-US')}
@@ -772,6 +783,8 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
+const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
+
 function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, blockHeight }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
@@ -780,7 +793,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
   const domLabel = btcDominanceLabel(btcDominance)
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">24h Volume</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
@@ -1824,7 +1837,7 @@ export default function App() {
 
         {/* Mempool + Network fees */}
         <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Fees</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Transaction fees in satoshis per virtual byte (sat/vB). Higher fees mean the mempool is congested and miners are prioritising the best-paying transactions. Under 2 sat/vB is typically low-congestion; above 20 sat/vB signals significant backlog." /></p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
           {mempool != null && (() => {

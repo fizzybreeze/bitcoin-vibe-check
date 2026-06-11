@@ -1,6 +1,10 @@
+import CardTooltip from './CardTooltip.jsx'
+
 const LABEL = 'text-xs font-semibold uppercase tracking-widest text-gray-500'
 const VALUE = 'text-3xl font-bold text-orange-400 mt-1'
 const SUB   = 'mt-1 text-sm text-gray-400'
+
+const TOOLTIP_TEXT = 'US spot ETFs collectively hold over 1 million BTC, making them the dominant institutional vehicle. The 7-day change in total holdings signals whether institutions are net buyers or sellers. Sustained accumulation has historically coincided with price appreciation.'
 
 function formatBtc(n) {
   if (n == null) return '—'
@@ -21,7 +25,7 @@ export default function InstitutionalPulseCard({ btcHeld, btcHeld7dAgo, dataDate
 
   return (
     <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
-      <p className={LABEL}>Institutional Pulse</p>
+      <p className={`${LABEL} flex items-center`}>Institutional Pulse<CardTooltip text={TOOLTIP_TEXT} /></p>
       <p className="text-xs text-gray-600">US Spot ETF Holdings</p>
 
       {isLoading && btcHeld == null ? (

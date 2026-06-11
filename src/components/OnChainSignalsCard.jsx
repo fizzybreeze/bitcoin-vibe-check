@@ -1,6 +1,10 @@
+import CardTooltip from './CardTooltip.jsx'
+
 const LABEL = 'text-xs font-semibold uppercase tracking-widest text-gray-500'
 const VALUE = 'text-3xl font-bold text-orange-400 mt-1'
 const SUB   = 'mt-1 text-sm text-gray-400'
+
+const MVRV_TOOLTIP = "Compares Bitcoin's market cap to the aggregate cost basis of all coins. Above 3.5 has historically marked cycle tops; below 1 has marked bottoms. Near 1 means the market is close to its collective break-even."
 
 function mvrvInterpretation(mvrv) {
   if (mvrv == null) return null
@@ -17,7 +21,7 @@ export default function OnChainSignalsCard({ mvrv, dataDate, isLoading }) {
   return (
     <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
       <p className={LABEL}>On-Chain Signals</p>
-      <p className="text-xs text-gray-600">MVRV Ratio</p>
+      <p className="text-xs text-gray-600 flex items-center">MVRV Ratio<CardTooltip text={MVRV_TOOLTIP} /></p>
 
       {isLoading && mvrv == null ? (
         <div className="animate-pulse space-y-2">
