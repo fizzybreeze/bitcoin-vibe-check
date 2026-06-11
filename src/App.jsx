@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import './App.css'
 import BeehiivEmbed from './components/BeehiivEmbed.jsx'
+import { usePersistedState } from './hooks/usePersistedState.js'
 import ShareButton from './components/ShareButton.jsx'
 import ShareModal from './components/ShareModal.jsx'
 import { supabase } from './lib/supabase.js'
@@ -1138,8 +1139,8 @@ export default function App() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [range, setRange]             = useState('7D')
-  const [currency, setCurrency]       = useState('usd')
+  const [range, setRange]             = usePersistedState('btc-vibe-chart-timeframe', '7D')
+  const [currency, setCurrency]       = usePersistedState('btc-vibe-currency', 'usd')
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
