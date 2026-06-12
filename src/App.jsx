@@ -1181,6 +1181,7 @@ export default function App() {
 
   const [chainData, setChainData]             = useState(null)
   const [chainDataLoading, setChainDataLoading] = useState(true)
+  const [chainDataError, setChainDataError]   = useState(false)
   const [ohlcData200, setOhlcData200]         = useState(null)
   const [ohlcLoading, setOhlcLoading]         = useState(true)
   const [ohlcError, setOhlcError]             = useState(null)
@@ -1346,13 +1347,14 @@ export default function App() {
     let active = true
     async function fetchChainData() {
       setChainDataLoading(true)
+      setChainDataError(false)
       try {
         const res = await fetch('/api/chain-data')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = await res.json()
         if (active) setChainData(json)
       } catch {
-        // silently fail — cards handle null data gracefully
+        if (active) setChainDataError(true)
       } finally {
         if (active) setChainDataLoading(false)
       }
@@ -1673,6 +1675,7 @@ export default function App() {
             btcHeld7dAgo={chainData?.etf?.btcHeld7dAgo}
             dataDate={chainData?.etf?.date}
             isLoading={chainDataLoading}
+            error={chainDataError}
           />
         </div>
         <div className="order-6 lg:order-none lg:col-start-2 lg:row-start-3">
@@ -1680,6 +1683,7 @@ export default function App() {
             mvrv={chainData?.mvrv?.value}
             dataDate={chainData?.mvrv?.date}
             isLoading={chainDataLoading}
+            error={chainDataError}
           />
         </div>
         <div className="order-4 lg:order-none lg:col-start-3 lg:row-start-3">

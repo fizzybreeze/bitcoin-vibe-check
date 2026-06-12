@@ -30,8 +30,13 @@ describe('InstitutionalPulseCard', () => {
     expect(screen.getByText(/neutral/i)).toBeTruthy()
   })
 
-  it('renders nothing (no card shell) when btcHeld is null and not loading', () => {
+  it('shows a skeleton when btcHeld is null and not loading (data absent but no error)', () => {
     const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={false} />)
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+  })
+
+  it('hides card entirely when error=true', () => {
+    const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={false} error={true} />)
     expect(container.firstChild).toBeNull()
   })
 
@@ -67,8 +72,13 @@ describe('OnChainSignalsCard', () => {
     expect(screen.getByText(/extremely overvalued/i)).toBeTruthy()
   })
 
-  it('renders nothing (no card shell) when mvrv is null and not loading', () => {
+  it('shows a skeleton when mvrv is null and not loading (data absent but no error)', () => {
     const { container } = render(<OnChainSignalsCard mvrv={null} isLoading={false} />)
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+  })
+
+  it('hides card entirely when error=true', () => {
+    const { container } = render(<OnChainSignalsCard mvrv={null} isLoading={false} error={true} />)
     expect(container.firstChild).toBeNull()
   })
 })
