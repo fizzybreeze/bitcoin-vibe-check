@@ -6,6 +6,12 @@ import {
 } from 'recharts'
 import './App.css'
 import BeehiivEmbed from './components/BeehiivEmbed.jsx'
+import { usePersistedState } from './hooks/usePersistedState.js'
+import ShareButton from './components/ShareButton.jsx'
+import ShareModal from './components/ShareModal.jsx'
+import PriceAlertsButton from './components/PriceAlertsButton.jsx'
+import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
+import { usePriceAlerts } from './hooks/usePriceAlerts.js'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -13,8 +19,13 @@ import {
 } from './utils.js'
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
-  computeVibeLabel, computeHashRateTrend,
+  computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
+import { calc200DMA } from './utils/cycleCalculations.js'
+import InstitutionalPulseCard from './components/InstitutionalPulseCard.jsx'
+import OnChainSignalsCard from './components/OnChainSignalsCard.jsx'
+import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
+import CardTooltip from './components/CardTooltip.jsx'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -289,6 +300,10 @@ function playPriceTick(ctx, up) {
   osc.stop(now + 0.08)
 }
 
+const FNG_TOOLTIP        = 'A composite sentiment score from 0 (extreme fear) to 100 (extreme greed). Values below 25 have historically preceded recoveries; above 75 have preceded corrections. Measures crowd psychology, not fundamentals.'
+const HASH_RATE_TOOLTIP  = 'Total computational power securing the Bitcoin network, measured in exahashes per second. Rising hash rate signals miner confidence; a sharp drop can signal miner stress or capitulation.'
+const DIFFICULTY_TOOLTIP = 'Adjusts every ~2,016 blocks (~2 weeks) to keep average block times near 10 minutes. A positive adjustment means blocks were found faster than target — network is growing. Negative means slower — miners left or difficulty was too high.'
+
 function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
   const fngClass       = fng?.value_classification ?? null
@@ -329,7 +344,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 1: Fear & Greed | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear &amp; Greed</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
           <div className="mt-2">
             {loading || fngScore == null
               ? <Skeleton className="h-8 w-10" />
@@ -341,7 +356,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
           <div className="mt-2">
             {loading
               ? <Skeleton className="h-8 w-16" />
@@ -369,7 +384,7 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
       {/* Row 2: Hash Rate | (empty) */}
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Hash Rate</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
             {hashRate != null
               ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
@@ -410,12 +425,14 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   )
 }
 
+const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
+
 export function BtcPriceCard({ value, change, sub, athPct }) {
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">BTC Price</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
@@ -453,6 +470,8 @@ export function BtcPriceCard({ value, change, sub, athPct }) {
     </div>
   )
 }
+
+const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
 function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   const [blocks, setBlocks] = useState(null)
@@ -501,7 +520,7 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Recent Blocks</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
@@ -591,6 +610,8 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   )
 }
 
+const HALVING_TOOLTIP = 'Every 210,000 blocks (~4 years), the reward paid to miners is cut in half, reducing new BTC issuance. Each of the four previous halvings preceded significant price appreciation in the following 12–18 months. Past performance is not indicative of future results.'
+
 function HalvingCountdown({ blockHeight }) {
   const [secsLeft, setSecsLeft] = useState(null)
 
@@ -621,7 +642,7 @@ function HalvingCountdown({ blockHeight }) {
         <div className="h-full rounded-full bg-orange-400" style={{ width: `${epochPct}%` }} />
       </div>
       <p className="mt-1 text-xs text-gray-400">
-        <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
+        <span className="font-semibold text-white">{Math.round(epochPct)}%</span>
         <span className="ml-1 text-gray-500">of current epoch complete</span>
       </p>
     </>
@@ -634,7 +655,7 @@ function HalvingCountdown({ blockHeight }) {
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
               ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
                   {blocksRemaining.toLocaleString('en-US')}
@@ -765,6 +786,8 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
+const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
+
 function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, blockHeight }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
@@ -773,7 +796,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
   const domLabel = btcDominanceLabel(btcDominance)
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">24h Volume</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
@@ -1012,7 +1035,7 @@ function SupporterTickerCard({ donors }) {
     ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
     : null
   return (
-    <div className="hidden md:block rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="hidden md:block rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
       {content ? (
         <div className="relative w-full overflow-hidden">
@@ -1034,7 +1057,7 @@ function SupporterTickerCard({ donors }) {
 
 function MobileSupportersCard({ donors }) {
   return (
-    <div className="md:hidden rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="md:hidden rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         {donors.length > 0
@@ -1096,6 +1119,7 @@ function DonationCard() {
           </a>
         </p>
         <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
+        <p className="text-sm text-gray-600">We'll add you to the list once we see your payment come through.</p>
       </div>
       <div className="mt-4">
         <input
@@ -1136,8 +1160,8 @@ export default function App() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [range, setRange]             = useState('7D')
-  const [currency, setCurrency]       = useState('usd')
+  const [range, setRange]             = usePersistedState('btc-vibe-chart-timeframe', '7D')
+  const [currency, setCurrency]       = usePersistedState('btc-vibe-currency', 'usd')
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
@@ -1155,6 +1179,15 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  const [chainData, setChainData]             = useState(null)
+  const [chainDataLoading, setChainDataLoading] = useState(true)
+  const [chainDataError, setChainDataError]   = useState(false)
+  const [ohlcData200, setOhlcData200]         = useState(null)
+  const [ohlcLoading, setOhlcLoading]         = useState(true)
+  const [ohlcError, setOhlcError]             = useState(null)
+
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isPriceAlertsOpen, setIsPriceAlertsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
   const prevBlockHtRef    = useRef(null)
@@ -1309,6 +1342,52 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
+  // Fetch BGeometrics chain data (MVRV + ETF) via serverless proxy; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchChainData() {
+      setChainDataLoading(true)
+      setChainDataError(false)
+      try {
+        const res = await fetch('/api/chain-data')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (active) setChainData(json)
+      } catch {
+        if (active) setChainDataError(true)
+      } finally {
+        if (active) setChainDataLoading(false)
+      }
+    }
+    fetchChainData()
+    const id = setInterval(fetchChainData, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
+  // Fetch 200-day Binance klines for 200DMA and Mayer Multiple; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchOhlc200() {
+      setOhlcLoading(true)
+      setOhlcError(null)
+      try {
+        const res = await fetch(
+          'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (active) setOhlcData200(data)
+      } catch (err) {
+        if (active) setOhlcError(err.message)
+      } finally {
+        if (active) setOhlcLoading(false)
+      }
+    }
+    fetchOhlc200()
+    const id = setInterval(fetchOhlc200, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
     const days = RANGES.find(r => r.label === range)?.days ?? 7
@@ -1460,6 +1539,16 @@ export default function App() {
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
+  const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
+
+  const {
+    alerts,
+    addAlert,
+    removeAlert,
+    clearTriggered,
+    notificationPermission,
+    requestPermission,
+  } = usePriceAlerts(price, currency)
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -1477,12 +1566,13 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
       {/* Header */}
-      <header className="mb-8 flex items-start justify-between">
+      {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
+      <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
           <p className="mt-0.5 text-xs text-gray-500">{vibeLabel ?? 'Read the room.'}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 self-end md:self-auto">
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
@@ -1501,6 +1591,11 @@ export default function App() {
               </svg>
             )}
           </button>
+          <ShareButton onClick={() => setIsShareOpen(true)} />
+          <PriceAlertsButton
+            onClick={() => setIsPriceAlertsOpen(prev => !prev)}
+            hasActiveAlerts={alerts.some(a => !a.triggered)}
+          />
           <div className="relative">
             <select
               value={currency}
@@ -1530,7 +1625,7 @@ export default function App() {
       {/* KPI grid — 1 col mobile, 3 col desktop (lg+) */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Col 1 Row 1 — BTC Price */}
-        <div className="lg:col-start-1 lg:row-start-1">
+        <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1">
           <BtcPriceCard
             value={price != null ? fmtCurrency(price, currency) : null}
             change={priceChange24h}
@@ -1539,11 +1634,11 @@ export default function App() {
           />
         </div>
         {/* Col 2 Rows 1–2 — Network Pulse (full column height) */}
-        <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
+        <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
         </div>
         {/* Col 3 Row 1 — Network Heartbeat (mobile only; merged into Recent Blocks on desktop) */}
-        <div className="lg:hidden">
+        <div className="order-7 lg:hidden">
           <NetworkHeartbeatCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1552,7 +1647,7 @@ export default function App() {
           />
         </div>
         {/* Col 3 Rows 1–2 — Recent Blocks (heartbeat header merged in on desktop) */}
-        <div className="lg:col-start-3 lg:row-start-1 lg:row-span-2">
+        <div className="order-8 lg:order-none lg:col-start-3 lg:row-start-1 lg:row-span-2">
           <RecentBlocksCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1561,7 +1656,7 @@ export default function App() {
           />
         </div>
         {/* Col 1 Row 2 — 24H Volume */}
-        <div className="lg:col-start-1 lg:row-start-2">
+        <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-2">
           <VolumeCard
             volumeUsd={volumeUsd}
             volume={volume}
@@ -1571,6 +1666,34 @@ export default function App() {
             marketCapUsd={marketCapUsd}
             price={price}
             blockHeight={blockHeight}
+          />
+        </div>
+        {/* Row 3 — Signal Cards */}
+        <div className="order-5 lg:order-none lg:col-start-1 lg:row-start-3">
+          <InstitutionalPulseCard
+            btcHeld={chainData?.etf?.btcHeld}
+            btcHeld7dAgo={chainData?.etf?.btcHeld7dAgo}
+            dataDate={chainData?.etf?.date}
+            isLoading={chainDataLoading}
+            error={chainDataError}
+          />
+        </div>
+        <div className="order-6 lg:order-none lg:col-start-2 lg:row-start-3">
+          <OnChainSignalsCard
+            mvrv={chainData?.mvrv?.value}
+            dataDate={chainData?.mvrv?.date}
+            isLoading={chainDataLoading}
+            error={chainDataError}
+          />
+        </div>
+        <div className="order-4 lg:order-none lg:col-start-3 lg:row-start-3">
+          <CycleIndicatorsCard
+            currentPrice={priceUsd}
+            ma200={ma200}
+            ohlcLoading={ohlcLoading}
+            ohlcError={ohlcError}
+            currency={currency}
+            fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
           />
         </div>
       </div>
@@ -1738,7 +1861,7 @@ export default function App() {
 
         {/* Mempool + Network fees */}
         <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Fees</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear." /></p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
           {mempool != null && (() => {
@@ -1768,16 +1891,23 @@ export default function App() {
                   { label: 'Slow',   time: '~1 hour',  value: fees.hourFee     },
                   { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
                   { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
-                ].map(({ label, time, value }) => (
-                  <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                    <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
-                      <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
-                      <span className="text-xs text-gray-500">sat/vB</span>
+                ].map(({ label, time, value }) => {
+                  const fiatFee = price > 0 ? calcFiatFee(value, price) : null
+                  const fiatStr = fiatFee != null
+                    ? `≈ ${currencySym}${fiatFee >= 0.10 ? fiatFee.toFixed(2) : fiatFee.toFixed(4)}`
+                    : null
+                  return (
+                    <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
+                      <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
+                        <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
+                        <span className="text-xs text-gray-500">sat/vB</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-600">{time}</p>
+                      {fiatStr && <p className="mt-0.5 text-xs text-gray-500">{fiatStr}</p>}
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-600">{time}</p>
-                  </div>
-                ))
+                  )
+                })
             }
           </div>
 
@@ -1851,6 +1981,27 @@ export default function App() {
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
+
+      {isPriceAlertsOpen && (
+        <PriceAlertsPanel
+          alerts={alerts}
+          currency={currency}
+          onAdd={addAlert}
+          onRemove={removeAlert}
+          onClearTriggered={clearTriggered}
+          notificationPermission={notificationPermission}
+          onRequestPermission={requestPermission}
+          onClose={() => setIsPriceAlertsOpen(false)}
+        />
+      )}
+
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        cardData={{ ...(data ?? {}), chainData, ma200 }}
+        sentimentSummary={vibeLabel}
+        currency={currency}
+      />
 
       <Analytics />
 
