@@ -38,7 +38,7 @@ export default function OnChainSignalsCard({ mvrv, dataDate, isLoading }) {
           </div>
 
           {interp && (
-            <p className={`text-sm font-semibold ${interp.cls}`}>{interp.label}</p>
+            <p className={`text-sm ${interp.cls}`}>{interp.label}</p>
           )}
 
           {mvrv < 1 && (
