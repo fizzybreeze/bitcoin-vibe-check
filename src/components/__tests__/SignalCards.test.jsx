@@ -10,8 +10,8 @@ function makeKlines200(closePrice) {
 }
 
 describe('InstitutionalPulseCard', () => {
-  it('renders the card label', () => {
-    render(<InstitutionalPulseCard />)
+  it('renders the card label while loading', () => {
+    render(<InstitutionalPulseCard isLoading={true} />)
     expect(screen.getByText(/institutional pulse/i)).toBeTruthy()
   })
 
@@ -30,9 +30,9 @@ describe('InstitutionalPulseCard', () => {
     expect(screen.getByText(/neutral/i)).toBeTruthy()
   })
 
-  it('shows "Data unavailable" when btcHeld is null and not loading', () => {
-    render(<InstitutionalPulseCard btcHeld={null} isLoading={false} />)
-    expect(screen.getByText(/data unavailable/i)).toBeTruthy()
+  it('renders nothing (no card shell) when btcHeld is null and not loading', () => {
+    const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={false} />)
+    expect(container.firstChild).toBeNull()
   })
 
   it('shows a loading skeleton when isLoading=true and no data yet', () => {
@@ -42,8 +42,8 @@ describe('InstitutionalPulseCard', () => {
 })
 
 describe('OnChainSignalsCard', () => {
-  it('renders the card label', () => {
-    render(<OnChainSignalsCard />)
+  it('renders the card label while loading', () => {
+    render(<OnChainSignalsCard isLoading={true} />)
     expect(screen.getByText(/on-chain signals/i)).toBeTruthy()
   })
 
@@ -67,9 +67,9 @@ describe('OnChainSignalsCard', () => {
     expect(screen.getByText(/extremely overvalued/i)).toBeTruthy()
   })
 
-  it('shows "Data unavailable" when mvrv is null and not loading', () => {
-    render(<OnChainSignalsCard mvrv={null} isLoading={false} />)
-    expect(screen.getByText(/data unavailable/i)).toBeTruthy()
+  it('renders nothing (no card shell) when mvrv is null and not loading', () => {
+    const { container } = render(<OnChainSignalsCard mvrv={null} isLoading={false} />)
+    expect(container.firstChild).toBeNull()
   })
 })
 

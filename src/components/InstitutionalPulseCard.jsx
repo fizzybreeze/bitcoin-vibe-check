@@ -23,6 +23,8 @@ export default function InstitutionalPulseCard({ btcHeld, btcHeld7dAgo, dataDate
   const signal = accumulationSignal(btcHeld, btcHeld7dAgo)
   const change = btcHeld != null && btcHeld7dAgo != null ? btcHeld - btcHeld7dAgo : null
 
+  if (!isLoading && btcHeld == null) return null
+
   return (
     <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
       <p className={`${LABEL} flex items-center`}>Institutional Pulse<CardTooltip text={TOOLTIP_TEXT} /></p>
@@ -33,9 +35,7 @@ export default function InstitutionalPulseCard({ btcHeld, btcHeld7dAgo, dataDate
           <div className="h-8 w-32 rounded bg-gray-800" />
           <div className="h-4 w-24 rounded bg-gray-800" />
         </div>
-      ) : btcHeld == null ? (
-        <p className="text-sm text-gray-500">Data unavailable</p>
-      ) : (
+      ) : btcHeld == null ? null : (
         <>
           <div>
             <p className={VALUE}>{formatBtc(btcHeld)}</p>

@@ -642,7 +642,7 @@ function HalvingCountdown({ blockHeight }) {
         <div className="h-full rounded-full bg-orange-400" style={{ width: `${epochPct}%` }} />
       </div>
       <p className="mt-1 text-xs text-gray-400">
-        <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
+        <span className="font-semibold text-white">{Math.round(epochPct)}%</span>
         <span className="ml-1 text-gray-500">of current epoch complete</span>
       </p>
     </>
@@ -1035,7 +1035,7 @@ function SupporterTickerCard({ donors }) {
     ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
     : null
   return (
-    <div className="hidden md:block rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="hidden md:block rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
       {content ? (
         <div className="relative w-full overflow-hidden">
@@ -1057,7 +1057,7 @@ function SupporterTickerCard({ donors }) {
 
 function MobileSupportersCard({ donors }) {
   return (
-    <div className="md:hidden rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="md:hidden rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         {donors.length > 0
@@ -1119,6 +1119,7 @@ function DonationCard() {
           </a>
         </p>
         <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
+        <p className="text-sm text-gray-600">We'll add you to the list once we see your payment come through.</p>
       </div>
       <div className="mt-4">
         <input
@@ -1622,7 +1623,7 @@ export default function App() {
       {/* KPI grid — 1 col mobile, 3 col desktop (lg+) */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Col 1 Row 1 — BTC Price */}
-        <div className="lg:col-start-1 lg:row-start-1">
+        <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1">
           <BtcPriceCard
             value={price != null ? fmtCurrency(price, currency) : null}
             change={priceChange24h}
@@ -1631,11 +1632,11 @@ export default function App() {
           />
         </div>
         {/* Col 2 Rows 1–2 — Network Pulse (full column height) */}
-        <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
+        <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
         </div>
         {/* Col 3 Row 1 — Network Heartbeat (mobile only; merged into Recent Blocks on desktop) */}
-        <div className="lg:hidden">
+        <div className="order-7 lg:hidden">
           <NetworkHeartbeatCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1644,7 +1645,7 @@ export default function App() {
           />
         </div>
         {/* Col 3 Rows 1–2 — Recent Blocks (heartbeat header merged in on desktop) */}
-        <div className="lg:col-start-3 lg:row-start-1 lg:row-span-2">
+        <div className="order-8 lg:order-none lg:col-start-3 lg:row-start-1 lg:row-span-2">
           <RecentBlocksCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1653,7 +1654,7 @@ export default function App() {
           />
         </div>
         {/* Col 1 Row 2 — 24H Volume */}
-        <div className="lg:col-start-1 lg:row-start-2">
+        <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-2">
           <VolumeCard
             volumeUsd={volumeUsd}
             volume={volume}
@@ -1666,7 +1667,7 @@ export default function App() {
           />
         </div>
         {/* Row 3 — Signal Cards */}
-        <div className="lg:col-start-1 lg:row-start-3">
+        <div className="order-5 lg:order-none lg:col-start-1 lg:row-start-3">
           <InstitutionalPulseCard
             btcHeld={chainData?.etf?.btcHeld}
             btcHeld7dAgo={chainData?.etf?.btcHeld7dAgo}
@@ -1674,14 +1675,14 @@ export default function App() {
             isLoading={chainDataLoading}
           />
         </div>
-        <div className="lg:col-start-2 lg:row-start-3">
+        <div className="order-6 lg:order-none lg:col-start-2 lg:row-start-3">
           <OnChainSignalsCard
             mvrv={chainData?.mvrv?.value}
             dataDate={chainData?.mvrv?.date}
             isLoading={chainDataLoading}
           />
         </div>
-        <div className="lg:col-start-3 lg:row-start-3">
+        <div className="order-4 lg:order-none lg:col-start-3 lg:row-start-3">
           <CycleIndicatorsCard
             currentPrice={priceUsd}
             ma200={ma200}
