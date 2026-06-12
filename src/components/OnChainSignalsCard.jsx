@@ -18,39 +18,42 @@ function mvrvInterpretation(mvrv) {
 export default function OnChainSignalsCard({ mvrv, dataDate, isLoading }) {
   const interp = mvrvInterpretation(mvrv)
 
-  if (!isLoading && mvrv == null) return null
-
-  return (
-    <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
-      <p className={LABEL}>On-Chain Signals</p>
-      <p className="text-xs text-gray-600 flex items-center">MVRV Ratio<CardTooltip text={MVRV_TOOLTIP} /></p>
-
-      {isLoading && mvrv == null ? (
+  // 1. Loading — always show skeleton while fetch is in flight
+  if (isLoading) {
+    return (
+      <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
+        <p className={LABEL}>On-Chain Signals</p>
+        <p className="text-xs text-gray-600 flex items-center">MVRV Ratio<CardTooltip text={MVRV_TOOLTIP} /></p>
         <div className="animate-pulse space-y-2">
           <div className="h-8 w-20 rounded bg-gray-800" />
           <div className="h-4 w-32 rounded bg-gray-800" />
         </div>
-      ) : mvrv == null ? null : (
-        <>
-          <div>
-            <p className={VALUE}>{mvrv.toFixed(2)}</p>
-            <p className={SUB}>Market Value to Realised Value</p>
-          </div>
+      </div>
+    )
+  }
 
-          {interp && (
-            <p className={`text-sm ${interp.cls}`}>{interp.label}</p>
-          )}
+  // 2. Fetch complete, no data — hide card entirely
+  if (mvrv == null) return null
 
-          {mvrv < 1 && (
-            <p className="text-xs text-gray-500">
-              Coins are, on average, held at a loss — historically a strong buying zone.
-            </p>
-          )}
-
-          {dataDate && (
-            <p className="text-xs text-gray-600">As of {dataDate}</p>
-          )}
-        </>
+  // 3. Data present — render normally
+  return (
+    <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
+      <p className={LABEL}>On-Chain Signals</p>
+      <p className="text-xs text-gray-600 flex items-center">MVRV Ratio<CardTooltip text={MVRV_TOOLTIP} /></p>
+      <div>
+        <p className={VALUE}>{mvrv.toFixed(2)}</p>
+        <p className={SUB}>Market Value to Realised Value</p>
+      </div>
+      {interp && (
+        <p className={`text-sm ${interp.cls}`}>{interp.label}</p>
+      )}
+      {mvrv < 1 && (
+        <p className="text-xs text-gray-500">
+          Coins are, on average, held at a loss — historically a strong buying zone.
+        </p>
+      )}
+      {dataDate && (
+        <p className="text-xs text-gray-600">As of {dataDate}</p>
       )}
     </div>
   )

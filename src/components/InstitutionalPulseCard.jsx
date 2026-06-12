@@ -23,42 +23,46 @@ export default function InstitutionalPulseCard({ btcHeld, btcHeld7dAgo, dataDate
   const signal = accumulationSignal(btcHeld, btcHeld7dAgo)
   const change = btcHeld != null && btcHeld7dAgo != null ? btcHeld - btcHeld7dAgo : null
 
-  if (!isLoading && btcHeld == null) return null
-
-  return (
-    <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
-      <p className={`${LABEL} flex items-center`}>Institutional Pulse<CardTooltip text={TOOLTIP_TEXT} /></p>
-      <p className="text-xs text-gray-600">US Spot ETF Holdings</p>
-
-      {isLoading && btcHeld == null ? (
+  // 1. Loading — always show skeleton while fetch is in flight
+  if (isLoading) {
+    return (
+      <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
+        <p className={`${LABEL} flex items-center`}>Institutional Pulse<CardTooltip text={TOOLTIP_TEXT} /></p>
+        <p className="text-xs text-gray-600">US Spot ETF Holdings</p>
         <div className="animate-pulse space-y-2">
           <div className="h-8 w-32 rounded bg-gray-800" />
           <div className="h-4 w-24 rounded bg-gray-800" />
         </div>
-      ) : btcHeld == null ? null : (
-        <>
-          <div>
-            <p className={VALUE}>{formatBtc(btcHeld)}</p>
-            <p className={SUB}>BTC held</p>
-          </div>
+      </div>
+    )
+  }
 
-          {signal && (
-            <div className="flex items-center gap-2">
-              <span className={`text-sm font-semibold ${signal.cls}`}>
-                {signal.arrow} {signal.label}
-              </span>
-              {change != null && (
-                <span className="text-xs text-gray-500">
-                  ({change >= 0 ? '+' : ''}{formatBtc(change)} BTC over 7d)
-                </span>
-              )}
-            </div>
-          )}
+  // 2. Fetch complete, no data — hide card entirely
+  if (btcHeld == null) return null
 
-          {dataDate && (
-            <p className="text-xs text-gray-600">As of {dataDate}</p>
+  // 3. Data present — render normally
+  return (
+    <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-3 h-full">
+      <p className={`${LABEL} flex items-center`}>Institutional Pulse<CardTooltip text={TOOLTIP_TEXT} /></p>
+      <p className="text-xs text-gray-600">US Spot ETF Holdings</p>
+      <div>
+        <p className={VALUE}>{formatBtc(btcHeld)}</p>
+        <p className={SUB}>BTC held</p>
+      </div>
+      {signal && (
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${signal.cls}`}>
+            {signal.arrow} {signal.label}
+          </span>
+          {change != null && (
+            <span className="text-xs text-gray-500">
+              ({change >= 0 ? '+' : ''}{formatBtc(change)} BTC over 7d)
+            </span>
           )}
-        </>
+        </div>
+      )}
+      {dataDate && (
+        <p className="text-xs text-gray-600">As of {dataDate}</p>
       )}
     </div>
   )
