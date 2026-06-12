@@ -4,10 +4,10 @@
 // Verified field shapes (confirmed via live API test, 2026-06-11):
 //   MVRV: [{d: 'YYYY-MM-DD', unixTs: number, mvrv: number}, ...]
 //
-// ETF endpoint: '/v1/etf-holdings' is a best-guess — the BGeometrics daily rate
-// limit was exhausted before the endpoint name could be confirmed. Verify by
-// checking https://api.bgeometrics.com/scalar.html once the limit resets and
-// update the path + field name below if needed.
+// ETF endpoint: '/v1/etf-holdings-btc' confirmed via OpenAPI spec at
+// /v3/api-docs (2026-06-12). Response shape (array vs HAL JSON) and exact
+// data field name pending live verification — rate limit exhausted during
+// probing. Dynamic field detection below handles either case.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -20,8 +20,7 @@ export default async function handler(req, res) {
   const [mvrvResult, etfResult] = await Promise.allSettled([
     fetch('https://api.bgeometrics.com/v1/mvrv', { headers })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`MVRV HTTP ${r.status}`)))),
-    // NOTE: endpoint name unverified — update path here once confirmed
-    fetch('https://api.bgeometrics.com/v1/etf-holdings', { headers })
+    fetch('https://api.bgeometrics.com/v1/etf-holdings-btc', { headers })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`ETF HTTP ${r.status}`)))),
   ])
 
