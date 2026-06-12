@@ -10,11 +10,11 @@ const MAYER_TOOLTIP     = 'Price divided by the 200-day moving average. Above 2.
 
 function mayerInterpretation(multiple) {
   if (multiple == null) return null
-  if (multiple < 0.8) return { label: 'Historically Cheap',  cls: 'text-green-400'  }
-  if (multiple < 1.0) return { label: 'Below Average',       cls: 'text-orange-400' }
-  if (multiple < 1.5) return { label: 'Normal Range',        cls: 'text-gray-400' }
-  if (multiple < 2.4) return { label: 'Elevated',            cls: 'text-amber-400'  }
-  return                     { label: 'Overheated',          cls: 'text-red-400'    }
+  if (multiple < 0.8) return { label: 'Historically Cheap' }
+  if (multiple < 1.0) return { label: 'Below Average'      }
+  if (multiple < 1.5) return { label: 'Normal Range'       }
+  if (multiple < 2.4) return { label: 'Elevated'           }
+  return                     { label: 'Overheated'         }
 }
 
 function powerLawInterpretation(currentPrice, fairValue) {
@@ -81,7 +81,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
             label="Mayer Multiple"
             value={mayer != null ? mayer.toFixed(2) : '—'}
             context={mayerInterp?.label}
-            contextCls={mayerInterp?.cls ?? 'text-gray-400'}
+            contextCls="text-gray-500"
             tooltip={MAYER_TOOLTIP}
           />
         </>

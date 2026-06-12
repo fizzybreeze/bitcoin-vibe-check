@@ -282,11 +282,11 @@ function mvrvLabel(mvrv) {
 
 function mayerLabel(multiple) {
   if (multiple == null) return null
-  if (multiple < 0.8) return { text: 'Historically Cheap', color: '#4ade80'  }
-  if (multiple < 1.0) return { text: 'Below Average',      color: '#a3e635'  }
-  if (multiple < 1.5) return { text: 'Normal Range',       color: '#facc15'  }
-  if (multiple < 2.4) return { text: 'Elevated',           color: '#fbbf24'  }
-  return                     { text: 'Overheated',         color: '#f87171'  }
+  if (multiple < 0.8) return { text: 'Historically Cheap' }
+  if (multiple < 1.0) return { text: 'Below Average'      }
+  if (multiple < 1.5) return { text: 'Normal Range'       }
+  if (multiple < 2.4) return { text: 'Elevated'           }
+  return                     { text: 'Overheated'         }
 }
 
 function InstitutionalPulseShareCard({ cardData }) {
@@ -349,7 +349,7 @@ function CycleIndicatorsShareCard({ cardData }) {
             {mayer != null ? mayer.toFixed(2) : '—'}
           </p>
           {mLabel && (
-            <p style={{ ...SUB_STYLE, color: mLabel.color, fontWeight: 600 }}>{mLabel.text}</p>
+            <p style={{ ...SUB_STYLE, color: MUTED }}>{mLabel.text}</p>
           )}
         </div>
       </div>
