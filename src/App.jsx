@@ -63,6 +63,8 @@ const WS_SYMBOL_MAP = {
   'BTC/CHF': 'priceChf',
 }
 
+const ETF_TICKERS = ['IBIT', 'FBTC', 'GBTC', 'ARKB', 'BITB', 'HODL', 'BTCO', 'EZBC', 'BTCW']
+
 function parseBinanceKlines(klines, days) {
   if (!klines?.length) return null
   if (days === 1) {
@@ -152,6 +154,23 @@ async function fetchChart(days) {
   if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
   const klines = await res.json()
   return parseBinanceKlines(klines, days)
+}
+
+async function fetchEtfData() {
+  const res = await fetch(
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${ETF_TICKERS.join(',')}`
+  )
+  if (!res.ok) throw new Error(`ETF fetch failed: ${res.status}`)
+  const json = await res.json()
+  const quotes = json?.quoteResponse?.result ?? []
+  return quotes
+    .filter(q => q.totalAssets != null)
+    .map(q => ({
+      ticker:    q.symbol,
+      aum:       q.totalAssets,
+      changePct: q.regularMarketChangePercent ?? null,
+    }))
+    .sort((a, b) => b.aum - a.aum)
 }
 
 function readCache() {
@@ -1128,6 +1147,53 @@ function DonationCard() {
   )
 }
 
+function SpotEtfCard({ etfData, loading }) {
+  const totalAum = etfData?.reduce((s, e) => s + e.aum, 0) ?? null
+  const weightedChangePct = etfData?.length && totalAum
+    ? etfData.reduce((s, e) => s + (e.changePct ?? 0) * (e.aum / totalAum), 0)
+    : null
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 mb-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">US Spot BTC ETFs</p>
+      <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          {loading || (totalAum == null && etfData == null)
+            ? <Skeleton className="h-9 w-36" />
+            : totalAum != null
+              ? <p className="text-2xl font-bold text-orange-400 md:text-3xl">{fmtVolume(totalAum, 'usd')}</p>
+              : <p className="text-2xl font-bold text-gray-600">—</p>
+          }
+          <p className="mt-1 text-xs text-gray-500">Combined AUM</p>
+          {!loading && weightedChangePct != null && (
+            <p className={`mt-1.5 text-sm font-medium ${weightedChangePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {weightedChangePct >= 0 ? '▲' : '▼'}&nbsp;{Math.abs(weightedChangePct).toFixed(2)}% today
+            </p>
+          )}
+          {!loading && etfData == null && (
+            <p className="mt-2 text-xs text-gray-600">Data temporarily unavailable</p>
+          )}
+        </div>
+        {etfData?.length > 0 && (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+            {etfData.slice(0, 6).map(e => (
+              <div key={e.ticker} className="flex items-center justify-between gap-2">
+                <span className="text-xs font-mono font-semibold text-gray-400">{e.ticker}</span>
+                {e.changePct != null
+                  ? <span className={`text-xs font-semibold ${e.changePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {e.changePct >= 0 ? '+' : ''}{e.changePct.toFixed(1)}%
+                    </span>
+                  : <span className="text-xs text-gray-600">—</span>
+                }
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Singleton: ensures loadData() fires only once on mount even under React StrictMode
 // (StrictMode double-invokes effects in development; both runs share the same promise).
 let _initialLoadPromise = null
@@ -1154,6 +1220,9 @@ export default function App() {
   const prefetchingRef   = useRef(new Set())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
+
+  const [etfData, setEtfData]         = useState(null)
+  const [etfLoading, setEtfLoading]   = useState(true)
 
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
@@ -1306,6 +1375,23 @@ export default function App() {
     }
     fetchDonors()
     const id = setInterval(fetchDonors, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // US spot ETF data — fetched independently, refreshed every 5 minutes
+  useEffect(() => {
+    async function load() {
+      try {
+        const result = await fetchEtfData()
+        setEtfData(result.length ? result : null)
+      } catch {
+        setEtfData(null)
+      } finally {
+        setEtfLoading(false)
+      }
+    }
+    load()
+    const id = setInterval(load, 5 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
 
@@ -1577,6 +1663,9 @@ export default function App() {
 
       {/* Halving countdown */}
       <HalvingCountdown blockHeight={blockHeight} />
+
+      {/* US Spot ETF indicator */}
+      <SpotEtfCard etfData={etfData} loading={etfLoading} />
 
       {/* Chart + Fees */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
