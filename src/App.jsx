@@ -9,6 +9,9 @@ import BeehiivEmbed from './components/BeehiivEmbed.jsx'
 import { usePersistedState } from './hooks/usePersistedState.js'
 import ShareButton from './components/ShareButton.jsx'
 import ShareModal from './components/ShareModal.jsx'
+import PriceAlertsButton from './components/PriceAlertsButton.jsx'
+import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
+import { usePriceAlerts } from './hooks/usePriceAlerts.js'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -16,7 +19,7 @@ import {
 } from './utils.js'
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
-  computeVibeLabel, computeHashRateTrend,
+  computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
 import { calc200DMA } from './utils/cycleCalculations.js'
 import InstitutionalPulseCard from './components/InstitutionalPulseCard.jsx'
@@ -1182,6 +1185,7 @@ export default function App() {
   const [ohlcError, setOhlcError]             = useState(null)
 
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isPriceAlertsOpen, setIsPriceAlertsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
   const prevBlockHtRef    = useRef(null)
@@ -1534,6 +1538,15 @@ export default function App() {
   const athPct = computeAthDistance(priceUsd, athUsd)
   const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
 
+  const {
+    alerts,
+    addAlert,
+    removeAlert,
+    clearTriggered,
+    notificationPermission,
+    requestPermission,
+  } = usePriceAlerts(price, currency)
+
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
   const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
@@ -1576,6 +1589,10 @@ export default function App() {
             )}
           </button>
           <ShareButton onClick={() => setIsShareOpen(true)} />
+          <PriceAlertsButton
+            onClick={() => setIsPriceAlertsOpen(prev => !prev)}
+            hasActiveAlerts={alerts.some(a => !a.triggered)}
+          />
           <div className="relative">
             <select
               value={currency}
@@ -1839,7 +1856,7 @@ export default function App() {
 
         {/* Mempool + Network fees */}
         <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Transaction fees in satoshis per virtual byte (sat/vB). Higher fees mean the mempool is congested and miners are prioritising the best-paying transactions. Under 2 sat/vB is typically low-congestion; above 20 sat/vB signals significant backlog." /></p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear." /></p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
           {mempool != null && (() => {
@@ -1869,16 +1886,23 @@ export default function App() {
                   { label: 'Slow',   time: '~1 hour',  value: fees.hourFee     },
                   { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
                   { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
-                ].map(({ label, time, value }) => (
-                  <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                    <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
-                      <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
-                      <span className="text-xs text-gray-500">sat/vB</span>
+                ].map(({ label, time, value }) => {
+                  const fiatFee = price > 0 ? calcFiatFee(value, price) : null
+                  const fiatStr = fiatFee != null
+                    ? `≈ ${currencySym}${fiatFee >= 0.10 ? fiatFee.toFixed(2) : fiatFee.toFixed(4)}`
+                    : null
+                  return (
+                    <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
+                      <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
+                        <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
+                        <span className="text-xs text-gray-500">sat/vB</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-600">{time}</p>
+                      {fiatStr && <p className="mt-0.5 text-xs text-gray-500">{fiatStr}</p>}
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-600">{time}</p>
-                  </div>
-                ))
+                  )
+                })
             }
           </div>
 
@@ -1952,6 +1976,19 @@ export default function App() {
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
+
+      {isPriceAlertsOpen && (
+        <PriceAlertsPanel
+          alerts={alerts}
+          currency={currency}
+          onAdd={addAlert}
+          onRemove={removeAlert}
+          onClearTriggered={clearTriggered}
+          notificationPermission={notificationPermission}
+          onRequestPermission={requestPermission}
+          onClose={() => setIsPriceAlertsOpen(false)}
+        />
+      )}
 
       <ShareModal
         isOpen={isShareOpen}

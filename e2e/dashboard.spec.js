@@ -6,6 +6,7 @@ import {
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   marketsFixture, hashrate3dFixture, hashrate1mFixture,
   chainDataFixture, klines200dFixture,
+  paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
 } from './fixtures.js'
 
 const TIMEOUT = 10_000
@@ -51,6 +52,17 @@ async function mockApis(page) {
   )
   await page.route('https://mempool.space/api/v1/mining/hashrate/1m', route =>
     route.fulfill({ json: hashrate1mFixture })
+  )
+  // CoinPaprika — primary price source (USD, volume, ATH, dominance)
+  await page.route('https://api.coinpaprika.com/v1/tickers/btc-bitcoin', route =>
+    route.fulfill({ json: paprikaTickerFixture })
+  )
+  await page.route('https://api.coinpaprika.com/v1/global', route =>
+    route.fulfill({ json: paprikaGlobalFixture })
+  )
+  // Kraken REST — initial GBP/EUR/CAD/CHF prices
+  await page.route('https://api.kraken.com/0/public/Ticker*', route =>
+    route.fulfill({ json: krakenTickerFixture })
   )
   // Block the Kraken WebSocket so fixture price values are not overwritten by live data
   await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())

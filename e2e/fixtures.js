@@ -79,6 +79,35 @@ export const mempoolFixture = {
 // /coins/markets — price 105,000 is ~3.7% below ATH of 109,000
 export const marketsFixture = [{ ath: 109000 }]
 
+// CoinPaprika /v1/tickers/btc-bitcoin — price, volume, change, ATH
+export const paprikaTickerFixture = {
+  quotes: {
+    USD: {
+      price: 105000,
+      volume_24h: 35_000_000_000,
+      percent_change_24h: 2.5,
+      market_cap: 2_100_000_000_000,
+      ath_price: 109000,
+    },
+  },
+}
+
+// CoinPaprika /v1/global — BTC dominance
+export const paprikaGlobalFixture = {
+  bitcoin_dominance_percentage: 64.5,
+}
+
+// Kraken REST /0/public/Ticker — GBP/EUR/CAD/CHF spot prices
+// Key must end with the currency suffix for findKrakenPrice() to match it
+export const krakenTickerFixture = {
+  result: {
+    XBTGBP: { c: ['82000'] },
+    XBTEUR: { c: ['96000'] },
+    XBTCAD: { c: ['142000'] },
+    XBTCHF: { c: ['93000'] },
+  },
+}
+
 // /mining/hashrate/3d — current network hash rate
 export const hashrate3dFixture = { currentHashrate: 800e18 }
 

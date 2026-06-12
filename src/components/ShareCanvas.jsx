@@ -1,6 +1,6 @@
 import { fmtCurrency, fmtVolume, blocksToNextHalving, epochPercentage, CURRENCY_META } from '../utils.js'
 import {
-  computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
+  computeAthDistance, computeSatsPerFiat, computeIssuedSupply, calcFiatFee,
 } from '../lib/calculations.js'
 import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculations.js'
 
@@ -212,9 +212,19 @@ function RecentBlocksShareCard({ cardData }) {
   )
 }
 
-function FeesShareCard({ cardData }) {
-  const { fees, mempool } = cardData
+function FeesShareCard({ cardData, currency }) {
+  const { fees, mempool,
+    priceUsd, priceGbp, priceEur, priceCad, priceChf } = cardData
+  const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
+  const currSym = CURRENCY_META[currency]?.sym ?? '$'
   const cg = mempool?.vsize != null ? congestionInfo(mempool.vsize) : null
+
+  function fmtFiatFee(feeRate) {
+    if (!(price > 0)) return null
+    const f = calcFiatFee(feeRate, price)
+    return `≈ ${currSym}${f >= 0.10 ? f.toFixed(2) : f.toFixed(4)}`
+  }
+
   return (
     <>
       <p style={LABEL_STYLE}>Network Fees</p>
@@ -224,17 +234,21 @@ function FeesShareCard({ cardData }) {
             { label: 'Slow',   value: fees.hourFee,     time: '~1 hr'  },
             { label: 'Medium', value: fees.halfHourFee, time: '~30 min' },
             { label: 'Fast',   value: fees.fastestFee,  time: '~10 min' },
-          ].map(({ label, value, time }) => (
-            <div key={label} style={{
-              flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 6px',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }}>
-              <p style={{ ...LABEL_STYLE, fontSize: 9 }}>{label}</p>
-              <p style={{ fontSize: 16, fontWeight: 700, color: ORANGE, margin: '4px 0 0' }}>{value}</p>
-              <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>sat/vB</p>
-              <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>{time}</p>
-            </div>
-          ))}
+          ].map(({ label, value, time }) => {
+            const fiatStr = fmtFiatFee(value)
+            return (
+              <div key={label} style={{
+                flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 6px',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                <p style={{ ...LABEL_STYLE, fontSize: 9 }}>{label}</p>
+                <p style={{ fontSize: 16, fontWeight: 700, color: ORANGE, margin: '4px 0 0' }}>{value}</p>
+                <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>sat/vB</p>
+                <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>{time}</p>
+                {fiatStr && <p style={{ fontSize: 9, color: '#9ca3af', margin: '3px 0 0' }}>{fiatStr}</p>}
+              </div>
+            )
+          })}
         </div>
       ) : (
         <p style={{ ...VALUE_STYLE, fontSize: 18 }}>—</p>
@@ -350,7 +364,7 @@ function renderShareCard(key, cardData, currency) {
     case 'volume':             return <VolumeShareCard cardData={cardData} currency={currency} />
     case 'halving':            return <HalvingShareCard cardData={cardData} />
     case 'recentBlocks':       return <RecentBlocksShareCard cardData={cardData} />
-    case 'fees':               return <FeesShareCard cardData={cardData} />
+    case 'fees':               return <FeesShareCard cardData={cardData} currency={currency} />
     case 'institutionalPulse': return <InstitutionalPulseShareCard cardData={cardData} />
     case 'onChainSignals':     return <OnChainSignalsShareCard cardData={cardData} />
     case 'cycleIndicators':    return <CycleIndicatorsShareCard cardData={cardData} />
