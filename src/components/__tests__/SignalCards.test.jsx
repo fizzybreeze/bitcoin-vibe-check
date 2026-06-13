@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import InstitutionalPulseCard from '../InstitutionalPulseCard.jsx'
 import OnChainSignalsCard from '../OnChainSignalsCard.jsx'
 import CycleIndicatorsCard from '../CycleIndicatorsCard.jsx'
 
@@ -8,43 +7,6 @@ import CycleIndicatorsCard from '../CycleIndicatorsCard.jsx'
 function makeKlines200(closePrice) {
   return Array.from({ length: 200 }, (_, i) => [i, '0', '0', '0', String(closePrice), '0'])
 }
-
-describe('InstitutionalPulseCard', () => {
-  it('renders the card label while loading', () => {
-    render(<InstitutionalPulseCard isLoading={true} />)
-    expect(screen.getByText(/institutional pulse/i)).toBeTruthy()
-  })
-
-  it('shows "Accumulating" when btcHeld increased over 7 days', () => {
-    render(<InstitutionalPulseCard btcHeld={1_100_000} btcHeld7dAgo={1_000_000} />)
-    expect(screen.getByText(/accumulating/i)).toBeTruthy()
-  })
-
-  it('shows "Distributing" when btcHeld decreased over 7 days', () => {
-    render(<InstitutionalPulseCard btcHeld={900_000} btcHeld7dAgo={1_000_000} />)
-    expect(screen.getByText(/distributing/i)).toBeTruthy()
-  })
-
-  it('shows "Neutral" when change is negligible', () => {
-    render(<InstitutionalPulseCard btcHeld={1_000_010} btcHeld7dAgo={1_000_000} />)
-    expect(screen.getByText(/neutral/i)).toBeTruthy()
-  })
-
-  it('shows a skeleton when btcHeld is null and not loading (data absent but no error)', () => {
-    const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={false} />)
-    expect(container.querySelector('.animate-pulse')).toBeTruthy()
-  })
-
-  it('hides card entirely when error=true', () => {
-    const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={false} error={true} />)
-    expect(container.firstChild).toBeNull()
-  })
-
-  it('shows a loading skeleton when isLoading=true and no data yet', () => {
-    const { container } = render(<InstitutionalPulseCard btcHeld={null} isLoading={true} />)
-    expect(container.querySelector('.animate-pulse')).toBeTruthy()
-  })
-})
 
 describe('OnChainSignalsCard', () => {
   it('renders the card label while loading', () => {

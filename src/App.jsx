@@ -22,7 +22,6 @@ import {
   computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
 import { calc200DMA } from './utils/cycleCalculations.js'
-import InstitutionalPulseCard from './components/InstitutionalPulseCard.jsx'
 import OnChainSignalsCard from './components/OnChainSignalsCard.jsx'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import CardTooltip from './components/CardTooltip.jsx'
@@ -1669,16 +1668,7 @@ export default function App() {
           />
         </div>
         {/* Row 3 — Signal Cards */}
-        <div className="order-5 lg:order-none lg:col-start-1 lg:row-start-3">
-          <InstitutionalPulseCard
-            btcHeld={chainData?.etf?.btcHeld}
-            btcHeld7dAgo={chainData?.etf?.btcHeld7dAgo}
-            dataDate={chainData?.etf?.date}
-            isLoading={chainDataLoading}
-            error={chainDataError}
-          />
-        </div>
-        <div className="order-6 lg:order-none lg:col-start-2 lg:row-start-3">
+        <div className="order-6 lg:order-none lg:col-start-1 lg:row-start-3">
           <OnChainSignalsCard
             mvrv={chainData?.mvrv?.value}
             dataDate={chainData?.mvrv?.date}
@@ -1686,7 +1676,7 @@ export default function App() {
             error={chainDataError}
           />
         </div>
-        <div className="order-4 lg:order-none lg:col-start-3 lg:row-start-3">
+        <div className="order-4 lg:order-none lg:col-start-2 lg:row-start-3 lg:col-span-2">
           <CycleIndicatorsCard
             currentPrice={priceUsd}
             ma200={ma200}
