@@ -3,13 +3,11 @@
 //
 // Verified field shapes:
 //   MVRV (BGeometrics): [{d: 'YYYY-MM-DD', unixTs: number, mvrv: number}, ...]
-//   ETF (SoSoValue):    [{time: 'YYYY-MM-DD', totalBtcHolding: number}, ...]
-//     SoSoValue may return items newest-first; sorted ascending for safety.
+//   ETF  (CoinGlass v3): { code, data: [{ date: <ms>, totalBtcAmount: number, ... }, ...] }
+//     — flow-history returns newest-first; sorted ascending. Field names confirmed
+//       from Vercel logs on first live run (see console.log below).
 //
-// CoinGlass fallback (requires COINGLASS_API_KEY env var, if SoSoValue unavailable):
-//   https://open-api.coinglass.com/api/public/v2/spot_etf/bitcoin
-//   Headers: { 'CG-API-KEY': process.env.COINGLASS_API_KEY }
-//   Shape: { data: { list: [{ date: 'YYYY-MM-DD', btcAmount: number }, ...] } }
+// Required env var: COINGLASS_API_KEY (free tier from coinglass.com)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -18,12 +16,16 @@ export default async function handler(req, res) {
 
   const token = process.env.BGEOMETRICS_API_KEY
   const bgeomHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+  const cgKey = process.env.COINGLASS_API_KEY
 
   const [mvrvResult, etfResult] = await Promise.allSettled([
     fetch('https://api.bgeometrics.com/v1/mvrv', { headers: bgeomHeaders })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`MVRV HTTP ${r.status}`)))),
-    fetch('https://sosovalue.com/api/etf/btc/spot-etf-total-holding-list')
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`ETF HTTP ${r.status}`)))),
+    cgKey
+      ? fetch('https://open-api-v3.coinglass.com/api/bitcoin/etf/flow-history', {
+          headers: { 'CG-API-KEY': cgKey, accept: 'application/json' },
+        }).then(r => (r.ok ? r.json() : Promise.reject(new Error(`ETF HTTP ${r.status}`))))
+      : Promise.reject(new Error('COINGLASS_API_KEY not set')),
   ])
 
   // MVRV (unchanged)
@@ -31,28 +33,41 @@ export default async function handler(req, res) {
   if (mvrvResult.status === 'fulfilled' && Array.isArray(mvrvResult.value) && mvrvResult.value.length > 0) {
     const sorted = [...mvrvResult.value].sort((a, b) => new Date(a.d) - new Date(b.d))
     const latest = sorted[sorted.length - 1]
-    mvrv = {
-      value: latest.mvrv,
-      date: latest.d,
-    }
+    mvrv = { value: latest.mvrv, date: latest.d }
   }
 
-  // ETF (SoSoValue — replaces BGeometrics)
+  // ETF (CoinGlass v3 — /api/bitcoin/etf/flow-history)
   let etf = null
   if (etfResult.status === 'fulfilled') {
     const raw = etfResult.value
-    // Handle both raw array and { code, data: [...] } envelope
-    const items = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : null)
+    // Log first call so we can verify actual field names in Vercel function logs
+    console.log('[chain-data] CoinGlass ETF sample:', JSON.stringify(raw).slice(0, 400))
+    const items = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null)
     if (items && items.length > 0) {
-      const sorted = [...items].sort((a, b) => new Date(a.time) - new Date(b.time))
+      // Sort ascending by timestamp (CoinGlass returns newest-first)
+      const sorted = [...items].sort((a, b) => {
+        const da = a.date ?? a.time ?? a.ts ?? 0
+        const db = b.date ?? b.time ?? b.ts ?? 0
+        return da - db
+      })
       const latest = sorted[sorted.length - 1]
-      const sevenDaysAgo = sorted[sorted.length - 8] ?? sorted[0]
-      etf = {
-        btcHeld: latest.totalBtcHolding,
-        btcHeld7dAgo: sevenDaysAgo?.totalBtcHolding ?? null,
-        date: latest.time,
+      const sevenAgo = sorted[sorted.length - 8] ?? sorted[0]
+
+      // Try likely field names for total BTC held (confirmed from logs after first run)
+      const btcHeld = latest.totalBtcAmount ?? latest.btcAmount ?? latest.holdingAmount ?? latest.total ?? null
+      const btcHeld7dAgo = sevenAgo?.totalBtcAmount ?? sevenAgo?.btcAmount ?? sevenAgo?.holdingAmount ?? sevenAgo?.total ?? null
+
+      if (btcHeld != null) {
+        // CoinGlass date is Unix ms timestamp — convert to YYYY-MM-DD
+        const dateVal = latest.date ?? latest.time ?? latest.ts
+        const dateStr = typeof dateVal === 'number'
+          ? new Date(dateVal).toISOString().slice(0, 10)
+          : String(dateVal).slice(0, 10)
+        etf = { btcHeld, btcHeld7dAgo, date: dateStr }
       }
     }
+  } else {
+    console.error('[chain-data] ETF fetch failed:', etfResult.reason?.message)
   }
 
   if (!mvrv && !etf) {
