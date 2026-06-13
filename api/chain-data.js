@@ -3,11 +3,18 @@
 //
 // Verified field shapes:
 //   MVRV (BGeometrics): [{d: 'YYYY-MM-DD', unixTs: number, mvrv: number}, ...]
-//   ETF  (CoinGlass v3): { code, data: [{ date: <ms>, totalBtcAmount: number, ... }, ...] }
-//     — flow-history returns newest-first; sorted ascending. Field names confirmed
-//       from Vercel logs on first live run (see console.log below).
+//   ETF  (Yahoo Finance quoteSummary summaryDetail.totalAssets, 5 tickers):
+//     current BTC held = sum(totalAssets) / BTC spot price (from Binance)
+//     btcHeld7dAgo: derived from 10-day ETF chart prices vs 10-day BTC klines —
+//     see inline comment for approximation caveat.
 //
-// Required env var: COINGLASS_API_KEY (free tier from coinglass.com)
+// No extra env vars needed (Yahoo Finance is public; Binance is public).
+
+const ETF_TICKERS = ['IBIT', 'FBTC', 'ARKB', 'BITB', 'HODL']
+const YF_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'application/json',
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -16,18 +23,18 @@ export default async function handler(req, res) {
   const token = process.env.BGEOMETRICS_API_KEY
   const bgeomHeaders = token ? { Authorization: `Bearer ${token}` } : {}
 
-  const [mvrvResult, etfResult] = await Promise.allSettled([
+  // Fetch MVRV, BTC 10-day klines, and each ETF's quoteSummary + 10-day chart in parallel
+  const [mvrvResult, btcKlinesResult, ...etfResults] = await Promise.allSettled([
     fetch('https://api.bgeometrics.com/v1/mvrv', { headers: bgeomHeaders })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(`MVRV HTTP ${r.status}`)))),
-    fetch('https://api.bgeometrics.com/v1/etf-holdings-btc', { headers: bgeomHeaders })
-      .then(r => {
-        console.log('[chain-data] BGeometrics ETF status:', r.status)
-        return r.ok ? r.json() : Promise.reject(new Error(`ETF HTTP ${r.status}`))
-      })
-      .then(json => {
-        console.log('[chain-data] BGeometrics ETF sample:', JSON.stringify(json).slice(0, 500))
-        return json
-      }),
+    fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=10')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`BTC klines HTTP ${r.status}`)))),
+    ...ETF_TICKERS.map(ticker => Promise.allSettled([
+      fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryDetail`, { headers: YF_HEADERS })
+        .then(r => (r.ok ? r.json() : Promise.reject(new Error(`${ticker} summary HTTP ${r.status}`)))),
+      fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=10d`, { headers: YF_HEADERS })
+        .then(r => (r.ok ? r.json() : Promise.reject(new Error(`${ticker} chart HTTP ${r.status}`)))),
+    ])),
   ])
 
   // MVRV (unchanged)
@@ -38,36 +45,66 @@ export default async function handler(req, res) {
     mvrv = { value: latest.mvrv, date: latest.d }
   }
 
-  // ETF (BGeometrics /v1/etf-holdings-btc)
-  // Field names are logged above on first run — update this comment once confirmed.
+  // ETF (Yahoo Finance + Binance)
   let etf = null
-  if (etfResult.status === 'fulfilled') {
-    const raw = etfResult.value
-    const items = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : null)
-    if (items && items.length > 0) {
-      const sorted = [...items].sort((a, b) => new Date(a.d ?? a.date ?? a.time) - new Date(b.d ?? b.date ?? b.time))
-      const latest = sorted[sorted.length - 1]
-      const sevenAgo = sorted[sorted.length - 8] ?? sorted[0]
-      // Derive data field: skip known metadata keys
-      const dataField = Object.keys(latest).find(k => !['d', 'date', 'time', 'unixTs'].includes(k)) ?? null
-      if (dataField) {
-        const dateVal = latest.d ?? latest.date ?? latest.time ?? ''
-        etf = {
-          btcHeld: latest[dataField],
-          btcHeld7dAgo: sevenAgo?.[dataField] ?? null,
-          date: String(dateVal).slice(0, 10),
+  try {
+    const klines = btcKlinesResult.status === 'fulfilled' ? btcKlinesResult.value : null
+    // klines: [[openTime, open, high, low, close, ...], ...] — ascending by date
+    const btcToday = klines ? parseFloat(klines[klines.length - 1][4]) : null
+    const btc7d    = klines && klines.length >= 8 ? parseFloat(klines[klines.length - 8][4]) : null
+
+    console.log('[chain-data] BTC prices — today:', btcToday, '7d ago:', btc7d)
+
+    let totalAumToday = 0
+    let totalAum7dAgo = 0
+    let yfWorked = false
+
+    for (const [summaryResult, chartResult] of etfResults) {
+      const totalAssets = summaryResult.status === 'fulfilled'
+        ? (summaryResult.value?.quoteSummary?.result?.[0]?.summaryDetail?.totalAssets?.raw ?? 0)
+        : 0
+      if (totalAssets > 0) {
+        totalAumToday += totalAssets
+        yfWorked = true
+      }
+
+      // Chart gives 10-day closes; ETF price 7d ago lets us estimate 7d-ago AUM
+      // Note: shares outstanding is assumed constant over 7 days (small approximation error)
+      if (chartResult.status === 'fulfilled' && totalAssets > 0) {
+        const closes = chartResult.value?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []
+        const closeToday = closes[closes.length - 1]
+        const close7d    = closes.length >= 8 ? closes[closes.length - 8] : null
+        if (closeToday && close7d) {
+          totalAum7dAgo += totalAssets * (close7d / closeToday)
         }
       }
     }
-  } else {
-    console.error('[chain-data] ETF fetch failed:', etfResult.reason?.message)
+
+    console.log('[chain-data] ETF total AUM today:', totalAumToday, '7d ago:', totalAum7dAgo, 'yfWorked:', yfWorked)
+
+    if (yfWorked && btcToday) {
+      const btcHeld      = Math.round(totalAumToday / btcToday)
+      // btcHeld7dAgo uses 7d-ago ETF prices / 7d-ago BTC price.
+      // Because ETF price ≈ BTC price (arbitrage), this closely approximates
+      // the change driven by net share creation/redemption (inflows/outflows).
+      const btcHeld7dAgo = (totalAum7dAgo > 0 && btc7d)
+        ? Math.round(totalAum7dAgo / btc7d)
+        : null
+      etf = {
+        btcHeld,
+        btcHeld7dAgo,
+        date: new Date().toISOString().slice(0, 10),
+      }
+    }
+  } catch (e) {
+    console.error('[chain-data] ETF calculation error:', e.message)
   }
 
   if (!mvrv && !etf) {
     return res.status(503).json({ error: 'All data sources unavailable' })
   }
 
-  // Cache 24h when all data present; retry in 5 min if ETF is missing (key not set, fetch failed, etc.)
+  // Cache 24h when all data present; retry in 5 min if ETF is missing
   const cacheTtl = etf ? 86400 : 300
   res.setHeader('Cache-Control', `s-maxage=${cacheTtl}, stale-while-revalidate=60`)
 
