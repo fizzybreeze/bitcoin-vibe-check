@@ -11,8 +11,7 @@
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  // CDN cache 24h; serve stale for up to 1h while revalidating
-  res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600')
+  // Cache-Control is set dynamically at the end: 24h if all data present, 5 min if ETF is missing
 
   const token = process.env.BGEOMETRICS_API_KEY
   const bgeomHeaders = token ? { Authorization: `Bearer ${token}` } : {}
@@ -73,6 +72,10 @@ export default async function handler(req, res) {
   if (!mvrv && !etf) {
     return res.status(503).json({ error: 'All data sources unavailable' })
   }
+
+  // Cache 24h when all data present; retry in 5 min if ETF is missing (key not set, fetch failed, etc.)
+  const cacheTtl = etf ? 86400 : 300
+  res.setHeader('Cache-Control', `s-maxage=${cacheTtl}, stale-while-revalidate=60`)
 
   res.status(200).json({ mvrv, etf })
 }
