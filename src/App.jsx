@@ -981,7 +981,7 @@ function SatoshiQuote() {
             href="https://bitcoin.org/bitcoin.pdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors"
+            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors max-w-full px-4 break-all overflow-x-auto"
           >
             {GENESIS_HASH}
           </a>
