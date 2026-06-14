@@ -22,7 +22,6 @@ import {
   computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
 import { calc200DMA } from './utils/cycleCalculations.js'
-import OnChainSignalsCard from './components/OnChainSignalsCard.jsx'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import CardTooltip from './components/CardTooltip.jsx'
 
@@ -1792,25 +1791,19 @@ export default function App() {
       </div>
 
       {/* Row 4: Valuation / Cycle Indicators */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div>
-          <OnChainSignalsCard
-            mvrv={chainData?.mvrv?.value}
-            dataDate={chainData?.mvrv?.date}
-            isLoading={chainDataLoading}
-            error={chainDataError}
-          />
-        </div>
-        <div className="lg:col-span-2">
-          <CycleIndicatorsCard
-            currentPrice={priceUsd}
-            ma200={ma200}
-            ohlcLoading={ohlcLoading}
-            ohlcError={ohlcError}
-            currency={currency}
-            fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
-          />
-        </div>
+      <div className="mb-4">
+        <CycleIndicatorsCard
+          currentPrice={priceUsd}
+          ma200={ma200}
+          ohlcLoading={ohlcLoading}
+          ohlcError={ohlcError}
+          currency={currency}
+          fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
+          mvrv={chainData?.mvrv?.value}
+          dataDate={chainData?.mvrv?.date}
+          mvrvLoading={chainDataLoading}
+          mvrvError={chainDataError}
+        />
       </div>
 
       {/* Row 5: Network Health + Recent Blocks + Network Fees */}
