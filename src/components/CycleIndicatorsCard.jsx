@@ -58,65 +58,73 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
     <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 h-full">
       <p className={LABEL}>Cycle Indicators</p>
 
-      {mvrvError ? null : mvrvLoading && mvrv == null ? (
-        <div className="animate-pulse space-y-1">
-          <div className="h-3 w-20 rounded bg-gray-800" />
-          <div className="h-6 w-16 rounded bg-gray-800" />
+      <div className="grid grid-cols-2 gap-4 md:gap-6 divide-x divide-gray-800">
+        {/* Top-left: MVRV Ratio */}
+        <div className="flex flex-col gap-0.5">
+          {!mvrvError && mvrvLoading && mvrv == null ? (
+            <div className="animate-pulse space-y-1">
+              <div className="h-3 w-20 rounded bg-gray-800" />
+              <div className="h-6 w-16 rounded bg-gray-800" />
+            </div>
+          ) : (
+            <>
+              <MetricRow
+                label="MVRV Ratio"
+                value={mvrv != null ? mvrv.toFixed(2) : '—'}
+                context={mvrvInterp?.label}
+                contextCls={mvrvInterp?.cls ?? 'text-gray-400'}
+                tooltip={MVRV_TOOLTIP}
+              />
+              {dataDate && <p className="text-xs text-gray-600">{dataDate}</p>}
+            </>
+          )}
         </div>
-      ) : mvrv != null ? (
-        <>
+
+        {/* Top-right: Power Law Fair Value */}
+        <div className="pl-4 md:pl-6">
           <MetricRow
-            label="MVRV Ratio"
-            value={mvrv.toFixed(2)}
-            context={mvrvInterp?.label}
-            contextCls={mvrvInterp?.cls ?? 'text-gray-400'}
-            tooltip={MVRV_TOOLTIP}
+            label="Power Law Fair Value"
+            value={fairValue != null ? fmtCurrency(fairValue * fxRate, currency) : '—'}
+            context={plInterp?.label}
+            contextCls={plInterp?.cls ?? 'text-gray-400'}
+            tooltip={POWER_LAW_TOOLTIP}
           />
-          {dataDate && <p className="text-xs text-gray-600">{dataDate}</p>}
-        </>
-      ) : null}
-
-      <div className="h-px bg-gray-800" />
-
-      <MetricRow
-        label="Power Law Fair Value"
-        value={fairValue != null ? fmtCurrency(fairValue * fxRate, currency) : '—'}
-        context={plInterp?.label}
-        contextCls={plInterp?.cls ?? 'text-gray-400'}
-        tooltip={POWER_LAW_TOOLTIP}
-      />
-
-      <div className="h-px bg-gray-800" />
-
-      {ohlcLoading && ma200 == null ? (
-        <div className="animate-pulse space-y-3">
-          <div className="h-4 w-28 rounded bg-gray-800" />
-          <div className="h-6 w-20 rounded bg-gray-800" />
-          <div className="h-px bg-gray-800" />
-          <div className="h-4 w-24 rounded bg-gray-800" />
-          <div className="h-6 w-16 rounded bg-gray-800" />
         </div>
-      ) : ohlcError || !isOhlcReady ? (
-        <p className="text-xs text-gray-500">200-day data unavailable</p>
-      ) : (
-        <>
-          <MetricRow
-            label="200-Day Moving Average"
-            value={fmtCurrency(ma200 * fxRate, currency)}
-            tooltip={MA200_TOOLTIP}
-          />
 
-          <div className="h-px bg-gray-800" />
+        {/* Bottom-left: 200-Day Moving Average */}
+        <div className="flex flex-col gap-0.5">
+          {ohlcLoading && ma200 == null ? (
+            <div className="animate-pulse space-y-1">
+              <div className="h-3 w-28 rounded bg-gray-800" />
+              <div className="h-6 w-20 rounded bg-gray-800" />
+            </div>
+          ) : (
+            <MetricRow
+              label="200-Day Moving Average"
+              value={isOhlcReady ? fmtCurrency(ma200 * fxRate, currency) : '—'}
+              tooltip={MA200_TOOLTIP}
+            />
+          )}
+        </div>
 
-          <MetricRow
-            label="Mayer Multiple"
-            value={mayer != null ? mayer.toFixed(2) : '—'}
-            context={mayerInterp?.label}
-            contextCls="text-gray-500"
-            tooltip={MAYER_TOOLTIP}
-          />
-        </>
-      )}
+        {/* Bottom-right: Mayer Multiple */}
+        <div className="pl-4 md:pl-6">
+          {ohlcLoading && ma200 == null ? (
+            <div className="animate-pulse space-y-1">
+              <div className="h-3 w-24 rounded bg-gray-800" />
+              <div className="h-6 w-16 rounded bg-gray-800" />
+            </div>
+          ) : (
+            <MetricRow
+              label="Mayer Multiple"
+              value={isOhlcReady && mayer != null ? mayer.toFixed(2) : '—'}
+              context={isOhlcReady ? mayerInterp?.label : undefined}
+              contextCls="text-gray-500"
+              tooltip={MAYER_TOOLTIP}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

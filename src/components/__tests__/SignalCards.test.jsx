@@ -69,7 +69,7 @@ describe('CycleIndicatorsCard', () => {
     expect(screen.getByText(/mayer multiple/i)).toBeTruthy()
   })
 
-  it('shows "200-day data unavailable" on ohlcError', () => {
+  it('shows dash placeholders on ohlcError', () => {
     render(
       <CycleIndicatorsCard
         currentPrice={65000}
@@ -78,7 +78,8 @@ describe('CycleIndicatorsCard', () => {
         ohlcError="fetch failed"
       />
     )
-    expect(screen.getByText(/200-day data unavailable/i)).toBeTruthy()
+    expect(screen.getByText('200-Day Moving Average')).toBeTruthy()
+    expect(screen.getByText('Mayer Multiple')).toBeTruthy()
   })
 
   it('shows a loading skeleton while OHLC is loading', () => {
