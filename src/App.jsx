@@ -1813,8 +1813,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Row 5: Network Health + Recent Blocks */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Row 5: Network Health + Recent Blocks + Network Fees */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <NetworkPulseCard difficulty={difficulty} loading={loading} />
         <div className="flex flex-col gap-4">
           {/* Mobile-only: NetworkHeartbeatCard (desktop merges this data into RecentBlocksCard) */}
@@ -1833,31 +1833,7 @@ export default function App() {
             loading={loading}
           />
         </div>
-      </div>
-
-      {/* Row 6: Supply / Epoch */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl bg-gray-900 p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Supply Issued</p>
-          {blockHeight != null ? (
-            <>
-              <p className="mt-2 text-lg font-bold text-white">
-                {computeIssuedSupply(blockHeight).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
-              </p>
-              <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
-            </>
-          ) : (
-            <Skeleton className="mt-2 h-7 w-36" />
-          )}
-        </div>
-        <div className="lg:col-span-3">
-          <HalvingCountdown blockHeight={blockHeight} />
-        </div>
-      </div>
-
-      {/* Row 7: Fees & Lightning */}
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
+        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear." /></p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
@@ -1945,6 +1921,26 @@ export default function App() {
                 : <p className="text-xs text-gray-500">Unavailable</p>
             }
           </div>
+        </div>
+      </div>
+
+      {/* Row 6: Supply / Epoch */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="rounded-2xl bg-gray-900 p-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Supply Issued</p>
+          {blockHeight != null ? (
+            <>
+              <p className="mt-2 text-lg font-bold text-white">
+                {computeIssuedSupply(blockHeight).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
+            </>
+          ) : (
+            <Skeleton className="mt-2 h-7 w-36" />
+          )}
+        </div>
+        <div className="lg:col-span-3">
+          <HalvingCountdown blockHeight={blockHeight} />
         </div>
       </div>
 
