@@ -58,7 +58,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
     <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 h-full">
       <p className={LABEL}>Cycle Indicators</p>
 
-      <div className="grid grid-cols-2 gap-4 md:gap-6 divide-x divide-gray-800">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 divide-x divide-gray-800">
         {/* Top-left: MVRV Ratio */}
         <div className="flex flex-col gap-0.5">
           {!mvrvError && mvrvLoading && mvrv == null ? (
