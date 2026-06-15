@@ -35,18 +35,28 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Estimated date** for the next halving
 - **Epoch progress bar** showing how far through the current 210,000-block epoch the network has advanced
 
+### Cycle Indicators
+- **MVRV Ratio** — Market Value to Realised Value ratio; values below 1 have historically marked cycle bottoms, above 3.5 marked cycle tops
+- **Power Law Fair Value** — long-run price model based on Bitcoin's logarithmic growth curve
+- **200-Day Moving Average** — computed from the last 200 daily closes; shows current price relative to the trend
+- **Mayer Multiple** — ratio of current price to the 200-day MA; readings above 2.4 have historically indicated overheating
+- Displayed in a **2×2 grid layout** on tablet and desktop, single column on mobile
+- MVRV was previously shown in a separate On-Chain Signals card — it is now consolidated here alongside the other valuation metrics
+
 ### Price Chart
 - Interactive area chart with overlaid volume bars
 - Four time ranges: **1D · 7D · 1M · 1Y**
 - Range percentage change displayed alongside the chart label
 - **High and low reference lines** for the selected period
 - **Chart locked to USD** with a clear "Chart in USD" label — avoids CoinGecko chart API limitations with other currencies
+- **Volume bars show Binance BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges by CoinGecko
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
 - Chart data is cached per range/currency combination for the session to avoid redundant API requests
 
 ### Network Fees & Mempool
 - **Fee tiers** — Slow (~1 hour), Medium (~30 min), and Fast (~10 min) in sat/vB
 - **Mempool congestion** indicator (Low / Moderate / High) with a visual fill bar and unconfirmed transaction count
+- On desktop, the Network Fees card sits in the **network health row** alongside Network Pulse and Recent Blocks (3-column layout)
 
 ### Lightning Network
 - **Total network capacity** in BTC
