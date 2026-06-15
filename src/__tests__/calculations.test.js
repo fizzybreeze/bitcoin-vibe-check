@@ -8,6 +8,7 @@ import {
   computeVibeLabel,
   computeHashRateTrend,
   computeMempoolPressurePct,
+  calcFiatFee,
 } from '../lib/calculations.js'
 
 // ─── ATH distance ────────────────────────────────────────────────────────────
@@ -260,5 +261,25 @@ describe('computeMempoolPressurePct', () => {
 
   it('returns null for null input', () => {
     expect(computeMempoolPressurePct(null)).toBeNull()
+  })
+})
+
+// ─── Fiat fee estimate ────────────────────────────────────────────────────────
+
+describe('calcFiatFee', () => {
+  it('returns 2.5 for 10 sat/vB at $100,000 (10 * 250 / 1e8 * 100000)', () => {
+    expect(calcFiatFee(10, 100000)).toBeCloseTo(2.5, 10)
+  })
+
+  it('returns 0.25 for 1 sat/vB at $100,000', () => {
+    expect(calcFiatFee(1, 100000)).toBeCloseTo(0.25, 10)
+  })
+
+  it('returns 0 for fee rate of 0', () => {
+    expect(calcFiatFee(0, 100000)).toBe(0)
+  })
+
+  it('returns 0 for price of 0', () => {
+    expect(calcFiatFee(10, 0)).toBe(0)
   })
 })

@@ -6,6 +6,12 @@ import {
 } from 'recharts'
 import './App.css'
 import BeehiivEmbed from './components/BeehiivEmbed.jsx'
+import { usePersistedState } from './hooks/usePersistedState.js'
+import ShareButton from './components/ShareButton.jsx'
+import ShareModal from './components/ShareModal.jsx'
+import PriceAlertsButton from './components/PriceAlertsButton.jsx'
+import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
+import { usePriceAlerts } from './hooks/usePriceAlerts.js'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
@@ -13,8 +19,11 @@ import {
 } from './utils.js'
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
-  computeVibeLabel, computeHashRateTrend,
+  computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
+import { calc200DMA } from './utils/cycleCalculations.js'
+import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
+import CardTooltip from './components/CardTooltip.jsx'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -71,6 +80,14 @@ function parseBinanceKlines(klines, days) {
       price: Math.round(parseFloat(k[4])),
       volume: parseFloat(k[7]),
     }))
+  }
+  if (days === 7) {
+    const groups = {}
+    for (const k of klines) {
+      const date = new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      groups[date] = { date, price: Math.round(parseFloat(k[4])), volume: (groups[date]?.volume ?? 0) + parseFloat(k[7]) }
+    }
+    return Object.values(groups)
   }
   return klines.map(k => ({
     date: new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
@@ -289,15 +306,17 @@ function playPriceTick(ctx, up) {
   osc.stop(now + 0.08)
 }
 
-function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
-  const fngScore       = fng?.value != null ? parseInt(fng.value, 10) : null
-  const fngClass       = fng?.value_classification ?? null
-  const diffChange     = difficulty?.difficultyChange ?? null
+const FNG_TOOLTIP        = 'A composite sentiment score from 0 (extreme fear) to 100 (extreme greed). Values below 25 have historically preceded recoveries; above 75 have preceded corrections. Measures crowd psychology, not fundamentals.'
+const HASH_RATE_TOOLTIP  = 'Total computational power securing the Bitcoin network, measured in exahashes per second. Rising hash rate signals miner confidence; a sharp drop can signal miner stress or capitulation.'
+const DIFFICULTY_TOOLTIP = 'Adjusts every ~2,016 blocks (~2 weeks) to keep average block times near 10 minutes. A positive adjustment means blocks were found faster than target — network is growing. Negative means slower — miners left or difficulty was too high.'
+
+function NetworkPulseCard({ difficulty, loading }) {
+  const diffChange      = difficulty?.difficultyChange ?? null
   const remainingBlocks = difficulty?.remainingBlocks ?? null
-  const diffDays       = remainingBlocks != null
+  const diffDays        = remainingBlocks != null
     ? Math.round(remainingBlocks * 10 / 60 / 24)
     : null
-  const diffInterp     = diffInterpretation(diffChange)
+  const diffInterp      = diffInterpretation(diffChange)
 
   const [hashRate, setHashRate] = useState(null)
   useEffect(() => {
@@ -324,24 +343,26 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Pulse</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Health</p>
 
-      {/* Row 1: Fear & Greed | Difficulty */}
+      {/* Row 1: Hash Rate | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Fear &amp; Greed</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
-            {loading || fngScore == null
-              ? <Skeleton className="h-8 w-10" />
-              : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
+            {hashRate != null
+              ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
+              : <Skeleton className="h-8 w-20" />
             }
-            <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
-              {fngClass ?? (loading ? ' ' : '—')}
-            </p>
+            {hashRate != null && hashRateTrend != null && (
+              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {hashRateTrend >= 0 ? '▲' : '▼'}&nbsp;{hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
+              </p>
+            )}
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
           <div className="mt-2">
             {loading
               ? <Skeleton className="h-8 w-16" />
@@ -366,34 +387,39 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
         </div>
       </div>
 
-      {/* Row 2: Hash Rate | (empty) */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Hash Rate</p>
-          <div className="mt-2">
-            {hashRate != null
-              ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
-              : <Skeleton className="h-8 w-20" />
-            }
-            {hashRate != null && hashRateTrend != null && (
-              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {hashRateTrend >= 0 ? '▲' : '▼'}&nbsp;{hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Divider */}
       <div className="mt-4 border-t border-gray-700" />
 
-      {/* Row 3: Adjustment bar (full width) */}
+      {/* Difficulty Adjustment bar (full width) */}
       <div className="mt-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Difficulty Adjustment</p>
         <DifficultyBar change={loading ? null : diffChange} />
       </div>
+    </div>
+  )
+}
 
-      {/* Row 4: F&G sparkline (full width) */}
+function MarketSentimentCard({ fng, fngHistory, loading }) {
+  const fngScore = fng?.value != null ? parseInt(fng.value, 10) : null
+  const fngClass = fng?.value_classification ?? null
+
+  return (
+    <div className="rounded-2xl bg-gray-900 p-6 h-full">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Market Sentiment</p>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
+        <div className="mt-2">
+          {loading || fngScore == null
+            ? <Skeleton className="h-8 w-10" />
+            : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
+          }
+          <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
+            {fngClass ?? (loading ? ' ' : '—')}
+          </p>
+        </div>
+      </div>
+
       {fngHistory && (
         <div className="mt-3">
           <div className="h-20">
@@ -410,12 +436,14 @@ function NetworkPulseCard({ fng, fngHistory, difficulty, loading }) {
   )
 }
 
+const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
+
 export function BtcPriceCard({ value, change, sub, athPct }) {
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">BTC Price</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
@@ -453,6 +481,8 @@ export function BtcPriceCard({ value, change, sub, athPct }) {
     </div>
   )
 }
+
+const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
 function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   const [blocks, setBlocks] = useState(null)
@@ -501,7 +531,7 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Recent Blocks</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
@@ -591,6 +621,8 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   )
 }
 
+const HALVING_TOOLTIP = 'Every 210,000 blocks (~4 years), the reward paid to miners is cut in half, reducing new BTC issuance. Each of the four previous halvings preceded significant price appreciation in the following 12–18 months. Past performance is not indicative of future results.'
+
 function HalvingCountdown({ blockHeight }) {
   const [secsLeft, setSecsLeft] = useState(null)
 
@@ -621,7 +653,7 @@ function HalvingCountdown({ blockHeight }) {
         <div className="h-full rounded-full bg-orange-400" style={{ width: `${epochPct}%` }} />
       </div>
       <p className="mt-1 text-xs text-gray-400">
-        <span className="font-semibold text-white">{epochPct.toFixed(1)}%</span>
+        <span className="font-semibold text-white">{Math.round(epochPct)}%</span>
         <span className="ml-1 text-gray-500">of current epoch complete</span>
       </p>
     </>
@@ -634,7 +666,7 @@ function HalvingCountdown({ blockHeight }) {
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
               ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
                   {blocksRemaining.toLocaleString('en-US')}
@@ -765,7 +797,10 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
   )
 }
 
-function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price, blockHeight }) {
+const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
+const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Binance's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinGecko — the two figures are not directly comparable."
+
+function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
   const volVs7d  = vol7dAvg != null && volumeUsd != null
     ? ((volumeUsd - vol7dAvg) / vol7dAvg) * 100
@@ -773,7 +808,7 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
   const domLabel = btcDominanceLabel(btcDominance)
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">24h Volume</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
@@ -815,20 +850,6 @@ function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, mar
                 </p>
               </>
             )}
-            {/* Supply issued */}
-            {blockHeight != null && (() => {
-              const supply = computeIssuedSupply(blockHeight)
-              return (
-                <>
-                  <div className="mt-3 border-t border-gray-700" />
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Supply issued</p>
-                  <p className="mt-1 text-lg font-bold text-white">
-                    {supply.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
-                </>
-              )
-            })()}
           </>
         )}
       </div>
@@ -968,7 +989,7 @@ function SatoshiQuote() {
             href="https://bitcoin.org/bitcoin.pdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors"
+            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors max-w-full px-4 break-all overflow-x-auto"
           >
             {GENESIS_HASH}
           </a>
@@ -1012,7 +1033,7 @@ function SupporterTickerCard({ donors }) {
     ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
     : null
   return (
-    <div className="hidden md:block rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="hidden md:block rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
       {content ? (
         <div className="relative w-full overflow-hidden">
@@ -1034,7 +1055,7 @@ function SupporterTickerCard({ donors }) {
 
 function MobileSupportersCard({ donors }) {
   return (
-    <div className="md:hidden rounded-2xl bg-gray-900 p-4 mt-4">
+    <div className="md:hidden rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         {donors.length > 0
@@ -1096,6 +1117,7 @@ function DonationCard() {
           </a>
         </p>
         <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
+        <p className="text-sm text-gray-600">We'll add you to the list once we see your payment come through.</p>
       </div>
       <div className="mt-4">
         <input
@@ -1136,8 +1158,8 @@ export default function App() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [range, setRange]             = useState('7D')
-  const [currency, setCurrency]       = useState('usd')
+  const [range, setRange]             = usePersistedState('btc-vibe-chart-timeframe', '7D')
+  const [currency, setCurrency]       = usePersistedState('btc-vibe-currency', 'usd')
   const [chart, setChart]             = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
@@ -1155,6 +1177,15 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  const [chainData, setChainData]             = useState(null)
+  const [chainDataLoading, setChainDataLoading] = useState(true)
+  const [chainDataError, setChainDataError]   = useState(false)
+  const [ohlcData200, setOhlcData200]         = useState(null)
+  const [ohlcLoading, setOhlcLoading]         = useState(true)
+  const [ohlcError, setOhlcError]             = useState(null)
+
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isPriceAlertsOpen, setIsPriceAlertsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
   const audioCtxRef       = useRef(null)
   const prevBlockHtRef    = useRef(null)
@@ -1309,6 +1340,52 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
+  // Fetch BGeometrics chain data (MVRV + ETF) via serverless proxy; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchChainData() {
+      setChainDataLoading(true)
+      setChainDataError(false)
+      try {
+        const res = await fetch('/api/chain-data')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (active) setChainData(json)
+      } catch {
+        if (active) setChainDataError(true)
+      } finally {
+        if (active) setChainDataLoading(false)
+      }
+    }
+    fetchChainData()
+    const id = setInterval(fetchChainData, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
+  // Fetch 200-day Binance klines for 200DMA and Mayer Multiple; refresh every 6 hours
+  useEffect(() => {
+    let active = true
+    async function fetchOhlc200() {
+      setOhlcLoading(true)
+      setOhlcError(null)
+      try {
+        const res = await fetch(
+          'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (active) setOhlcData200(data)
+      } catch (err) {
+        if (active) setOhlcError(err.message)
+      } finally {
+        if (active) setOhlcLoading(false)
+      }
+    }
+    fetchOhlc200()
+    const id = setInterval(fetchOhlc200, 6 * 60 * 60 * 1000)
+    return () => { active = false; clearInterval(id) }
+  }, [])
+
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
     const days = RANGES.find(r => r.label === range)?.days ?? 7
@@ -1460,6 +1537,16 @@ export default function App() {
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
+  const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
+
+  const {
+    alerts,
+    addAlert,
+    removeAlert,
+    clearTriggered,
+    notificationPermission,
+    requestPermission,
+  } = usePriceAlerts(price, currency)
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -1477,12 +1564,13 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
 
       {/* Header */}
-      <header className="mb-8 flex items-start justify-between">
+      {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
+      <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
           <p className="mt-0.5 text-xs text-gray-500">{vibeLabel ?? 'Read the room.'}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 self-end md:self-auto">
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
@@ -1501,6 +1589,11 @@ export default function App() {
               </svg>
             )}
           </button>
+          <ShareButton onClick={() => setIsShareOpen(true)} />
+          <PriceAlertsButton
+            onClick={() => setIsPriceAlertsOpen(prev => !prev)}
+            hasActiveAlerts={alerts.some(a => !a.triggered)}
+          />
           <div className="relative">
             <select
               value={currency}
@@ -1527,10 +1620,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* KPI grid — 1 col mobile, 3 col desktop (lg+) */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Col 1 Row 1 — BTC Price */}
-        <div className="lg:col-start-1 lg:row-start-1">
+      {/* Row 1: Price + Chart */}
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div>
           <BtcPriceCard
             value={price != null ? fmtCurrency(price, currency) : null}
             change={priceChange24h}
@@ -1538,21 +1630,204 @@ export default function App() {
             athPct={athPct}
           />
         </div>
-        {/* Col 2 Rows 1–2 — Network Pulse (full column height) */}
-        <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
-          <NetworkPulseCard fng={fng} fngHistory={fngHistory} difficulty={difficulty} loading={loading} />
+        <div className="md:col-span-2 h-full">
+          <div className="rounded-2xl bg-gray-900 p-6 h-full">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">
+                  Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
+                </p>
+                {chartChange != null && !chartLoading && (
+                  <span
+                    data-testid="chart-range-change"
+                    className={`text-xs font-semibold ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}
+                  >
+                    {chartChange >= 0 ? '▲' : '▼'}&nbsp;{chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col items-start md:items-end gap-1">
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {RANGES.map(({ label }) => (
+                  <button
+                    key={label}
+                    onClick={() => setRange(label)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      range === label
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  onClick={refreshChart}
+                  disabled={chartLoading}
+                  aria-label="Refresh chart"
+                  className="ml-1 rounded-full p-1 text-gray-600 transition-colors hover:text-gray-300 disabled:opacity-30"
+                >
+                  <svg
+                    width="13" height="13" viewBox="0 0 13 13"
+                    fill="none" stroke="currentColor" strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    className={chartLoading ? 'animate-spin' : ''}
+                    aria-hidden="true"
+                  >
+                    <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
+                    <polyline points="11.5 1.5 11.5 5 8 5"/>
+                  </svg>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">Chart in USD</p>
+              </div>
+            </div>
+
+            {chartError === 'temp' && (
+              <p className="mb-4 text-xs text-red-500/70">Data temporarily unavailable. Retrying...</p>
+            )}
+            {chartError === 'permanent' && (
+              <div className="mb-4 flex items-center gap-2">
+                <p className="text-xs text-red-500/70">Unable to load chart data. Try again shortly.</p>
+                <button
+                  onClick={refreshChart}
+                  aria-label="Retry chart"
+                  className="text-gray-600 transition-colors hover:text-gray-400"
+                >
+                  <svg
+                    width="13" height="13" viewBox="0 0 13 13"
+                    fill="none" stroke="currentColor" strokeWidth="1.5"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
+                    <polyline points="11.5 1.5 11.5 5 8 5"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {chartLoading && !chart
+              ? <Skeleton className="h-64" />
+              : (
+                <div className="relative">
+                  <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                    <ResponsiveContainer width="100%" height={264}>
+                      <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                        <defs>
+                          <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
+                            <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                        <XAxis
+                          dataKey="date"
+                          interval={xInterval}
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
+                          axisLine={false} tickLine={false}
+                        />
+                        <YAxis
+                          yAxisId="price"
+                          domain={[lo - pad, hi + pad]}
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
+                          axisLine={false} tickLine={false}
+                          tickFormatter={v => `$${Math.round(v / 1000)}k`}
+                          width={52}
+                        />
+                        <YAxis yAxisId="volume" hide />
+                        <Tooltip content={<ChartTooltip currency="usd" />} />
+                        <Bar
+                          yAxisId="volume" dataKey="volume"
+                          fill={ORANGE} fillOpacity={0.15}
+                          strokeWidth={0} legendType="none"
+                          isAnimationActive={false}
+                        />
+                        <Area
+                          yAxisId="price"
+                          type="monotone" dataKey="price"
+                          stroke={ORANGE} strokeWidth={2}
+                          fill="url(#priceGrad)" dot={false}
+                          activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
+                        />
+                        {chartPrices.length > 0 && (
+                          <>
+                            <ReferenceLine
+                              yAxisId="price"
+                              y={hi}
+                              stroke="#4ade80"
+                              strokeDasharray="3 3"
+                              strokeWidth={1}
+                              label={{ value: `H: $${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
+                            />
+                            <ReferenceLine
+                              yAxisId="price"
+                              y={lo}
+                              stroke="#f87171"
+                              strokeDasharray="3 3"
+                              strokeWidth={1}
+                              label={{ value: `L: $${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
+                            />
+                          </>
+                        )}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {chartLoading && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <p className="text-xs text-gray-500">Loading...</p>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+          </div>
         </div>
-        {/* Col 3 Row 1 — Network Heartbeat (mobile only; merged into Recent Blocks on desktop) */}
-        <div className="lg:hidden">
-          <NetworkHeartbeatCard
-            blockHeight={blockHeight}
-            difficulty={difficulty}
-            lastBlockTs={lastBlockTs}
-            loading={loading}
-          />
-        </div>
-        {/* Col 3 Rows 1–2 — Recent Blocks (heartbeat header merged in on desktop) */}
-        <div className="lg:col-start-3 lg:row-start-1 lg:row-span-2">
+      </div>
+
+      {/* Row 2+3: Market Stats + Sentiment */}
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <VolumeCard
+          volumeUsd={volumeUsd}
+          volume={volume}
+          currency={currency}
+          btcDominance={btcDominance}
+          volHistory={volHistory}
+          marketCapUsd={marketCapUsd}
+          price={price}
+        />
+        <MarketSentimentCard fng={fng} fngHistory={fngHistory} loading={loading} />
+      </div>
+
+      {/* Row 4: Valuation / Cycle Indicators */}
+      <div className="mb-4">
+        <CycleIndicatorsCard
+          currentPrice={priceUsd}
+          ma200={ma200}
+          ohlcLoading={ohlcLoading}
+          ohlcError={ohlcError}
+          currency={currency}
+          fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
+          mvrv={chainData?.mvrv?.value}
+          dataDate={chainData?.mvrv?.date}
+          mvrvLoading={chainDataLoading}
+          mvrvError={chainDataError}
+        />
+      </div>
+
+      {/* Row 5: Network Health + Recent Blocks + Network Fees */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <NetworkPulseCard difficulty={difficulty} loading={loading} />
+        <div className="flex flex-col gap-4">
+          {/* Mobile-only: NetworkHeartbeatCard (desktop merges this data into RecentBlocksCard) */}
+          <div className="lg:hidden">
+            <NetworkHeartbeatCard
+              blockHeight={blockHeight}
+              difficulty={difficulty}
+              lastBlockTs={lastBlockTs}
+              loading={loading}
+            />
+          </div>
           <RecentBlocksCard
             blockHeight={blockHeight}
             difficulty={difficulty}
@@ -1560,185 +1835,8 @@ export default function App() {
             loading={loading}
           />
         </div>
-        {/* Col 1 Row 2 — 24H Volume */}
-        <div className="lg:col-start-1 lg:row-start-2">
-          <VolumeCard
-            volumeUsd={volumeUsd}
-            volume={volume}
-            currency={currency}
-            btcDominance={btcDominance}
-            volHistory={volHistory}
-            marketCapUsd={marketCapUsd}
-            price={price}
-            blockHeight={blockHeight}
-          />
-        </div>
-      </div>
-
-      {/* Halving countdown */}
-      <HalvingCountdown blockHeight={blockHeight} />
-
-      {/* Chart + Fees */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-
-        {/* Price chart */}
-        <div className="rounded-2xl bg-gray-900 p-6 md:col-span-2 h-full">
-          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-                Price · {currency.toUpperCase()}
-              </p>
-              {chartChange != null && !chartLoading && (
-                <span
-                  data-testid="chart-range-change"
-                  className={`text-xs font-semibold ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}
-                >
-                  {chartChange >= 0 ? '▲' : '▼'}&nbsp;{chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col items-start md:items-end gap-1">
-            <div className="flex items-center gap-1 overflow-x-auto">
-              {RANGES.map(({ label }) => (
-                <button
-                  key={label}
-                  onClick={() => setRange(label)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                    range === label
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={refreshChart}
-                disabled={chartLoading}
-                aria-label="Refresh chart"
-                className="ml-1 rounded-full p-1 text-gray-600 transition-colors hover:text-gray-300 disabled:opacity-30"
-              >
-                <svg
-                  width="13" height="13" viewBox="0 0 13 13"
-                  fill="none" stroke="currentColor" strokeWidth="1.5"
-                  strokeLinecap="round" strokeLinejoin="round"
-                  className={chartLoading ? 'animate-spin' : ''}
-                  aria-hidden="true"
-                >
-                  <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-                  <polyline points="11.5 1.5 11.5 5 8 5"/>
-                </svg>
-              </button>
-            </div>
-            <p className="text-xs text-gray-500">Chart in USD</p>
-            </div>
-          </div>
-
-          {/* Fix 3: error messages below toggles */}
-          {chartError === 'temp' && (
-            <p className="mb-4 text-xs text-red-500/70">Data temporarily unavailable. Retrying...</p>
-          )}
-          {chartError === 'permanent' && (
-            <div className="mb-4 flex items-center gap-2">
-              <p className="text-xs text-red-500/70">Unable to load chart data. Try again shortly.</p>
-              <button
-                onClick={refreshChart}
-                aria-label="Retry chart"
-                className="text-gray-600 transition-colors hover:text-gray-400"
-              >
-                <svg
-                  width="13" height="13" viewBox="0 0 13 13"
-                  fill="none" stroke="currentColor" strokeWidth="1.5"
-                  strokeLinecap="round" strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-                  <polyline points="11.5 1.5 11.5 5 8 5"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* Fix 4: skeleton when no data yet; dim + "Loading..." overlay while fetching new range */}
-          {chartLoading && !chart
-            ? <Skeleton className="h-64" />
-            : (
-              <div className="relative">
-                <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                  <ResponsiveContainer width="100%" height={264}>
-                    <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
-                          <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                      <XAxis
-                        dataKey="date"
-                        interval={xInterval}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                        axisLine={false} tickLine={false}
-                      />
-                      <YAxis
-                        yAxisId="price"
-                        domain={[lo - pad, hi + pad]}
-                        tick={{ fill: '#6b7280', fontSize: 11 }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={v => `$${Math.round(v / 1000)}k`}
-                        width={52}
-                      />
-                      <YAxis yAxisId="volume" hide />
-                      <Tooltip content={<ChartTooltip currency="usd" />} />
-                      <Bar
-                        yAxisId="volume" dataKey="volume"
-                        fill={ORANGE} fillOpacity={0.15}
-                        strokeWidth={0} legendType="none"
-                        isAnimationActive={false}
-                      />
-                      <Area
-                        yAxisId="price"
-                        type="monotone" dataKey="price"
-                        stroke={ORANGE} strokeWidth={2}
-                        fill="url(#priceGrad)" dot={false}
-                        activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
-                      />
-                      {chartPrices.length > 0 && (
-                        <>
-                          <ReferenceLine
-                            yAxisId="price"
-                            y={hi}
-                            stroke="#4ade80"
-                            strokeDasharray="3 3"
-                            strokeWidth={1}
-                            label={{ value: `H: $${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
-                          />
-                          <ReferenceLine
-                            yAxisId="price"
-                            y={lo}
-                            stroke="#f87171"
-                            strokeDasharray="3 3"
-                            strokeWidth={1}
-                            label={{ value: `L: $${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
-                          />
-                        </>
-                      )}
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {chartLoading && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <p className="text-xs text-gray-500">Loading...</p>
-                  </div>
-                )}
-              </div>
-            )
-          }
-        </div>
-
-        {/* Mempool + Network fees */}
-        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between h-full">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Fees</p>
+        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear." /></p>
 
           {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
           {mempool != null && (() => {
@@ -1768,16 +1866,23 @@ export default function App() {
                   { label: 'Slow',   time: '~1 hour',  value: fees.hourFee     },
                   { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
                   { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
-                ].map(({ label, time, value }) => (
-                  <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                    <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
-                      <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
-                      <span className="text-xs text-gray-500">sat/vB</span>
+                ].map(({ label, time, value }) => {
+                  const fiatFee = price > 0 ? calcFiatFee(value, price) : null
+                  const fiatStr = fiatFee != null
+                    ? `≈ ${currencySym}${fiatFee >= 0.10 ? fiatFee.toFixed(2) : fiatFee.toFixed(4)}`
+                    : null
+                  return (
+                    <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
+                      <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
+                        <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
+                        <span className="text-xs text-gray-500">sat/vB</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-600">{time}</p>
+                      {fiatStr && <p className="mt-0.5 text-xs text-gray-500">{fiatStr}</p>}
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-600">{time}</p>
-                  </div>
-                ))
+                  )
+                })
             }
           </div>
 
@@ -1819,7 +1924,26 @@ export default function App() {
             }
           </div>
         </div>
+      </div>
 
+      {/* Row 6: Supply / Epoch */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="rounded-2xl bg-gray-900 p-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Supply Issued</p>
+          {blockHeight != null ? (
+            <>
+              <p className="mt-2 text-lg font-bold text-white">
+                {computeIssuedSupply(blockHeight).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
+            </>
+          ) : (
+            <Skeleton className="mt-2 h-7 w-36" />
+          )}
+        </div>
+        <div className="lg:col-span-3">
+          <HalvingCountdown blockHeight={blockHeight} />
+        </div>
       </div>
 
       {/* Supporters ticker */}
@@ -1851,6 +1975,27 @@ export default function App() {
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
+
+      {isPriceAlertsOpen && (
+        <PriceAlertsPanel
+          alerts={alerts}
+          currency={currency}
+          onAdd={addAlert}
+          onRemove={removeAlert}
+          onClearTriggered={clearTriggered}
+          notificationPermission={notificationPermission}
+          onRequestPermission={requestPermission}
+          onClose={() => setIsPriceAlertsOpen(false)}
+        />
+      )}
+
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        cardData={{ ...(data ?? {}), chainData, ma200 }}
+        sentimentSummary={vibeLabel}
+        currency={currency}
+      />
 
       <Analytics />
 

@@ -5,6 +5,8 @@ import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   marketsFixture, hashrate3dFixture, hashrate1mFixture,
+  chainDataFixture, klines200dFixture,
+  paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
 } from './fixtures.js'
 
 const TIMEOUT = 10_000
@@ -51,8 +53,27 @@ async function mockApis(page) {
   await page.route('https://mempool.space/api/v1/mining/hashrate/1m', route =>
     route.fulfill({ json: hashrate1mFixture })
   )
+  // CoinPaprika — primary price source (USD, volume, ATH, dominance)
+  await page.route('https://api.coinpaprika.com/v1/tickers/btc-bitcoin', route =>
+    route.fulfill({ json: paprikaTickerFixture })
+  )
+  await page.route('https://api.coinpaprika.com/v1/global', route =>
+    route.fulfill({ json: paprikaGlobalFixture })
+  )
+  // Kraken REST — initial GBP/EUR/CAD/CHF prices
+  await page.route('https://api.kraken.com/0/public/Ticker*', route =>
+    route.fulfill({ json: krakenTickerFixture })
+  )
   // Block the Kraken WebSocket so fixture price values are not overwritten by live data
   await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())
+  // BGeometrics proxy (Vercel serverless function)
+  await page.route('/api/chain-data', route =>
+    route.fulfill({ json: chainDataFixture })
+  )
+  // Binance 200-day klines for 200DMA / Mayer Multiple
+  await page.route('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200', route =>
+    route.fulfill({ json: klines200dFixture })
+  )
 }
 
 test.describe('Bitcoin Dashboard', () => {
@@ -145,6 +166,24 @@ test.describe('Bitcoin Dashboard', () => {
     }
 
     expect(errors).toHaveLength(0)
+  })
+
+  // ── Signal Cards (row 3) ────────────────────────────────────────────────────
+
+  test('Cycle Indicators card renders with MVRV value from fixture', async ({ page }) => {
+    await expect(page.getByText(/cycle indicators/i).first()).toBeVisible({ timeout: TIMEOUT })
+    // Fixture MVRV = 2.15 → rendered as "2.15"
+    await expect(page.getByText('2.15').first()).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('Cycle Indicators card renders Power Law Fair Value', async ({ page }) => {
+    await expect(page.getByText(/cycle indicators/i).first()).toBeVisible({ timeout: TIMEOUT })
+    await expect(page.getByText(/power law fair value/i).first()).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('Cycle Indicators card renders 200-Day Moving Average from fixture klines', async ({ page }) => {
+    // Fixture klines all close at 103,000 → 200DMA = $103,000
+    await expect(page.getByText(/200-day moving average/i).first()).toBeVisible({ timeout: TIMEOUT })
   })
 
   // ── Newsletter & footer ─────────────────────────────────────────────────────

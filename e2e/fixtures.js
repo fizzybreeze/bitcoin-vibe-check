@@ -79,6 +79,35 @@ export const mempoolFixture = {
 // /coins/markets — price 105,000 is ~3.7% below ATH of 109,000
 export const marketsFixture = [{ ath: 109000 }]
 
+// CoinPaprika /v1/tickers/btc-bitcoin — price, volume, change, ATH
+export const paprikaTickerFixture = {
+  quotes: {
+    USD: {
+      price: 105000,
+      volume_24h: 35_000_000_000,
+      percent_change_24h: 2.5,
+      market_cap: 2_100_000_000_000,
+      ath_price: 109000,
+    },
+  },
+}
+
+// CoinPaprika /v1/global — BTC dominance
+export const paprikaGlobalFixture = {
+  bitcoin_dominance_percentage: 64.5,
+}
+
+// Kraken REST /0/public/Ticker — GBP/EUR/CAD/CHF spot prices
+// Key must end with the currency suffix for findKrakenPrice() to match it
+export const krakenTickerFixture = {
+  result: {
+    XBTGBP: { c: ['82000'] },
+    XBTEUR: { c: ['96000'] },
+    XBTCAD: { c: ['142000'] },
+    XBTCHF: { c: ['93000'] },
+  },
+}
+
 // /mining/hashrate/3d — current network hash rate
 export const hashrate3dFixture = { currentHashrate: 800e18 }
 
@@ -111,3 +140,18 @@ export const addressFixture = {
   },
   mempool_stats: { tx_count: 0 },
 }
+
+// /api/chain-data — serverless proxy response for BGeometrics data
+export const chainDataFixture = {
+  mvrv: { value: 2.15, date: '2026-06-10' },
+  etf:  { btcHeld: 1_100_000, btcHeld7dAgo: 1_085_000, date: '2026-06-10' },
+}
+
+// Binance klines — 200 daily candles at a fixed close of $103,000
+// Shape: [openTime, open, high, low, close, volume, closeTime, quoteVolume, ...]
+export const klines200dFixture = Array.from({ length: 200 }, (_, i) => [
+  now - (200 - i) * DAY_MS,
+  '100000', '105000', '95000', '103000', '500',
+  now - (200 - i) * DAY_MS + DAY_MS - 1,
+  '51500000000', '1000', '0', '0', '1',
+])

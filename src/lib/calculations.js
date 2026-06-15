@@ -57,3 +57,11 @@ export function computeMempoolPressurePct(count) {
   if (count == null) return null
   return Math.min(100, (count / 200_000) * 100)
 }
+
+// Standard single-input, two-output transaction size used for fee estimates.
+const TX_VSIZE = 250
+
+export function calcFiatFee(feeRateSatsPerVbyte, priceInCurrency) {
+  const totalSats = feeRateSatsPerVbyte * TX_VSIZE
+  return (totalSats / 100_000_000) * priceInCurrency
+}
