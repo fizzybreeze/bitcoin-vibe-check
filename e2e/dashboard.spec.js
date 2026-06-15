@@ -170,8 +170,8 @@ test.describe('Bitcoin Dashboard', () => {
 
   // ── Signal Cards (row 3) ────────────────────────────────────────────────────
 
-  test('On-Chain Signals card renders with MVRV value from fixture', async ({ page }) => {
-    await expect(page.getByText(/on-chain signals/i).first()).toBeVisible({ timeout: TIMEOUT })
+  test('Cycle Indicators card renders with MVRV value from fixture', async ({ page }) => {
+    await expect(page.getByText(/cycle indicators/i).first()).toBeVisible({ timeout: TIMEOUT })
     // Fixture MVRV = 2.15 → rendered as "2.15"
     await expect(page.getByText('2.15').first()).toBeVisible({ timeout: TIMEOUT })
   })
