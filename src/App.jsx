@@ -798,6 +798,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
 }
 
 const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
+const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Binance's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinGecko — the two figures are not directly comparable."
 
 function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
@@ -1633,8 +1634,8 @@ export default function App() {
           <div className="rounded-2xl bg-gray-900 p-6 h-full">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-                  Price · {currency.toUpperCase()}
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">
+                  Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
                 </p>
                 {chartChange != null && !chartLoading && (
                   <span
