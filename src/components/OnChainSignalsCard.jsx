@@ -8,10 +8,10 @@ const MVRV_TOOLTIP = "Compares Bitcoin's market cap to the aggregate cost basis 
 
 function mvrvInterpretation(mvrv) {
   if (mvrv == null) return null
-  if (mvrv < 1)    return { label: 'Deeply Undervalued',  cls: 'text-green-400'  }
-  if (mvrv < 1.5)  return { label: 'Undervalued',         cls: 'text-lime-400'   }
-  if (mvrv < 2.4)  return { label: 'Fair Value',          cls: 'text-yellow-400' }
-  if (mvrv < 3.7)  return { label: 'Overvalued',          cls: 'text-amber-400'  }
+  if (mvrv < 1)    return { label: 'Deeply Undervalued',   cls: 'text-green-400' }
+  if (mvrv < 1.5)  return { label: 'Undervalued',          cls: 'text-green-400' }
+  if (mvrv < 2.4)  return { label: 'Fair Value',           cls: 'text-gray-400'  }
+  if (mvrv < 3.7)  return { label: 'Overvalued',           cls: 'text-red-400'   }
   return                   { label: 'Extremely Overvalued', cls: 'text-red-400'   }
 }
 

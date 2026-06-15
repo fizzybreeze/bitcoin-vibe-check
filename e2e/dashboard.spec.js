@@ -170,13 +170,8 @@ test.describe('Bitcoin Dashboard', () => {
 
   // ── Signal Cards (row 3) ────────────────────────────────────────────────────
 
-  test('Institutional Pulse card renders with ETF holdings label', async ({ page }) => {
-    await expect(page.getByText(/institutional pulse/i).first()).toBeVisible({ timeout: TIMEOUT })
-    await expect(page.getByText(/US Spot ETF Holdings/i).first()).toBeVisible({ timeout: TIMEOUT })
-  })
-
-  test('On-Chain Signals card renders with MVRV value from fixture', async ({ page }) => {
-    await expect(page.getByText(/on-chain signals/i).first()).toBeVisible({ timeout: TIMEOUT })
+  test('Cycle Indicators card renders with MVRV value from fixture', async ({ page }) => {
+    await expect(page.getByText(/cycle indicators/i).first()).toBeVisible({ timeout: TIMEOUT })
     // Fixture MVRV = 2.15 → rendered as "2.15"
     await expect(page.getByText('2.15').first()).toBeVisible({ timeout: TIMEOUT })
   })
