@@ -81,6 +81,14 @@ function parseBinanceKlines(klines, days) {
       volume: parseFloat(k[7]),
     }))
   }
+  if (days === 7) {
+    const groups = {}
+    for (const k of klines) {
+      const date = new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      groups[date] = { date, price: Math.round(parseFloat(k[4])), volume: (groups[date]?.volume ?? 0) + parseFloat(k[7]) }
+    }
+    return Object.values(groups)
+  }
   return klines.map(k => ({
     date: new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     price: Math.round(parseFloat(k[4])),
