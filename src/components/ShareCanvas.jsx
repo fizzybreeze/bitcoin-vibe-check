@@ -102,40 +102,49 @@ function BtcPriceShareCard({ cardData, currency }) {
 }
 
 function NetworkPulseShareCard({ cardData }) {
-  const { fng, difficulty } = cardData
-  const fngScore = fng?.value != null ? parseInt(fng.value, 10) : null
-  const fngClass = fng?.value_classification ?? null
-  const diffChange = difficulty?.difficultyChange ?? null
+  const diffChange      = cardData.difficulty?.difficultyChange ?? null
+  const remainingBlocks = cardData.difficulty?.remainingBlocks ?? null
   const diffPos = diffChange != null && diffChange >= 0
+  const diffDays = remainingBlocks != null
+    ? Math.round(remainingBlocks * 10 / 60 / 24)
+    : null
+  const interpText = diffChange == null ? null
+    : diffChange > 4  ? 'Miners Speeding Up Fast'
+    : diffChange > 1  ? 'Miners Speeding Up'
+    : diffChange > -1 ? 'Stable'
+    : diffChange > -4 ? 'Miners Slowing'
+    : 'Miners Slowing Fast'
   return (
     <>
-      <p style={LABEL_STYLE}>Network Pulse</p>
-      <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-        <div style={{ flex: 1 }}>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Fear &amp; Greed</p>
-          <p style={{ ...VALUE_STYLE, color: fngScore != null ? fngColorHex(fngClass) : MUTED }}>
-            {fngScore ?? '—'}
-          </p>
-          <p style={{ ...SUB_STYLE, color: fngScore != null ? fngColorHex(fngClass) : MUTED }}>
-            {fngClass ?? '—'}
-          </p>
-        </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Difficulty</p>
-          <p style={{ ...VALUE_STYLE }}>
-            {diffChange != null ? `${diffChange >= 0 ? '+' : ''}${diffChange.toFixed(1)}%` : '—'}
-          </p>
-          {diffChange != null && (
-            <p style={{ ...SUB_STYLE, color: diffPos ? GREEN : '#9ca3af' }}>
-              {diffChange > 4 ? 'Miners Speeding Up Fast'
-                : diffChange > 1 ? 'Miners Speeding Up'
-                : diffChange > -1 ? 'Stable'
-                : diffChange > -4 ? 'Miners Slowing'
-                : 'Miners Slowing Fast'}
-            </p>
-          )}
-        </div>
-      </div>
+      <p style={LABEL_STYLE}>Network Health</p>
+      <p style={{ ...LABEL_STYLE, marginTop: 8, marginBottom: 4 }}>Difficulty Adjustment</p>
+      <p style={VALUE_STYLE}>
+        {diffChange != null ? `${diffChange >= 0 ? '+' : ''}${diffChange.toFixed(1)}%` : '—'}
+      </p>
+      {interpText && (
+        <p style={{ ...SUB_STYLE, color: diffPos ? GREEN : '#9ca3af', fontWeight: 600, marginTop: 4 }}>
+          {interpText}
+        </p>
+      )}
+      {diffDays != null && (
+        <p style={{ ...SUB_STYLE, marginTop: 4 }}>
+          Next adjustment in ~{diffDays}d
+        </p>
+      )}
+    </>
+  )
+}
+
+function MarketSentimentShareCard({ cardData }) {
+  const fngScore = cardData.fng?.value != null ? parseInt(cardData.fng.value, 10) : null
+  const fngClass = cardData.fng?.value_classification ?? null
+  const color    = fngScore != null ? fngColorHex(fngClass) : MUTED
+  return (
+    <>
+      <p style={LABEL_STYLE}>Market Sentiment</p>
+      <p style={{ ...LABEL_STYLE, marginTop: 8, marginBottom: 4 }}>Fear &amp; Greed</p>
+      <p style={{ ...VALUE_STYLE, color }}>{fngScore ?? '—'}</p>
+      <p style={{ ...SUB_STYLE, color, fontWeight: 600, marginTop: 4 }}>{fngClass ?? '—'}</p>
     </>
   )
 }
@@ -263,14 +272,6 @@ function FeesShareCard({ cardData, currency }) {
   )
 }
 
-function accumulationSignalLabel(btcHeld, btcHeld7dAgo) {
-  if (btcHeld == null || btcHeld7dAgo == null) return null
-  const pct = ((btcHeld - btcHeld7dAgo) / btcHeld7dAgo) * 100
-  if (pct > 0.1)  return { text: '▲ Accumulating', color: '#4ade80' }
-  if (pct < -0.1) return { text: '▼ Distributing', color: '#f87171' }
-  return                  { text: '— Neutral',      color: '#facc15' }
-}
-
 function mvrvLabel(mvrv) {
   if (mvrv == null) return null
   if (mvrv < 1)    return { text: 'Deeply Undervalued',   color: '#4ade80'  }
@@ -289,68 +290,46 @@ function mayerLabel(multiple) {
   return                     { text: 'Overheated'         }
 }
 
-function InstitutionalPulseShareCard({ cardData }) {
-  const etf   = cardData.chainData?.etf ?? null
-  const held  = etf?.btcHeld ?? null
-  const signal = accumulationSignalLabel(etf?.btcHeld, etf?.btcHeld7dAgo)
-  return (
-    <>
-      <p style={LABEL_STYLE}>Institutional Pulse</p>
-      <p style={{ ...SUB_STYLE, marginBottom: 6 }}>US Spot ETF Holdings</p>
-      <p style={VALUE_STYLE}>
-        {held != null ? held.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}
-      </p>
-      <p style={SUB_STYLE}>BTC held</p>
-      {signal && (
-        <p style={{ ...SUB_STYLE, marginTop: 8, color: signal.color, fontWeight: 600 }}>
-          {signal.text}
-        </p>
-      )}
-      {!held && <p style={{ ...SUB_STYLE, marginTop: 8 }}>Data unavailable</p>}
-    </>
-  )
-}
-
-function OnChainSignalsShareCard({ cardData }) {
-  const mvrv  = cardData.chainData?.mvrv?.value ?? null
-  const label = mvrvLabel(mvrv)
-  return (
-    <>
-      <p style={LABEL_STYLE}>On-Chain Signals</p>
-      <p style={{ ...SUB_STYLE, marginBottom: 6 }}>MVRV Ratio</p>
-      <p style={VALUE_STYLE}>{mvrv != null ? mvrv.toFixed(2) : '—'}</p>
-      {label && (
-        <p style={{ ...SUB_STYLE, color: label.color, fontWeight: 600 }}>{label.text}</p>
-      )}
-      {mvrv == null && <p style={SUB_STYLE}>Data unavailable</p>}
-    </>
-  )
-}
-
 function CycleIndicatorsShareCard({ cardData }) {
+  const mvrv      = cardData.chainData?.mvrv?.value ?? null
   const ma200     = cardData.ma200 ?? null
   const price     = cardData.priceUsd ?? null
   const fairValue = calcPowerLawFairValue()
   const mayer     = calcMayerMultiple(price, ma200)
-  const mLabel    = mayerLabel(mayer)
+  const mvrvLbl   = mvrvLabel(mvrv)
+  const mayerLbl  = mayerLabel(mayer)
+
+  const SMALL_VAL = { ...VALUE_STYLE, fontSize: 17 }
+
   return (
     <>
       <p style={LABEL_STYLE}>Cycle Indicators</p>
-      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginTop: 10 }}>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 2 }}>Power Law Fair Value</p>
-          <p style={{ ...VALUE_STYLE, fontSize: 18 }}>
+          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>MVRV Ratio</p>
+          <p style={{ ...SMALL_VAL, color: mvrvLbl?.color ?? ORANGE }}>
+            {mvrv != null ? mvrv.toFixed(2) : '—'}
+          </p>
+          {mvrvLbl && <p style={{ ...SUB_STYLE, color: mvrvLbl.color, fontWeight: 600 }}>{mvrvLbl.text}</p>}
+        </div>
+        <div>
+          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Power Law Fair Value</p>
+          <p style={SMALL_VAL}>
             {fairValue != null ? fmtCurrency(fairValue, 'usd') : '—'}
           </p>
         </div>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 2 }}>Mayer Multiple</p>
-          <p style={{ ...VALUE_STYLE, fontSize: 18 }}>
+          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>200-Day MA</p>
+          <p style={SMALL_VAL}>
+            {ma200 != null ? fmtCurrency(ma200, 'usd') : '—'}
+          </p>
+        </div>
+        <div>
+          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Mayer Multiple</p>
+          <p style={SMALL_VAL}>
             {mayer != null ? mayer.toFixed(2) : '—'}
           </p>
-          {mLabel && (
-            <p style={{ ...SUB_STYLE, color: MUTED }}>{mLabel.text}</p>
-          )}
+          {mayerLbl && <p style={{ ...SUB_STYLE, color: MUTED }}>{mayerLbl.text}</p>}
         </div>
       </div>
     </>
@@ -359,16 +338,15 @@ function CycleIndicatorsShareCard({ cardData }) {
 
 function renderShareCard(key, cardData, currency) {
   switch (key) {
-    case 'btcPrice':           return <BtcPriceShareCard cardData={cardData} currency={currency} />
-    case 'networkPulse':       return <NetworkPulseShareCard cardData={cardData} />
-    case 'volume':             return <VolumeShareCard cardData={cardData} currency={currency} />
-    case 'halving':            return <HalvingShareCard cardData={cardData} />
-    case 'recentBlocks':       return <RecentBlocksShareCard cardData={cardData} />
-    case 'fees':               return <FeesShareCard cardData={cardData} currency={currency} />
-    case 'institutionalPulse': return <InstitutionalPulseShareCard cardData={cardData} />
-    case 'onChainSignals':     return <OnChainSignalsShareCard cardData={cardData} />
-    case 'cycleIndicators':    return <CycleIndicatorsShareCard cardData={cardData} />
-    default:                   return null
+    case 'btcPrice':        return <BtcPriceShareCard cardData={cardData} currency={currency} />
+    case 'marketSentiment': return <MarketSentimentShareCard cardData={cardData} />
+    case 'volume':          return <VolumeShareCard cardData={cardData} currency={currency} />
+    case 'networkPulse':    return <NetworkPulseShareCard cardData={cardData} />
+    case 'halving':         return <HalvingShareCard cardData={cardData} />
+    case 'recentBlocks':    return <RecentBlocksShareCard cardData={cardData} />
+    case 'fees':            return <FeesShareCard cardData={cardData} currency={currency} />
+    case 'cycleIndicators': return <CycleIndicatorsShareCard cardData={cardData} />
+    default:                return null
   }
 }
 
