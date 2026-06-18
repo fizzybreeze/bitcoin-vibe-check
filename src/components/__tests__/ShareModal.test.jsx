@@ -104,9 +104,9 @@ describe('ShareModal', () => {
     expect(screen.queryByRole('button', { name: '1:1' })).toBeNull()
   })
 
-  it('renders the three v1.4 signal card checkboxes checked by default', () => {
+  it('renders the v1.4 signal card checkboxes checked by default', () => {
     renderModal()
-    const labels = ['Institutional Pulse', 'On-Chain Signals', 'Cycle Indicators']
+    const labels = ['Market Sentiment', 'Network Health', 'Cycle Indicators']
     for (const label of labels) {
       const checkbox = screen.getByRole('checkbox', { name: label })
       expect(checkbox).toBeInTheDocument()
