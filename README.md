@@ -10,7 +10,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Live Market Data
 - **Real-time BTC price** streamed via Kraken WebSocket v2, updating continuously without page refresh
-- **24-hour price change** with directional indicator, sourced from CoinGecko
+- **24-hour price change** with directional indicator
 - **ATH distance indicator** — shows percentage below all-time high, or "AT ATH" when within 0.1%
 - **Multi-currency display** — switch between USD, GBP, EUR, CAD, and CHF at any time; all values update instantly
 - **24h trading volume** with comparison against the 7-day rolling average
@@ -19,9 +19,9 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Live Bitcoin supply issued** — total BTC issued to date derived from block height, with no extra API call
 
 ### Sentiment & Network Health
-- **Live sentiment summary line** in the header — a human-readable sentence combining price direction, Fear & Greed, and mining difficulty; replaces the static tagline
-- **Fear & Greed index** (0–100) from Alternative.me, with colour-coded classification label and **30-day sparkline**
-- **Redesigned Network Pulse card** — 2×2 metric grid (Fear & Greed, Difficulty, Hash Rate), full-width difficulty adjustment bar, and full-width 30-day sentiment sparkline; arc gauge removed
+- **Live sentiment summary line** in the header — a human-readable sentence combining price direction, Fear & Greed, and mining difficulty
+- **Market Sentiment card** — Fear & Greed index (0–100) from Alternative.me, with colour-coded classification label and 30-day sparkline
+- **Network Pulse card** — Hash Rate and Difficulty side by side, with a full-width difficulty adjustment bar below
 - **Hash rate** — current network hash rate in EH/s with a **30-day trend indicator** (▲/▼ percentage)
 - **Mining difficulty** — current epoch change percentage, time until next adjustment, and textual interpretation
 - **Recent Blocks feed** — live list of the five most recent blocks with transaction count, total fees, and average fee rate; replaces the Whale Watch card
@@ -41,15 +41,15 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **200-Day Moving Average** — computed from the last 200 daily closes; shows current price relative to the trend
 - **Mayer Multiple** — ratio of current price to the 200-day MA; readings above 2.4 have historically indicated overheating
 - Displayed in a **2×2 grid layout** on tablet and desktop, single column on mobile
-- MVRV was previously shown in a separate On-Chain Signals card — it is now consolidated here alongside the other valuation metrics
+- MVRV data is fetched via a serverless proxy from BGeometrics; the other three metrics are derived from Binance daily OHLC data
 
 ### Price Chart
 - Interactive area chart with overlaid volume bars
 - Four time ranges: **1D · 7D · 1M · 1Y**
 - Range percentage change displayed alongside the chart label
 - **High and low reference lines** for the selected period
-- **Chart locked to USD** with a clear "Chart in USD" label — avoids CoinGecko chart API limitations with other currencies
-- **Volume bars show Binance BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges by CoinGecko
+- **Chart locked to USD** with a clear "Chart in USD" label
+- **Volume bars show Binance BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
 - Chart data is cached per range/currency combination for the session to avoid redundant API requests
 
@@ -62,14 +62,17 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Total network capacity** in BTC
 - **Channel count** and **node count**
 
-### Transaction & Address Lookup
-- Look up any **Bitcoin transaction ID** — shows confirmation status, block number, total value (BTC and fiat), fee, fee rate (sat/vB), and virtual size
-- Look up any **Bitcoin address** — shows on-chain balance (BTC and fiat), total transaction count, and any pending unconfirmed transactions
+### Price Alerts
+- Set custom price alerts for BTC in any supported currency
+- Browser **push notification** support with a one-time permission request
+- Active alerts shown via an indicator on the header button; triggered alerts are tracked separately
+- Alert panel accessible from the header on any screen size
 
 ### Header & Navigation
-- **Latest block hash** (first 8 characters) displayed in the header, updating on every new block
 - **Live indicator** showing whether the WebSocket price feed is connected, with fallback to last-updated timestamp
 - **Currency selector** — always visible
+- **Share button** — generates a shareable snapshot card for the current dashboard state
+- **Sound toggle** and **Price Alerts button** in the header
 
 ### Sound Mode
 - Optional ambient sound mode toggled from the header
@@ -121,13 +124,13 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ## Data Sources
 
-All APIs are free and require no authentication.
-
 | Source | What it provides |
 |---|---|
-| [CoinGecko API](https://www.coingecko.com/en/api) | BTC price in all currencies, 24h volume, market cap, 24h change, historical chart data |
-| [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics |
-| [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Crypto Fear & Greed index score and classification |
+| [CoinPaprika API](https://api.coinpaprika.com) | BTC price, 24h volume, market cap, 24h change, ATH, BTC dominance |
+| [Binance API](https://binance-docs.github.io/apidocs/spot/en/) | Historical OHLC data for the price chart and 200-day MA / Mayer Multiple calculations |
+| [BGeometrics](https://bgeometrics.com) (via serverless proxy) | MVRV Ratio |
+| [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
+| [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Crypto Fear & Greed index score and 30-day history |
 | [Kraken WebSocket v2](https://docs.kraken.com/websockets-v2/) | Real-time BTC ticker in USD, GBP, EUR, CAD, and CHF |
 
 ---
@@ -183,13 +186,17 @@ npm run test:e2e   # end-to-end tests (Playwright)
 
 | Variable | Description |
 |---|---|
-| `VITE_COINGECKO_API_KEY` | CoinGecko Demo API key (free — register at [coingecko.com/en/api](https://www.coingecko.com/en/api)). Required for all CoinGecko calls. Without it, requests fall back to the unauthenticated tier which has stricter rate limits. |
+| `VITE_SUPABASE_URL` | Supabase project URL — required for donor name submission and retrieval |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key — required for donor name submission and retrieval |
 
 Create a `.env` file in the project root and add:
 
 ```
-VITE_COINGECKO_API_KEY=your_key_here
+VITE_SUPABASE_URL=your_project_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
+
+The donor ticker and submission form will silently degrade if these are absent. All other dashboard data comes from public APIs with no authentication required.
 
 ---
 
