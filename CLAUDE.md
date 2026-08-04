@@ -165,12 +165,24 @@ All keyless except BGeometrics, which is proxied server-side.
 | API | Endpoint purpose |
 |---|---|
 | `api.coinpaprika.com` | Price, 24h volume, market cap, BTC dominance |
-| `api.binance.com` | Klines — chart data for every range, plus the 200-day series for MA and Mayer Multiple |
+| `api.binance.com` | Klines — chart data for every range, plus the 200-day series for MA and Mayer Multiple. **Browser only** — see the warning below |
 | `api.kraken.com` | REST ticker, seeding prices before the socket connects |
 | `wss://ws.kraken.com/v2` | Real-time BTC price ticker (WebSocket), 5 currency pairs |
 | `mempool.space` | Fee tiers, block height, difficulty, mempool, recent blocks, hash rate, Lightning stats |
 | `api.alternative.me/fng` | Fear & Greed index — single `?limit=30` call used for both current value and 30-day sparkline |
 | `/api/chain-data` | Own serverless route → BGeometrics MVRV, cached 24h at the CDN edge |
+
+> ⚠️ **Never call Binance from server-side code.** It answers US jurisdictions
+> with HTTP 451, and both GitHub Actions runners and Vercel functions are
+> US-hosted, so a server-side Binance fetch fails 100% of the time rather than
+> intermittently. The snapshot job hit exactly this and silently recorded a null
+> 200-day MA on every run; it now uses Kraken OHLC
+> (`scripts/lib/ohlc.js`), which does not geo-block datacentres.
+>
+> The browser app still uses Binance, which works because the request comes from
+> the visitor's own IP — but that likely means **US visitors see no chart and no
+> 200-day MA / Mayer Multiple**. Tracked separately; do not "fix" the snapshot
+> back to Binance.
 
 ### Database (Supabase Postgres)
 

@@ -19,6 +19,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import {
+  KRAKEN_OHLC_URL, extractKrakenOhlc, calc200DMA, calcMayerMultiple,
+} from './lib/ohlc.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -39,19 +42,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 // ─── Calculations (mirrored from src/lib/calculations.js) ────────────────────
 
 const GENESIS = new Date('2009-01-03T00:00:00.000Z')
-
-function calc200DMA(klines) {
-  if (!klines?.length) return null
-  const closes = klines.map(k => parseFloat(k[4]))
-  const last200 = closes.slice(-200)
-  if (!last200.length) return null
-  return last200.reduce((sum, v) => sum + v, 0) / last200.length
-}
-
-function calcMayerMultiple(price, ma200) {
-  if (price == null || ma200 == null || ma200 === 0) return null
-  return price / ma200
-}
 
 function calcPowerLawFairValue() {
   const days = Math.floor((Date.now() - GENESIS.getTime()) / 86_400_000)
@@ -101,7 +91,7 @@ async function main() {
     fngRaw,
     hashrate3dRaw,
     hashrate1mRaw,
-    ohlc200Raw,
+    krakenOhlcRaw,
     mvrvRaw,
   ] = await Promise.all([
     safeFetch('https://api.coinpaprika.com/v1/tickers/btc-bitcoin'),
@@ -114,7 +104,9 @@ async function main() {
     safeFetch('https://api.alternative.me/fng/?limit=1'),
     safeFetch('https://mempool.space/api/v1/mining/hashrate/3d'),
     safeFetch('https://mempool.space/api/v1/mining/hashrate/1m'),
-    safeFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'),
+    // Kraken, not Binance: Binance answers US jurisdictions with HTTP 451 and
+    // Actions runners are US-hosted, so this was null on every run.
+    safeFetch(KRAKEN_OHLC_URL),
     safeFetch('https://api.bgeometrics.com/v1/mvrv', BGEOMETRICS_KEY
       ? { headers: { Authorization: `Bearer ${BGEOMETRICS_KEY}` } }
       : {}),
@@ -130,7 +122,7 @@ async function main() {
   const dominance     = paprikaGlobalRaw?.bitcoin_dominance_percentage ?? null
 
   // Parse Binance 200d
-  const ma200         = calc200DMA(ohlc200Raw)
+  const ma200         = calc200DMA(extractKrakenOhlc(krakenOhlcRaw))
   const mayerMultiple = calcMayerMultiple(priceUsd, ma200)
   const powerLawFv    = calcPowerLawFairValue()
 
