@@ -59,31 +59,41 @@ Why this is genuinely exploitable, not theoretical:
 So today, anyone can read donor names awaiting approval, insert arbitrary content that will appear
 on your site pending moderation, rewrite existing rows, or **delete the entire table**.
 
-**Fix — but verify first.** Enabling RLS with only a `SELECT` policy present will silently break
-donor submissions from `DonationCard`. I confirmed a read policy exists but could not enumerate
-the complete policy set before the connection dropped. Run this first:
+**⚠️ The obvious one-line fix will break your app.** Supabase's own suggested remediation is
+`alter table public.donors enable row level security;` — **do not run that on its own.**
 
-```sql
-select policyname, cmd, qual, with_check
-from pg_policies where tablename = 'donors';
+Verified against the live database, `donors` has exactly one policy:
+
+| Policy | Command | Using |
+|---|---|---|
+| `Allow public read of approved donors` | `SELECT` | `approved = true` |
+
+There is **no `INSERT` policy**. But the app inserts with the anon key at `App.jsx:1088`:
+
+```js
+await supabase.from('donors').insert({ name: trimmed, approved: false })
 ```
 
-If there is no `INSERT` policy, apply the full set together, in one migration:
+Enabling RLS alone would therefore start denying every donation submission, silently — the
+`DonationCard` would just show its error state forever. Apply both statements together, as one
+migration:
 
 ```sql
--- Read: only approved names are ever visible to the public
-create policy "public reads approved donors"
-  on public.donors for select to anon
-  using (approved = true);
-
--- Write: anyone may submit a name, but never pre-approve their own
+-- Write: anyone may submit a name, but never pre-approve their own.
+-- with_check mirrors exactly what App.jsx:1088 inserts.
 create policy "public submits unapproved donors"
   on public.donors for insert to anon
   with check (approved = false);
 
+-- The existing SELECT policy already matches App.jsx:1332 (.eq('approved', true)),
+-- so reads keep working untouched.
+
 -- No update/delete policy for anon = those operations are denied once RLS is on.
 alter table public.donors enable row level security;
 ```
+
+This is a good illustration of why the audit was worth doing: the tooling's own recommended fix,
+applied literally, would have taken down a working feature.
 
 Approving names then happens through the Supabase dashboard or the service-role key, never the
 anon key. Add a length constraint on `name` while you're there — there is currently nothing
