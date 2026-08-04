@@ -1,0 +1,64 @@
+name: Claude
+
+# Lets you mention @claude on an issue, a PR, or a review comment and get work
+# back — without a Claude session open anywhere. This is the piece that makes the
+# GitHub mobile app a development surface rather than just a review surface.
+#
+# SECURITY, and it matters because this repository is public:
+# claude-code-action checks the *commenter's* repository permissions and requires
+# write access for issue, pull request, comment and review events. A stranger
+# commenting "@claude" on a public issue therefore cannot trigger a run against
+# the account's quota.
+#
+# Two inputs would undo that protection, and both are deliberately absent below:
+#   allowed_bots            — bots matching an entry skip the permission check
+#                             entirely and need no write access. Never set '*'.
+#   allowed_non_write_users — exactly what it sounds like.
+# If either is ever added, re-read docs/security.md in claude-code-action first.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+# One Claude run per issue or PR at a time. Not cancel-in-progress: a run that is
+# already pushing commits should finish rather than be killed halfway.
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    # Cheap pre-filter so a runner is not started for every comment in the repo.
+    # The action's own permission check is the security boundary; this is only
+    # here to avoid wasting Actions minutes.
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write        # push claude/* branches
+      pull-requests: write   # open PRs and comment on them
+      issues: write          # reply on issues
+      id-token: write        # OIDC, required by the action
+      actions: read          # read CI logs when diagnosing a failing check
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: Claude often needs to see why something was done, not
+          # just its current state.
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Generated from the Max subscription with `claude setup-token`, so
+          # runs bill against the subscription rather than a separate API key.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

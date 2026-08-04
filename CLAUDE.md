@@ -209,3 +209,18 @@ yet — it exists so historical charting becomes possible.
 |---|---|---|
 | Daily metrics snapshot | GitHub Actions (`snapshot.yml`) | 06:17 UTC, plus `workflow_dispatch` |
 | `donor-email-worker` | Supabase `pg_cron` → edge function | every minute |
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
+| `e2e.yml` | push to `main`, all PRs | Playwright chromium. Required check: `Playwright (chromium)` |
+| `snapshot.yml` | daily cron + manual | daily metrics → `metric_snapshots` |
+| `claude.yml` | `@claude` mention | responds on issues, PRs and review comments |
+
+> `claude.yml` runs only for commenters with **write access** — the action checks
+> repository permissions itself, which is what makes an `@claude` trigger safe on
+> a public repo. Do not add `allowed_bots` or `allowed_non_write_users` without
+> reading `docs/security.md` in `anthropics/claude-code-action` first; both bypass
+> that check.
