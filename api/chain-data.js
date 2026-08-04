@@ -12,8 +12,15 @@
 const ALLOWED_ORIGINS = [
   'https://bitcoinvibecheck.com',
   'https://www.bitcoinvibecheck.com',
+  'https://bitcoin-dashboard-neon.vercel.app',
 ]
-const ALLOWED_ORIGIN_SUFFIX = '.vercel.app'
+
+// Scoped to this team's namespace, not bare '.vercel.app'. Every preview URL
+// for this project looks like
+// bitcoin-vibe-check-<build>-fizzybreeze-projects.vercel.app, and anyone can
+// deploy to vercel.app for free — so a bare suffix match would have re-opened
+// the hole this allowlist exists to close.
+const ALLOWED_ORIGIN_SUFFIX = '-fizzybreeze-projects.vercel.app'
 
 // Exported for unit tests; the handler is the only production caller.
 export function resolveAllowedOrigin(origin) {
