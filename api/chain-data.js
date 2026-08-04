@@ -4,8 +4,36 @@
 // Verified field shapes:
 //   MVRV (BGeometrics): [{d: 'YYYY-MM-DD', unixTs: number, mvrv: number}, ...]
 
+// Only our own origins may call this route. It was previously `*`, which let any
+// site proxy through this function and consume the BGeometrics quota — 15
+// requests/day on the free tier, so a handful of third-party pages could have
+// exhausted it. Vercel preview deployments get generated subdomains, hence the
+// suffix match rather than a fixed list.
+const ALLOWED_ORIGINS = [
+  'https://bitcoinvibecheck.com',
+  'https://www.bitcoinvibecheck.com',
+]
+const ALLOWED_ORIGIN_SUFFIX = '.vercel.app'
+
+// Exported for unit tests; the handler is the only production caller.
+export function resolveAllowedOrigin(origin) {
+  if (!origin) return null
+  if (ALLOWED_ORIGINS.includes(origin)) return origin
+  try {
+    const { hostname, protocol } = new URL(origin)
+    if (protocol === 'https:' && hostname.endsWith(ALLOWED_ORIGIN_SUFFIX)) return origin
+  } catch {
+    return null
+  }
+  return null
+}
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  const allowedOrigin = resolveAllowedOrigin(req.headers.origin)
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600')
 
   const token = process.env.BGEOMETRICS_API_KEY

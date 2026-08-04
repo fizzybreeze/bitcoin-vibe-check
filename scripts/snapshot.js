@@ -2,40 +2,38 @@
 /**
  * Bitcoin Vibe Check — Daily Metrics Snapshot
  *
- * Fetches all dashboard data sources and writes one row to ~/btcvc/metrics.db (SQLite).
- * Intended to run once daily via cron: 0 1 * * * /usr/bin/node /opt/btcvc/scripts/snapshot.js
+ * Fetches all dashboard data sources and upserts one row per day into the
+ * Supabase `metric_snapshots` table. Runs on GitHub Actions
+ * (.github/workflows/snapshot.yml), daily plus on-demand via workflow_dispatch.
  *
- * Required env var:
- *   BGEOMETRICS_API_KEY — BGeometrics API token (free tier: 15 req/day)
+ * Required env vars:
+ *   SUPABASE_URL              — project URL
+ *   SUPABASE_SERVICE_ROLE_KEY — service role key. Writes bypass RLS; the table
+ *                               has no anon insert policy by design. NEVER put
+ *                               this in a VITE_ variable — it would ship to the
+ *                               browser.
  *
  * Optional env var:
- *   DB_PATH — override default ~/btcvc/metrics.db
+ *   BGEOMETRICS_API_KEY — BGeometrics API token (free tier: 15 req/day).
+ *                         Without it the MVRV fields come back null.
  */
 
-import Database from 'better-sqlite3'
-import { homedir } from 'os'
-import { join } from 'path'
-import { mkdirSync } from 'fs'
+import { createClient } from '@supabase/supabase-js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const DB_PATH = process.env.DB_PATH ?? join(homedir(), 'btcvc', 'metrics.db')
+const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const BGEOMETRICS_KEY = process.env.BGEOMETRICS_API_KEY ?? ''
 
-// ─── Database setup ───────────────────────────────────────────────────────────
-
-function openDb() {
-  mkdirSync(join(homedir(), 'btcvc'), { recursive: true })
-  const db = new Database(DB_PATH)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS snapshots (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      captured_at TEXT    NOT NULL,
-      metrics     TEXT    NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_captured_at ON snapshots(captured_at);
-  `)
-  return db
+// Fail loudly rather than silently collecting data and dropping it. A snapshot
+// job that quietly no-ops is worse than one that goes red in the Actions tab.
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error(
+    '[snapshot] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. ' +
+    'Set both as GitHub Actions repository secrets.'
+  )
+  process.exit(1)
 }
 
 // ─── Calculations (mirrored from src/lib/calculations.js) ────────────────────
@@ -207,13 +205,35 @@ async function main() {
     console.warn(`[snapshot] Null fields (API may have failed): ${nullFields.join(', ')}`)
   }
 
-  // Write to SQLite
-  const db = openDb()
-  const stmt = db.prepare('INSERT INTO snapshots (captured_at, metrics) VALUES (?, ?)')
-  stmt.run(new Date().toISOString(), JSON.stringify(metrics))
-  db.close()
+  // Refuse to store a worthless row. Price is the one field every other market
+  // metric is anchored to, so if CoinPaprika failed there is nothing useful to
+  // record — better to go red in the Actions tab than to pollute the series
+  // with a row that looks like a real day of data.
+  //
+  // Note this cannot be "are all fields null?": power_law_fair_value is derived
+  // from the clock alone and is always populated, so such a check never fires.
+  if (metrics.price_usd == null) {
+    console.error('[snapshot] No price could be fetched — refusing to write a placeholder row.')
+    process.exit(1)
+  }
 
-  console.log(`[snapshot] Done — wrote snapshot to ${DB_PATH}`)
+  // Upsert on captured_on so re-running the job on the same day corrects that
+  // day's row instead of adding a duplicate.
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+
+  const capturedAt = new Date().toISOString()
+  const { error } = await supabase
+    .from('metric_snapshots')
+    .upsert({ captured_at: capturedAt, metrics }, { onConflict: 'captured_on' })
+
+  if (error) {
+    console.error(`[snapshot] Supabase write failed: ${error.message}`)
+    process.exit(1)
+  }
+
+  console.log(`[snapshot] Done — upserted snapshot for ${capturedAt.slice(0, 10)}`)
   if (priceUsd) console.log(`[snapshot] BTC/USD: $${priceUsd.toLocaleString()} | F&G: ${metrics.fear_greed_value} (${metrics.fear_greed_label}) | MVRV: ${metrics.mvrv_value}`)
 }
 
