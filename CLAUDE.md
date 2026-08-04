@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Version | Changes |
 |---|---|
+| v1.4.3 | Infrastructure. Daily metrics snapshot moved off a home Proxmox box and local SQLite to GitHub Actions + a new Supabase `metric_snapshots` table (drops the unlisted `better-sqlite3` dependency; the data is now queryable by the app); existing schema captured as a baseline migration; `vercel.json` committed with security and caching headers; `api/chain-data.js` CORS narrowed from `*` to this project's own origins; Dependabot and a PR template added |
 | v1.4.2 | Tooling, not app behaviour. Supabase RLS enabled on `donors` with a matching INSERT policy (schema now tracked in `supabase/migrations/`); lint reduced from 16 errors to 0; dead `OnChainSignalsCard` and `FngArc` removed; GitHub Actions CI + E2E workflows added with `main` protected; e2e suite made hermetic (17/17, no network); Node pinned to 24.x; `.claude/` set up with a SessionStart hook, permission allowlist and `/ship` + `/verify` commands; `.env.example` added and this file corrected |
 | v1.4.1 | Social share updated for v1.4: removed dead toggles (Institutional Pulse, On-Chain Signals); added Market Sentiment toggle; Network Health share card updated to match live card; Cycle Indicators share card expanded to 2x2 grid (MVRV, Power Law, 200-Day MA, Mayer Multiple) |
 | v1.4.0 | Desktop layout restructured into logical data categories; On-Chain Signals card removed, MVRV merged into Cycle Indicators card (2x2 internal grid, mobile-safe); Network Fees card moved to network health row (3-column with Network Pulse and Recent Blocks); volume source tooltip added to price chart |
@@ -72,7 +73,9 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/components/shareCards.js` | `SHARE_CARDS` list (separate module so ShareModal only exports components) |
 | `src/components/PriceAlertsButton.jsx` · `PriceAlertsPanel.jsx` | Price alert UI |
 | `src/components/BeehiivEmbed.jsx` · `BeehiivForm.jsx` | Newsletter embed |
-| `api/chain-data.js` | Vercel serverless function proxying BGeometrics MVRV (24h CDN cache) |
+| `api/chain-data.js` | Vercel serverless function proxying BGeometrics MVRV (24h CDN cache); CORS restricted to own origins |
+| `scripts/snapshot.js` | Daily metrics capture → Supabase `metric_snapshots`. Runs on GitHub Actions, not a local machine — see `scripts/SNAPSHOT_SETUP.md` |
+| `vercel.json` | Deploy config and security/caching headers — kept in the repo so it is reviewable |
 | `supabase/migrations/` | Schema as code — every DB change belongs here |
 | `src/__tests__/` · `src/**/__tests__/` | Vitest unit tests |
 | `e2e/` | Playwright dashboard smoke tests (fully mocked — no network) |
@@ -162,9 +165,47 @@ All keyless except BGeometrics, which is proxied server-side.
 | API | Endpoint purpose |
 |---|---|
 | `api.coinpaprika.com` | Price, 24h volume, market cap, BTC dominance |
-| `api.binance.com` | Klines — chart data for every range, plus the 200-day series for MA and Mayer Multiple |
+| `api.binance.com` | Klines — chart data for every range, plus the 200-day series for MA and Mayer Multiple. **Browser only** — see the warning below |
 | `api.kraken.com` | REST ticker, seeding prices before the socket connects |
 | `wss://ws.kraken.com/v2` | Real-time BTC price ticker (WebSocket), 5 currency pairs |
 | `mempool.space` | Fee tiers, block height, difficulty, mempool, recent blocks, hash rate, Lightning stats |
 | `api.alternative.me/fng` | Fear & Greed index — single `?limit=30` call used for both current value and 30-day sparkline |
 | `/api/chain-data` | Own serverless route → BGeometrics MVRV, cached 24h at the CDN edge |
+
+> ⚠️ **Never call Binance from server-side code.** It answers US jurisdictions
+> with HTTP 451, and both GitHub Actions runners and Vercel functions are
+> US-hosted, so a server-side Binance fetch fails 100% of the time rather than
+> intermittently. The snapshot job hit exactly this and silently recorded a null
+> 200-day MA on every run; it now uses Kraken OHLC
+> (`scripts/lib/ohlc.js`), which does not geo-block datacentres.
+>
+> The browser app still uses Binance, which works because the request comes from
+> the visitor's own IP — but that likely means **US visitors see no chart and no
+> 200-day MA / Mayer Multiple**. Tracked separately; do not "fix" the snapshot
+> back to Binance.
+
+### Database (Supabase Postgres)
+
+Schema lives in `supabase/migrations/`. Both tables have RLS enabled; re-run the
+security advisors after any change and expect zero lints.
+
+| Table | Purpose | Anon access |
+|---|---|---|
+| `donors` | Names submitted via the donation card | `SELECT` where `approved = true`; `INSERT` only with `approved = false`. No update or delete. |
+| `metric_snapshots` | One row per UTC day of dashboard metrics (`jsonb`), written by the Actions snapshot job | `SELECT` only. Writes are service-role. |
+
+`metric_snapshots` is keyed by a generated `captured_on` date with a unique
+index, so the job upserts and re-runs are idempotent. Nothing in the app reads it
+yet — it exists so historical charting becomes possible.
+
+> A Supabase Database Webhook (`new_donor_notification`) POSTs each new donor row
+> to a Make.com automation. That URL is a capability URL and is deliberately
+> **not** committed — the baseline migration documents it with a placeholder.
+> Manage it from the Supabase dashboard, not from the repo.
+
+### Scheduled jobs
+
+| Job | Where | Cadence |
+|---|---|---|
+| Daily metrics snapshot | GitHub Actions (`snapshot.yml`) | 06:17 UTC, plus `workflow_dispatch` |
+| `donor-email-worker` | Supabase `pg_cron` → edge function | every minute |
