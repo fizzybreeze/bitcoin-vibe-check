@@ -1,0 +1,57 @@
+version: 2
+
+updates:
+  # npm dependencies. Grouped so a week's updates arrive as one PR to review on
+  # a phone, rather than a dozen. CI gates them, so a green grouped PR is a
+  # single merge button.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'chore'
+      include: scope
+    groups:
+      # Patch and minor bumps are the routine ones — one PR for all of them.
+      routine:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+      # Security fixes travel separately so they are never held up behind a
+      # routine bump that happens to break a test.
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+    ignore:
+      # Majors land as their own PR by default, which is what we want — but
+      # React and Vite majors need deliberate migration work, so don't open
+      # those automatically.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+
+  # Keep the Actions themselves current — this is how you avoid a surprise
+  # deprecation breaking every workflow at once.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'ci'
+    groups:
+      actions:
+        patterns:
+          - '*'
