@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { fmtCurrency, fmtVolume, blocksToNextHalving, epochPercentage, CURRENCY_META } from '../utils.js'
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply, calcFiatFee,
@@ -200,9 +201,12 @@ function HalvingShareCard({ cardData }) {
 
 function RecentBlocksShareCard({ cardData }) {
   const { blockHeight, lastBlockTs, difficulty } = cardData
+  // Frozen at mount: this card is rendered off-screen purely to be captured as
+  // a static image, so the timestamp must not change between render and capture.
+  const [capturedAt] = useState(() => Date.now())
   const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
   const lastBlockMinsAgo = lastBlockTs != null
-    ? Math.max(0, Math.floor((Date.now() / 1000 - lastBlockTs) / 60))
+    ? Math.max(0, Math.floor((capturedAt / 1000 - lastBlockTs) / 60))
     : null
   return (
     <>

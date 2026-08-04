@@ -1,17 +1,7 @@
 import { useState, useRef } from 'react'
 import ShareCanvas from './ShareCanvas.jsx'
 import { useShareImage } from '../hooks/useShareImage.js'
-
-export const SHARE_CARDS = [
-  { key: 'btcPrice',         label: 'BTC Price'        },
-  { key: 'marketSentiment',  label: 'Market Sentiment' },
-  { key: 'volume',           label: '24h Volume'       },
-  { key: 'networkPulse',     label: 'Network Health'   },
-  { key: 'halving',          label: 'Next Halving'     },
-  { key: 'recentBlocks',     label: 'Recent Blocks'    },
-  { key: 'fees',             label: 'Network Fees'     },
-  { key: 'cycleIndicators',  label: 'Cycle Indicators' },
-]
+import { SHARE_CARDS } from './shareCards.js'
 
 export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary, currency }) {
   const [selectedCards, setSelectedCards] = useState(() => SHARE_CARDS.map(c => c.key))
