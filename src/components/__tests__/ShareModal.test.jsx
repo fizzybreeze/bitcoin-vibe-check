@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import ShareModal, { SHARE_CARDS } from '../ShareModal.jsx'
+import ShareModal from '../ShareModal.jsx'
+import { SHARE_CARDS } from '../shareCards.js'
 
 vi.mock('html2canvas', () => ({
   default: vi.fn().mockResolvedValue({
@@ -30,7 +31,6 @@ const mockCardData = {
   fees: { hourFee: 5, halfHourFee: 8, fastestFee: 12 },
   mempool: { vsize: 15_000_000, count: 12_000 },
   lightning: null,
-  athUsd: 109_000,
 }
 
 function renderModal(props = {}) {

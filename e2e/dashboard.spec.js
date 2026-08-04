@@ -5,7 +5,7 @@ import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   marketsFixture, hashrate3dFixture, hashrate1mFixture,
-  chainDataFixture, klines200dFixture,
+  chainDataFixture, klines200dFixture, makeKlines, INTERVAL_MS,
   paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
 } from './fixtures.js'
 
@@ -70,9 +70,27 @@ async function mockApis(page) {
   await page.route('/api/chain-data', route =>
     route.fulfill({ json: chainDataFixture })
   )
-  // Binance 200-day klines for 200DMA / Mayer Multiple
-  await page.route('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200', route =>
-    route.fulfill({ json: klines200dFixture })
+  // Binance klines. limit=200 is the 200DMA / Mayer Multiple series and has a
+  // dedicated fixture the cycle-indicator assertions depend on; every other
+  // interval+limit combination is a chart range toggle (1D/7D/1M/1Y).
+  await page.route('https://api.binance.com/api/v3/klines*', route => {
+    const url      = new URL(route.request().url())
+    const limit    = parseInt(url.searchParams.get('limit')) || 200
+    const interval = url.searchParams.get('interval') || '1d'
+    if (limit === 200 && interval === '1d') {
+      return route.fulfill({ json: klines200dFixture })
+    }
+    route.fulfill({ json: makeKlines(limit, INTERVAL_MS[interval] ?? 86_400_000) })
+  })
+
+  // Third-party scripts. These are not part of the dashboard under test and are
+  // unreachable on a restricted network, so stub them out rather than let the
+  // suite depend on the public internet.
+  await page.route('https://subscribe-forms.beehiiv.com/**', route =>
+    route.fulfill({ contentType: 'application/javascript', body: '' })
+  )
+  await page.route('https://va.vercel-scripts.com/**', route =>
+    route.fulfill({ contentType: 'application/javascript', body: '' })
   )
 }
 

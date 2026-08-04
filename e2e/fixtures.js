@@ -155,3 +155,26 @@ export const klines200dFixture = Array.from({ length: 200 }, (_, i) => [
   now - (200 - i) * DAY_MS + DAY_MS - 1,
   '51500000000', '1000', '0', '0', '1',
 ])
+
+// Generic kline series for the chart range toggles (1D/7D/1M/1Y), which request
+// varying interval+limit combinations. Prices ramp gently so the chart renders a
+// visible line and computeChartChange produces a non-zero result.
+export function makeKlines(count, stepMs = DAY_MS) {
+  return Array.from({ length: count }, (_, i) => {
+    const open = now - (count - i) * stepMs
+    const close = 100_000 + i * 10
+    return [
+      open,
+      String(close - 500), String(close + 500), String(close - 800), String(close), '500',
+      open + stepMs - 1,
+      '51500000000', '1000', '0', '0', '1',
+    ]
+  })
+}
+
+// Milliseconds per Binance interval string, for sizing generated candles.
+export const INTERVAL_MS = {
+  '1h': 3_600_000,
+  '4h': 14_400_000,
+  '1d': DAY_MS,
+}

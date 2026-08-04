@@ -56,14 +56,6 @@ const FNG_COLOR = {
   'Extreme Greed':'text-green-400',
 }
 
-const FNG_DOT_COLOR = {
-  'Extreme Fear': '#f87171',
-  'Fear':         '#fbbf24',
-  'Neutral':      '#facc15',
-  'Greed':        '#a3e635',
-  'Extreme Greed':'#4ade80',
-}
-
 const WS_SYMBOL_MAP = {
   'BTC/USD': 'priceUsd',
   'BTC/GBP': 'priceGbp',
@@ -229,19 +221,6 @@ function computeVol7dAvg(history) {
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
-}
-
-function FngArc({ score, classification }) {
-  const angle    = score != null ? (180 - (score / 100) * 180) * Math.PI / 180 : null
-  const dotX     = angle != null ? 60 + 50 * Math.cos(angle) : null
-  const dotY     = angle != null ? 60 - 50 * Math.sin(angle) : null
-  const dotColor = FNG_DOT_COLOR[classification] ?? ORANGE
-  return (
-    <svg width="120" height="65" viewBox="0 0 120 65" className="mt-5">
-      <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#1f2937" strokeWidth="5" strokeLinecap="round" />
-      {dotX != null && <circle cx={dotX} cy={dotY} r={5} fill={dotColor} />}
-    </svg>
-  )
 }
 
 function DifficultyBar({ change }) {
@@ -486,7 +465,7 @@ const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin bl
 
 function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   const [blocks, setBlocks] = useState(null)
-  const [now, setNow]       = useState(Date.now())
+  const [now, setNow]       = useState(() => Date.now())
 
   // Fetch on mount and immediately when a new block is detected
   useEffect(() => {
@@ -525,8 +504,10 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
 
   const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
   const colors = blockTimeColors(avgBlockMins)
+  // Derived from the ticking `now` state (same source as timeAgo) rather than
+  // Date.now(), so this stays pure and updates on the same 1s cadence.
   const lastBlockMinsAgo = lastBlockTs != null
-    ? Math.max(0, Math.floor((Date.now() / 1000 - lastBlockTs) / 60))
+    ? Math.max(0, Math.floor((now / 1000 - lastBlockTs) / 60))
     : null
 
   return (
@@ -624,27 +605,37 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
 const HALVING_TOOLTIP = 'Every 210,000 blocks (~4 years), the reward paid to miners is cut in half, reducing new BTC issuance. Each of the four previous halvings preceded significant price appreciation in the following 12–18 months. Past performance is not indicative of future results.'
 
 function HalvingCountdown({ blockHeight }) {
-  const [secsLeft, setSecsLeft] = useState(null)
+  // Anchor the countdown to a wall-clock deadline and tick `now`, rather than
+  // decrementing a counter once a second. Browsers throttle timers in
+  // background tabs, so a decrementing counter drifts further behind real time
+  // the longer the tab is hidden; deriving from a deadline stays accurate.
+  const [deadline, setDeadline] = useState(null)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (blockHeight == null) return
-    setSecsLeft(Math.max(0, blocksToNextHalving(blockHeight)) * 10 * 60)
+    const secs = Math.max(0, blocksToNextHalving(blockHeight)) * 10 * 60
+    // Re-anchoring to a new chain tip is a genuine external-system sync: there
+    // is no pure render-time expression for "10 minutes per remaining block,
+    // measured from the moment we observed this height".
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDeadline(Date.now() + secs * 1000)
   }, [blockHeight])
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setSecsLeft(prev => prev != null ? Math.max(0, prev - 1) : prev)
-    }, 1000)
+    const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  const secsLeft = deadline != null ? Math.max(0, Math.round((deadline - now) / 1000)) : null
 
   const blocksRemaining = blockHeight != null ? Math.max(0, blocksToNextHalving(blockHeight)) : null
   const epochPct        = blockHeight != null ? epochPercentage(blockHeight) : null
   const days  = secsLeft != null ? Math.floor(secsLeft / 86400) : null
   const hours = secsLeft != null ? Math.floor((secsLeft % 86400) / 3600) : null
   const mins  = secsLeft != null ? Math.floor((secsLeft % 3600) / 60) : null
-  const estStr = secsLeft != null
-    ? new Date(Date.now() + secsLeft * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const estStr = deadline != null
+    ? new Date(deadline).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : null
 
   const epochBarContent = epochPct != null ? (
@@ -737,10 +728,17 @@ function blockTimeColors(mins) {
 }
 
 function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading }) {
+  // Tick once a minute so "N min ago" stays current without a re-fetch.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
   const colors = blockTimeColors(avgBlockMins)
   const lastBlockMinsAgo = lastBlockTs != null
-    ? Math.max(0, Math.floor((Date.now() / 1000 - lastBlockTs) / 60))
+    ? Math.max(0, Math.floor((now / 1000 - lastBlockTs) / 60))
     : null
 
   return (
@@ -1396,6 +1394,11 @@ export default function App() {
     // Cancel any pending debounce or retry timer
     clearTimeout(debounceRef.current)
     clearTimeout(retryRef.current)
+    // Clear any stale fetch error as a new fetch begins. This effect
+    // synchronises with an external system (the chart API), and the reset has
+    // to apply on every path below, so it cannot move into the cache-hit or
+    // success branches.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChartError(null)
 
     // Serve immediately from cache if available

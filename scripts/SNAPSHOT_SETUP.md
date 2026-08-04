@@ -59,8 +59,8 @@ npm install better-sqlite3
 
 ```bash
 mkdir -p /opt/btcvc/scripts
-# SCP from your Mac:
-# scp /Users/oliryan/Documents/Projects/bitcoin-vibe-check/scripts/snapshot.js root@<container-ip>:/opt/btcvc/scripts/
+# SCP from your local machine, run from the repo root:
+# scp scripts/snapshot.js root@<container-ip>:/opt/btcvc/scripts/
 
 cd /opt/btcvc
 npm init -y
