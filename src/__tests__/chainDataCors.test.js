@@ -45,4 +45,28 @@ describe('resolveAllowedOrigin', () => {
   it('returns null for a malformed Origin', () => {
     expect(resolveAllowedOrigin('not-a-url')).toBeNull()
   })
+
+  // Anyone can deploy to vercel.app for free, so matching the bare suffix would
+  // have let any Vercel-hosted page proxy through this route and burn the
+  // 15 req/day BGeometrics quota — the exact hole the allowlist exists to close.
+  it('rejects Vercel deployments belonging to someone else', () => {
+    expect(resolveAllowedOrigin('https://evil-app.vercel.app')).toBeNull()
+    expect(resolveAllowedOrigin('https://someone-elses-projects.vercel.app')).toBeNull()
+    expect(resolveAllowedOrigin('https://bitcoin-vibe-check-attacker-projects.vercel.app')).toBeNull()
+  })
+
+  it('allows the legacy bitcoin-dashboard-neon alias', () => {
+    expect(resolveAllowedOrigin('https://bitcoin-dashboard-neon.vercel.app'))
+      .toBe('https://bitcoin-dashboard-neon.vercel.app')
+  })
+
+  it('allows every shape of this project’s own preview URL', () => {
+    for (const origin of [
+      'https://bitcoin-vibe-check-fizzybreeze-projects.vercel.app',
+      'https://bitcoin-vibe-check-git-main-fizzybreeze-projects.vercel.app',
+      'https://bitcoin-vibe-check-n2di9u65l-fizzybreeze-projects.vercel.app',
+    ]) {
+      expect(resolveAllowedOrigin(origin)).toBe(origin)
+    }
+  })
 })
