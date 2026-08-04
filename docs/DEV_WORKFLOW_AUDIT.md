@@ -1,7 +1,7 @@
 # Development Workflow Audit — Optimising for Claude-Based Mobile Development
 
 **Date:** 2026-08-04
-**Repo:** `fizzybreeze/bitcoin-vibe-check` (public)
+**Repo:** `fizzybreeze/bitcoin-vibe-check` (private)
 **Stack:** Vite 8 + React 19 → Vercel · Supabase (Postgres 17) · GitHub
 **Goal:** Continuous development and continuous integration driven from a mobile phone.
 
@@ -53,7 +53,10 @@ Why this is genuinely exploitable, not theoretical:
 
 - `src/lib/supabase.js` reads `VITE_SUPABASE_ANON_KEY` — a `VITE_`-prefixed variable, so it is
   **compiled into the public JavaScript bundle** by design. Anyone can read it from the deployed site.
-- The repo is **public**, so the project URL and table shape are trivially discoverable.
+- The **deployed site is public**, and that is all an attacker needs. Opening devtools on
+  bitcoinvibecheck.com yields the project URL, the anon key, and — from the `.from('donors')`
+  call in the bundle — the table name. The repo itself is private, but that protects nothing
+  here: the credentials are in the shipped JavaScript, not in the source tree.
 - With RLS off, the anon key grants full `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `donors`.
 
 So today, anyone can read donor names awaiting approval, insert arbitrary content that will appear
@@ -337,8 +340,10 @@ artifact with screenshots, rather than needing a laptop to reproduce.
 Also change `playwright.config.js`: `reuseExistingServer: !process.env.CI`. Reusing a server in CI
 hides port conflicts and produces confusing failures.
 
-**Your repo is public, so GitHub Actions minutes are free and unlimited.** There is no cost
-argument against any of this.
+**Cost.** The repo is private, so Actions minutes are metered: 2,000/month on Free, 3,000 on Pro.
+The two workflows cost roughly 1.5 min (CI) + 3 min (E2E) per PR run, so even at 30 PRs a month
+you are around 135 minutes — comfortably inside the free allowance. The `concurrency` blocks
+cancel superseded runs, which is what stops a rapid push-push-push sequence from burning it.
 
 ### 4.3 Branch protection on `main`
 

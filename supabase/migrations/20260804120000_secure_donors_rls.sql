@@ -3,7 +3,8 @@
 -- Context: a SELECT policy ("Allow public read of approved donors") already
 -- existed on this table, but RLS was never enabled — so the policy was inert
 -- and the table was fully readable and writable by anyone holding the anon key,
--- which ships in the client bundle by design (VITE_ prefix) on a public repo.
+-- which ships in the client bundle by design (VITE_ prefix) and is therefore
+-- readable by anyone who opens devtools on the deployed site.
 --
 -- Enabling RLS on its own would have broken donor submissions, because no
 -- INSERT policy existed while the app inserts with the anon key. Both changes
