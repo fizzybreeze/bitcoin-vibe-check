@@ -1,0 +1,62 @@
+name: Production Smoke
+
+# Every other gate verifies the code. This one verifies the deployed site —
+# real upstreams, no mocks, from a US-hosted runner, which is the exact
+# vantage point that would have caught #10 (Binance 451ing US visitors)
+# automatically instead of via a hand-run VPN test.
+on:
+  schedule:
+    # Daily, not hourly: BGeometrics' free tier is 15 req/day and /api/chain-data
+    # is CDN-cached for 24h, so this costs at most one upstream call regardless
+    # of cadence — daily is just the size this needs, not a rate-limit workaround.
+    - cron: '43 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke test production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache browsers
+        uses: actions/cache@v6
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run smoke test against production
+        run: npm run test:smoke
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-report
+          path: playwright-report/
+          retention-days: 14
