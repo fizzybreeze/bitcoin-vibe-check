@@ -5,16 +5,16 @@ one row into the Supabase `metric_snapshots` table. It runs on GitHub Actions
 (`.github/workflows/snapshot.yml`) at 06:17 UTC, and can be triggered by hand
 from the Actions tab — including from the GitHub mobile app.
 
-> **This replaces the previous setup**, which ran on a Proxmox LXC container on
-> a home LAN and wrote to a SQLite file at `~/btcvc/metrics.db`. That
-> arrangement could not be observed or restarted from a phone, had no alerting
-> if it silently stopped, and — because the data never left the LAN — could
-> never be read by the deployed app. It also depended on `better-sqlite3`, a
-> native module that was never actually a dependency of this project.
+> **This replaced an earlier setup** that ran on a Proxmox LXC container on a
+> home LAN and wrote to a SQLite file at `~/btcvc/metrics.db`. That arrangement
+> could not be observed or restarted from a phone, had no alerting if it
+> silently stopped, and — because the data never left the LAN — could never be
+> read by the deployed app. It also depended on `better-sqlite3`, a native
+> module that was never actually a dependency of this project.
 >
-> Nothing needs to be decommissioned urgently, but the container can be
-> switched off once you have confirmed a green run here. The old SQLite file is
-> not migrated; the new series starts from the first Actions run.
+> The container can be switched off once you have confirmed a green run here,
+> if it has not been already. The old SQLite file was not migrated; the series
+> in Supabase starts from the first Actions run.
 
 ---
 
@@ -64,6 +64,23 @@ The `metrics` object covers price and market data (price, volume, market cap,
 Mayer Multiple, Power Law fair value, MVRV), fee tiers, network state (block
 height, difficulty change, hash rate and its 30-day trend), mempool size, and
 Lightning capacity/channels/nodes, plus the Fear & Greed value and label.
+
+## The 200-day series
+
+The 200-day MA and the Mayer Multiple derived from it come from **Kraken** OHLC
+candles, via `scripts/lib/ohlc.js` — a thin wrapper over the app's own
+`src/lib/ohlc.js`, so the job and the browser chart share one implementation.
+
+This is not incidental. The job originally read Binance, which answers US
+jurisdictions with HTTP 451 — and Actions runners are US-hosted, so the fetch
+failed on **every single run** while the job still reported success, silently
+writing a null 200-day MA into the permanent series. Do not point it back at
+Binance.
+
+The wrapper differs from the browser's use in two deliberate ways: it returns
+`null` rather than throwing when Kraken reports an error, and it refuses to
+average a series shorter than 200 candles. Both exist because this output is
+persisted permanently — a wrong number is worse than a missing one.
 
 ## Failure behaviour
 

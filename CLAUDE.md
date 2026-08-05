@@ -4,8 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Version history
 
+> ⚠️ `package.json` still reads `"version": "1.4.1"` — it was not bumped for
+> v1.4.2, v1.4.3 or v1.4.4. This table is the accurate record. Either bump
+> `package.json` to `1.4.4` and keep it in step from now on, or drop the field's
+> pretence of meaning anything; right now it is a third source of truth that
+> disagrees with the other two.
+
 | Version | Changes |
 |---|---|
+| v1.4.5 | Docs only, no behaviour change. `README.md` brought up to date: corrected the Node prerequisite (24.x, not 18+), the chart cache description (keyed by range — the chart is USD-only) and the service-worker claim (mempool.space and alternative.me only, not "all API calls"); added `BGEOMETRICS_API_KEY` to the env table; added project-structure, development-workflow, deployment, data/scheduled-jobs and docs-index sections. `docs/DEV_WORKFLOW_AUDIT.md` marked as a historical record with a status table. `scripts/SNAPSHOT_SETUP.md` gained a section on why the 200-day series reads Kraken |
 | v1.4.4 | **US fix (#10).** The browser chart still called Binance, which answers US jurisdictions with HTTP 451 — so US visitors saw no price chart, no 200-day MA and no Mayer Multiple. Confirmed by VPN test. `fetchChart` and the 200-day series now use Kraken OHLC. Kraken primitives consolidated into `src/lib/ohlc.js`, with `scripts/lib/ohlc.js` (from #9) reduced to a thin wrapper so both callers share one implementation. Vestigial CoinGecko and TxLookup e2e fixtures removed |
 | v1.4.3 | Infrastructure. Daily metrics snapshot moved off a home Proxmox box and local SQLite to GitHub Actions + a new Supabase `metric_snapshots` table (drops the unlisted `better-sqlite3` dependency; the data is now queryable by the app); existing schema captured as a baseline migration; `vercel.json` committed with security and caching headers; `api/chain-data.js` CORS narrowed from `*` to this project's own origins; Dependabot and a PR template added |
 | v1.4.2 | Tooling, not app behaviour. Supabase RLS enabled on `donors` with a matching INSERT policy (schema now tracked in `supabase/migrations/`); lint reduced from 16 errors to 0; dead `OnChainSignalsCard` and `FngArc` removed; GitHub Actions CI + E2E workflows added with `main` protected; e2e suite made hermetic (17/17, no network); Node pinned to 24.x; `.claude/` set up with a SessionStart hook, permission allowlist and `/ship` + `/verify` commands; `.env.example` added and this file corrected |
@@ -82,6 +89,10 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/__tests__/` · `src/**/__tests__/` | Vitest unit tests |
 | `e2e/` | Playwright dashboard smoke tests (fully mocked — no network) |
 | `.claude/hooks/session-start.sh` | Installs deps + resolves a chromium for remote sessions |
+| `.claude/commands/ship.md` · `verify.md` | `/ship` and `/verify` — the mobile workflow commands |
+| `vite.config.js` | Vite plugins and the `vite-plugin-pwa` service-worker config (precache + runtime caching) |
+| `README.md` | Public-facing: features, data sources, local setup, workflow, deployment |
+| `docs/DEV_WORKFLOW_AUDIT.md` | The 2026-08-04 audit that produced the current CI/security setup. **Historical** — carries a status banner saying what has since changed |
 
 ### Data flow
 
@@ -100,6 +111,18 @@ Prices are then kept live via a **Kraken WebSocket v2** connection (`wss://ws.kr
 Chart data (`fetchChart`) comes from **Kraken OHLC** via `src/lib/ohlc.js`, with the interval derived from the selected range (1D → 60min/24 candles, 7D → 240min/42, 1M → 1440min/30, 1Y → 1440min/365). Kraken has no `limit` parameter and returns up to 720 candles, so the app slices client-side. Fetched charts are memoised for the session in a `useRef(new Map())` keyed by range, and the other three ranges are prefetched in the background once the active one loads.
 
 > **CoinGecko is no longer used.** It was replaced by CoinPaprika (market data) and Kraken (charts). The vestigial CoinGecko mocks were removed from `e2e/dashboard.spec.js`.
+>
+> Two references survive and are **dead config, not behaviour** — neither causes
+> a request, because nothing calls `api.coingecko.com` any more:
+>
+> - `vite.config.js` still registers a Workbox `runtimeCaching` rule for
+>   `api.coingecko.com`. The service worker therefore caches a host the app
+>   never hits, while **CoinPaprika and Kraken are not runtime-cached at all** —
+>   only mempool.space and alternative.me are. If offline resilience for the
+>   price and chart data ever matters, that is the gap to close.
+> - `ci.yml` passes `VITE_COINGECKO_API_KEY` into the build step.
+>
+> Both can be deleted whenever someone is in the area.
 
 ### Components
 
