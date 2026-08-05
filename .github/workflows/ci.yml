@@ -36,6 +36,5 @@ jobs:
           # Build-time only. The app degrades gracefully when these are absent
           # (see src/lib/supabase.js), so CI does not need real credentials —
           # this job proves the bundle compiles, not that the APIs respond.
-          VITE_COINGECKO_API_KEY: ${{ secrets.VITE_COINGECKO_API_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}

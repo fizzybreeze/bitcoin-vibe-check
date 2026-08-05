@@ -91,7 +91,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Progressive Web App
 - Fully installable on **iOS, Android, and desktop** via the browser's native install prompt
-- **Service worker** (Workbox via `vite-plugin-pwa`) precaches the built assets and applies NetworkFirst runtime caching to the mempool.space and Alternative.me APIs
+- **Service worker** (Workbox via `vite-plugin-pwa`) precaches the built assets and applies NetworkFirst runtime caching to every data source listed below — the network answer always wins when it arrives, and the cache is consulted only when a request fails or times out
 - The last-fetched dashboard state is mirrored to `localStorage` (`btc-cache`), so a reload — online or off — paints real numbers immediately instead of skeletons
 
 ### Newsletter
@@ -144,6 +144,8 @@ Every source is keyless except BGeometrics, which is proxied server-side so the 
 > ⚠️ **Binance must not be reintroduced anywhere.** It answers US jurisdictions with HTTP 451, which broke the snapshot job and then the browser chart — US visitors saw no chart, no 200-day MA and no Mayer Multiple. Kraken is the replacement, and `src/lib/ohlc.js` is the single shared implementation.
 
 > CoinGecko is no longer used. It was replaced by CoinPaprika (market data) and Kraken (charts), and `VITE_COINGECKO_API_KEY` is read by no code.
+
+The service worker keeps one NetworkFirst cache per source above. `src/__tests__/pwaRuntimeCaching.test.js` asserts that correspondence, so adding a data source without giving it a cache — or retiring one and leaving its rule behind — fails the unit suite rather than quietly degrading the offline experience.
 
 ---
 
