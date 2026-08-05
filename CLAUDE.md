@@ -45,6 +45,13 @@ Rules that hold regardless:
 
 - **Never push to `main`.** It is protected; open a PR from a `claude/*` branch.
   CI (`Lint, test, build` + `Playwright (chromium)`) must pass before merge.
+- **Re-check your base before opening a PR.** A long session can outlive the
+  `main` it branched from. Run `git fetch origin main && git log --oneline
+  HEAD..origin/main`; if that prints anything, rebase and re-run the gates — a
+  clean rebase does not mean the combination still works. Then check
+  `git diff --stat origin/main HEAD`: a file showing **pure deletions you did not
+  intend** means you are about to revert merged work. PR #12 nearly reverted six
+  PRs this way, with auto-merge already enabled.
 - **Every behaviour change needs a test.** The fast unit suite is what makes it
   safe to review on a phone without reading the whole diff.
 - **Never silence a gate to go green.** Deleting an assertion or adding a blanket

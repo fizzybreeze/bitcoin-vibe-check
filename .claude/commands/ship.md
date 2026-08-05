@@ -33,16 +33,52 @@ attention, not yours.
    `npm run lint`, `npm test`, `npm run build`, `npm run test:e2e`.
    Do not push red. Do not report success you have not observed.
 
-6. **Commit and push** to the branch with a descriptive message.
+6. **Commit** to the branch with a descriptive message. Do not push yet — step 7
+   may rewrite this commit, and rebasing before the first push avoids ever
+   needing a force-push.
 
-7. **Open a PR into `main`.** The body should state what changed, why, and how
-   it was verified — with the real numbers from step 5.
+7. **Re-check the base branch.** Step 2 branched from `main`; that may have been
+   a long time ago.
+   ```
+   git fetch origin main && git log --oneline HEAD..origin/main
+   ```
+   If that prints anything, `main` has moved. Rebase onto it and **re-run all
+   four gates** — a clean rebase only means the *text* merged, not that the
+   combination still works.
+   ```
+   git rebase origin/main
+   ```
 
-8. **Enable auto-merge** so it lands by itself once CI passes.
+8. **Sanity-check the diff before opening anything.**
+   ```
+   git diff --stat origin/main HEAD
+   ```
+   Every file listed should be one this change meant to touch. A file showing
+   **pure deletions that you did not intend** is the signature of a stale base —
+   you are about to revert someone else's merged work. Stop and re-read the
+   diff; do not open the PR to "see what CI says".
 
-9. **Report back in three lines**: what you changed, the gate results, and the
-   PR link. If anything is genuinely uncertain or you made a judgement call the
-   user might disagree with, say so in a fourth line — do not bury it.
+9. **Push** to the branch.
+
+10. **Open a PR into `main`.** The body should state what changed, why, and how
+    it was verified — with the real numbers from step 5.
+
+11. **Enable auto-merge** so it lands by itself once CI passes.
+
+12. **Report back in three lines**: what you changed, the gate results, and the
+    PR link. If anything is genuinely uncertain or you made a judgement call the
+    user might disagree with, say so in a fourth line — do not bury it.
+
+## Why steps 7 and 8 exist
+
+PR #12 branched from `main`, then ran long enough that six other PRs merged
+underneath it. It would have deleted `vercel.json`, `dependabot.yml`,
+`claude.yml`, the PR template and `scripts/lib/ohlc.js`, and undone 19
+dependency updates — and auto-merge was already enabled, so it could have done
+that unattended. It was caught by hand.
+
+`git diff --stat origin/main HEAD` is what made it obvious once someone thought
+to run it. Run it every time; it costs a second.
 
 ## If a gate will not go green
 
