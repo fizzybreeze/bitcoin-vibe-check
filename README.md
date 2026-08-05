@@ -257,6 +257,7 @@ All four gates must pass before pushing. The `/verify` slash command runs them i
 Rules that hold regardless:
 
 - **Never push to `main`.** Open a PR from a `claude/*` branch; CI must pass before merge.
+- **Re-check your base before opening a PR.** A long session can outlive the `main` it branched from — merge or rebase, then re-run the gates, and check `git diff --stat origin/main HEAD` for files showing pure deletions you did not intend.
 - **Every behaviour change needs a test.** The fast unit suite is what makes a change reviewable on a phone without reading the whole diff.
 - **Never silence a gate to go green.** A targeted `eslint-disable` is acceptable only when the rule is genuinely wrong there, and must carry a comment explaining why.
 - **Any database change is a migration** in `supabase/migrations/`, never an ad-hoc dashboard edit.
