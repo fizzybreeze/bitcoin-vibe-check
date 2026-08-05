@@ -99,6 +99,7 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `vite.config.js` | Vite plugins and the `vite-plugin-pwa` service-worker config (precache + runtime caching) |
 | `README.md` | Public-facing: features, data sources, local setup, workflow, deployment |
 | `docs/DEV_WORKFLOW_AUDIT.md` | The 2026-08-04 audit that produced the current CI/security setup. **Historical** — carries a status banner saying what has since changed |
+| `docs/ROADMAP.md` | Product roadmap — forward-looking intent, plus an explicit not-doing list. **Not a commitment.** When an item ships it leaves the roadmap and gains a version-history row above |
 
 ### Data flow
 
