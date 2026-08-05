@@ -1,9 +1,55 @@
 # Development Workflow Audit — Optimising for Claude-Based Mobile Development
 
 **Date:** 2026-08-04
-**Repo:** `fizzybreeze/bitcoin-vibe-check` (private)
+**Repo:** `fizzybreeze/bitcoin-vibe-check`
 **Stack:** Vite 8 + React 19 → Vercel · Supabase (Postgres 17) · GitHub
 **Goal:** Continuous development and continuous integration driven from a mobile phone.
+
+---
+
+> ## 📌 Status: historical record — mostly implemented
+>
+> This is a **snapshot of the repo as it stood on 2026-08-04**, kept because it
+> explains *why* the current CI, security and mobile-development setup looks the
+> way it does. It is not a description of the repo today. Findings below are
+> written in the present tense of that date; the table says where each one
+> actually landed.
+>
+> Two facts in the body are now stale and are **not** edited in place, so the
+> record stays intact:
+>
+> - **The repo was private then; it is public now.** The §4.2 cost analysis
+>   ("Actions minutes are metered… ~135 minutes at 30 PRs a month") no longer
+>   applies — Actions minutes are free for public repositories. What the change
+>   *does* add is the `claude.yml` write-access requirement described in
+>   `CLAUDE.md`, which is what keeps an `@claude` trigger safe from strangers.
+> - **Node was pinned to 24.x, not 22.** §4.1, §4.2, §5.1 and §5.2 all recommend
+>   22; the repo standardised on 24.x instead — `engines` in `package.json`, and
+>   both workflows read that via `node-version-file` so there is one source of
+>   truth rather than three copies.
+>
+> | Finding (§2) | Status |
+> |---|---|
+> | 🔴 `donors` RLS disabled | ✅ Fixed — `20260804120000_secure_donors_rls.sql` |
+> | 🟠 16 lint errors | ✅ Fixed — lint is clean and is a required check |
+> | 🟠 Zero CI, zero PRs, no branch protection | ✅ Fixed — `ci.yml` + `e2e.yml`, `main` protected, all work via PR |
+> | 🟠 Snapshot job on a home Proxmox box | ✅ Fixed — `snapshot.yml` → Supabase `metric_snapshots` |
+> | 🟡 E2E not portable / not hermetic | ✅ Fixed — suite is fully mocked and runs in CI |
+> | 🟡 Phantom tests for `OnChainSignalsCard` | ✅ Fixed — component and its tests deleted |
+> | 🟡 `main` / `dev` divergence | ✅ Fixed — trunk-based on `main`, `dev` gone |
+> | 🟡 Undocumented env vars | ✅ Fixed — `.env.example`, plus tables in `CLAUDE.md` and `README.md` |
+> | 🔵 Repo hygiene (artifacts, Node pin, `vercel.json`, migrations, CLAUDE.md drift) | ✅ Fixed — see the notes above on the Node version |
+>
+> Recommendations from §6 also landed: `.claude/settings.json`, the SessionStart
+> hook, and the `/ship` and `/verify` slash commands. `/preview` and `/fixci`
+> (§6.4) were **not** written — they remain the obvious next additions. The
+> `name` length constraint suggested in §2 shipped with the RLS migration as
+> `donors_name_length` (2–50 characters).
+>
+> Two things arrived after this audit and so are absent below: the Binance
+> geo-block that broke the snapshot job and then the browser chart (both now on
+> Kraken via `src/lib/ohlc.js`), and the retirement of the orphaned
+> `donor-email-worker` pg_cron job.
 
 ---
 

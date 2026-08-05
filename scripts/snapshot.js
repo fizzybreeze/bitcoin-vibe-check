@@ -121,7 +121,7 @@ async function main() {
   const athUsd        = parseFloat(paprika.ath_price)        || null
   const dominance     = paprikaGlobalRaw?.bitcoin_dominance_percentage ?? null
 
-  // Parse Binance 200d
+  // Parse Kraken 200d
   const ma200         = calc200DMA(extractKrakenOhlc(krakenOhlcRaw))
   const mayerMultiple = calcMayerMultiple(priceUsd, ma200)
   const powerLawFv    = calcPowerLawFairValue()

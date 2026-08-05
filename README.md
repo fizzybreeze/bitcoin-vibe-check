@@ -4,6 +4,8 @@
 
 A real-time Bitcoin dashboard that surfaces everything you need to understand the current state of the network — price, sentiment, fees, mempool, halving countdown, and more — in a single dark-themed page. Built for people who want a fast, information-dense overview without navigating multiple block explorers or exchanges.
 
+🔗 **Live at [bitcoinvibecheck.com](https://bitcoinvibecheck.com)** — no login, no account, no wallet connection.
+
 ---
 
 ## Features
@@ -24,7 +26,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Network Pulse card** — Hash Rate and Difficulty side by side, with a full-width difficulty adjustment bar below
 - **Hash rate** — current network hash rate in EH/s with a **30-day trend indicator** (▲/▼ percentage)
 - **Mining difficulty** — current epoch change percentage, time until next adjustment, and textual interpretation
-- **Recent Blocks feed** — live list of the five most recent blocks with transaction count, total fees, and average fee rate; replaces the Whale Watch card
+- **Recent Blocks feed** — live list of the five most recent blocks with transaction count, total fees, and average fee rate
 - **Network Heartbeat merged into Recent Blocks** on desktop — block height, average block time, and last-block breathing dot appear as a header above the block list on large screens
 - **Average block time** — colour-coded green/amber/red relative to the 10-minute target
 - **Current block height** with animated breathing dot showing the time since the last block
@@ -41,7 +43,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **200-Day Moving Average** — computed from the last 200 daily closes; shows current price relative to the trend
 - **Mayer Multiple** — ratio of current price to the 200-day MA; readings above 2.4 have historically indicated overheating
 - Displayed in a **2×2 grid layout** on tablet and desktop, single column on mobile
-- MVRV data is fetched via a serverless proxy from BGeometrics; the other three metrics are derived from Kraken daily OHLC data
+- MVRV is fetched via a serverless proxy from BGeometrics; the other three are derived from Kraken daily OHLC data
 
 ### Price Chart
 - Interactive area chart with overlaid volume bars
@@ -51,7 +53,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Chart locked to USD** with a clear "Chart in USD" label
 - **Volume bars show Kraken BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
-- Chart data is cached per range/currency combination for the session to avoid redundant API requests
+- Chart data is memoised per range for the session, and the three inactive ranges are prefetched in the background once the active one loads, so switching range is instant
 
 ### Network Fees & Mempool
 - **Fee tiers** — Slow (~1 hour), Medium (~30 min), and Fast (~10 min) in sat/vB
@@ -67,11 +69,16 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Browser **push notification** support with a one-time permission request
 - Active alerts shown via an indicator on the header button; triggered alerts are tracked separately
 - Alert panel accessible from the header on any screen size
+- Alerts persist in `localStorage` (`btc-vibe-price-alerts`)
+
+### Social Share
+- **Share button** in the header opens a card picker, then renders the chosen card off-screen and captures it as an image
+- Eight shareable cards: BTC Price, Market Sentiment, 24h Volume, Network Health, Next Halving, Recent Blocks, Network Fees, and Cycle Indicators
+- `html2canvas` is lazy-loaded on first use, so the ~199 kB dependency stays out of the main bundle
 
 ### Header & Navigation
 - **Live indicator** showing whether the WebSocket price feed is connected, with fallback to last-updated timestamp
 - **Currency selector** — always visible
-- **Share button** — generates a shareable snapshot card for the current dashboard state
 - **Sound toggle** and **Price Alerts button** in the header
 
 ### Sound Mode
@@ -80,28 +87,25 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
   - Deep thud (80 Hz) when a new block is found
   - High tone (880 Hz) on price increases, lower tone (440 Hz) on decreases
   - Price ticks are debounced to a maximum of one per second
-- Preference persisted in `localStorage`; AudioContext is only created after the first user interaction to comply with browser autoplay policy
+- Preference persisted in `localStorage` (`btc-vibe-sound-enabled`); AudioContext is only created after the first user interaction to comply with browser autoplay policy
 
 ### Progressive Web App
 - Fully installable on **iOS, Android, and desktop** via the browser's native install prompt
-- **Service worker** (Workbox) with NetworkFirst caching for all API calls and CacheFirst for static assets
-- The last-fetched dashboard state is shown when offline — no blank screen
+- **Service worker** (Workbox via `vite-plugin-pwa`) precaches the built assets and applies NetworkFirst runtime caching to every data source listed below — the network answer always wins when it arrives, and the cache is consulted only when a request fails or times out
+- The last-fetched dashboard state is mirrored to `localStorage` (`btc-cache`), so a reload — online or off — paints real numbers immediately instead of skeletons
 
 ### Newsletter
-
 - **Satoshi's Weekly Brief** — Beehiiv-powered newsletter signup embedded in the sidebar and surfaced as a modal 5 seconds after a first visit
 - Modal is shown once per browser (suppressed via `localStorage`); auto-dismisses after a successful subscribe event
 
 ### Lightning Donations & Supporters
-
 - **Donate via Strike** — one-click link to `strike.me/fizzybreeze` for Lightning payments
 - After paying, visitors submit their name or handle; entries are stored in **Supabase** with `approved: false` and go live within 24 hours once approved
 - Approved donors are displayed in a scrolling ticker on desktop and as pill badges on mobile
 
 ### Quality of Life
-- **Satoshi quote rotator** in the footer — eight quotes cycling every 12 seconds with a fade transition
-- All KPI data is written to `localStorage` so the last known values appear immediately on subsequent loads rather than showing skeletons for the full fetch duration
-- Fully **responsive** — single-column layout on mobile, optimised **3-column grid on desktop** with Network Pulse spanning the full column height
+- **Satoshi quote rotator** in the footer — eight quotes cycling every 12 seconds with a fade transition, and a small easter egg once you have seen them all
+- Fully **responsive** — single-column layout on mobile, optimised **3-column grid on desktop** organised by data category
 - No login, no account required
 
 ---
@@ -117,21 +121,57 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app) + [Workbox](https://developer.chrome.com/docs/workbox) |
 | Unit tests | [Vitest](https://vitest.dev) + [Testing Library](https://testing-library.com) |
 | E2E tests | [Playwright](https://playwright.dev) |
-| Backend | [Supabase](https://supabase.com) (donor name storage) |
+| Hosting | [Vercel](https://vercel.com) — static site plus one serverless function |
+| Database | [Supabase](https://supabase.com) Postgres (donor names, daily metric snapshots) |
+| CI / cron | [GitHub Actions](https://docs.github.com/actions) |
 | Newsletter | [Beehiiv](https://beehiiv.com) (embedded signup form) |
 
 ---
 
 ## Data Sources
 
+Every source is keyless except BGeometrics, which is proxied server-side so the key never reaches the browser.
+
 | Source | What it provides |
 |---|---|
 | [CoinPaprika API](https://api.coinpaprika.com) | BTC price, 24h volume, market cap, 24h change, ATH, BTC dominance |
-| [Kraken API](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data) | Historical OHLC data for the price chart and 200-day MA / Mayer Multiple calculations. Replaced Binance, which blocks US IP addresses |
-| [BGeometrics](https://bgeometrics.com) (via serverless proxy) | MVRV Ratio |
-| [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
-| [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Crypto Fear & Greed index score and 30-day history |
+| [Kraken REST API](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data) | OHLC candles for the price chart and the 200-day MA / Mayer Multiple, plus the ticker that seeds prices before the socket connects |
 | [Kraken WebSocket v2](https://docs.kraken.com/websockets-v2/) | Real-time BTC ticker in USD, GBP, EUR, CAD, and CHF |
+| [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
+| [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed index — one `?limit=30` call serves both the current value and the 30-day sparkline |
+| `/api/chain-data` → [BGeometrics](https://bgeometrics.com) | MVRV Ratio, via this project's own serverless route (24h CDN cache; free tier is 15 requests/day) |
+
+> ⚠️ **Binance must not be reintroduced anywhere.** It answers US jurisdictions with HTTP 451, which broke the snapshot job and then the browser chart — US visitors saw no chart, no 200-day MA and no Mayer Multiple. Kraken is the replacement, and `src/lib/ohlc.js` is the single shared implementation.
+
+> CoinGecko is no longer used. It was replaced by CoinPaprika (market data) and Kraken (charts), and `VITE_COINGECKO_API_KEY` is read by no code.
+
+The service worker keeps one NetworkFirst cache per source above. `src/__tests__/pwaRuntimeCaching.test.js` asserts that correspondence, so adding a data source without giving it a cache — or retiring one and leaving its rule behind — fails the unit suite rather than quietly degrading the offline experience.
+
+---
+
+## Project Structure
+
+```
+src/
+  App.jsx                    most components, plus all data fetching and state orchestration
+  utils.js                   pure helpers — formatting, halving math, dominance labels
+  lib/
+    calculations.js          ATH distance, sats per fiat, supply issued, sentiment, hash trend
+    ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing
+    supabase.js              Supabase client; returns null when env vars are absent
+  utils/cycleCalculations.js Power Law fair value, Mayer Multiple
+  hooks/                     usePersistedState, usePriceAlerts, useShareImage
+  components/                CycleIndicatorsCard, share flow, price alerts, tooltip, newsletter
+  __tests__/ · **/__tests__/ Vitest unit tests
+api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
+scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
+supabase/migrations/         schema as code — every DB change belongs here
+e2e/                         Playwright smoke tests (fully mocked, no network)
+.github/workflows/           ci · e2e · snapshot · claude
+vercel.json                  deploy config plus security and caching headers
+```
+
+`src/App.jsx` is around 2,000 lines and holds most of the app. When you touch a card in it, consider extracting that card into `src/components/` — smaller diffs are what make review on a phone practical.
 
 ---
 
@@ -139,8 +179,8 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Prerequisites
 
-- **Node.js** 18 or later
-- **npm** 9 or later
+- **Node.js 24.x** — pinned via `engines` in `package.json`, and the same version is used by Vercel and CI
+- **npm** 10 or later (ships with Node 24)
 
 ### Installation
 
@@ -149,6 +189,8 @@ git clone https://github.com/fizzybreeze/bitcoin-vibe-check.git
 cd bitcoin-vibe-check
 npm install
 ```
+
+The app runs without any environment variables — every dashboard data source is public. Only donations and MVRV need configuration; see [Environment Variables](#environment-variables).
 
 ### Development
 
@@ -167,39 +209,114 @@ npm run preview
 
 Builds to `dist/` and serves it locally. The service worker is active in preview mode and the app can be installed from the browser.
 
-### Linting
+### Linting and tests
 
 ```bash
-npm run lint
-```
-
-### Tests
-
-```bash
+npm run lint       # ESLint
 npm test           # unit tests (Vitest)
-npm run test:e2e   # end-to-end tests (Playwright)
+npm run test:e2e   # end-to-end tests (Playwright, chromium)
 ```
+
+The e2e suite is hermetic — all APIs are mocked in `e2e/fixtures.js`, so it passes on a restricted network. It does need a chromium build: `npx playwright install --with-deps chromium`.
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
+Copy `.env.example` to `.env` and fill in what you need. `.env` is gitignored; this repository is public, so never commit real values.
+
+| Variable | Read by | Required for | Notes |
+|---|---|---|---|
+| `VITE_SUPABASE_URL` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
+| `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
+| `BGEOMETRICS_API_KEY` | `api/chain-data.js` | MVRV in Cycle Indicators | **Server-side only** — set it in Vercel, never with a `VITE_` prefix |
+
+> `VITE_`-prefixed variables are compiled into the client bundle by design and are readable by anyone who opens devtools on the deployed site. Only publishable/anon keys belong there — never a service-role key.
+
+> `src/lib/supabase.js` fails **soft**: `createClient` returns `null` when its two variables are missing, so the donation card silently stops working rather than throwing. Everything else on the dashboard keeps running.
+
+The snapshot job additionally needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as GitHub Actions secrets — see [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
+
+---
+
+## Development Workflow
+
+`main` is trunk and production, and it is protected. Work happens on short-lived `claude/*` branches that merge via pull request.
+
+### Definition of done
+
+All four gates must pass before pushing. The `/verify` slash command runs them in one go.
+
+| Gate | Expectation |
 |---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL — required for donor name submission and retrieval |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key — required for donor name submission and retrieval |
+| `npm run lint` | zero errors — the config is clean, so any error is new |
+| `npm test` | all green |
+| `npm run build` | succeeds |
+| `npm run test:e2e` | all green — required for any UI change |
 
-Create a `.env` file in the project root and add:
+Rules that hold regardless:
 
-```
-VITE_SUPABASE_URL=your_project_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
-```
+- **Never push to `main`.** Open a PR from a `claude/*` branch; CI must pass before merge.
+- **Re-check your base before opening a PR.** A long session can outlive the `main` it branched from — merge or rebase, then re-run the gates, and check `git diff --stat origin/main HEAD` for files showing pure deletions you did not intend.
+- **Every behaviour change needs a test.** The fast unit suite is what makes a change reviewable on a phone without reading the whole diff.
+- **Never silence a gate to go green.** A targeted `eslint-disable` is acceptable only when the rule is genuinely wrong there, and must carry a comment explaining why.
+- **Any database change is a migration** in `supabase/migrations/`, never an ad-hoc dashboard edit.
 
-The donor ticker and submission form will silently degrade if these are absent. All other dashboard data comes from public APIs with no authentication required.
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
+| `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
+| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots` |
+| `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
+
+`claude.yml` runs only for commenters with **write access** — the action checks repository permissions itself, which is what makes an `@claude` trigger safe on a public repo.
+
+Dependabot opens one grouped npm PR weekly and a monthly Actions PR; React and Vite majors are deliberately excluded.
+
+### Repo tooling for mobile sessions
+
+`.claude/` holds the setup that makes phone-driven development practical: a SessionStart hook that installs dependencies and resolves a chromium, a permission allowlist so routine commands do not re-prompt, and two slash commands — `/ship` (branch, implement, verify, push, open a PR with auto-merge) and `/verify` (run all four gates and report only failures).
+
+---
+
+## Deployment
+
+Vercel builds and deploys the app. `vercel.json` is committed so the configuration is reviewable in a PR rather than living as dashboard click-ops; it sets the framework and build command, security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), immutable caching for `/assets/*`, and `must-revalidate` for `/sw.js`.
+
+Every branch gets a preview URL. Merging to `main` deploys production to [bitcoinvibecheck.com](https://bitcoinvibecheck.com).
+
+The single serverless function, `api/chain-data.js`, proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier.
+
+---
+
+## Data & Scheduled Jobs
+
+Schema lives in `supabase/migrations/`. Both tables have RLS enabled.
+
+| Table | Purpose | Anonymous access |
+|---|---|---|
+| `donors` | Names submitted via the donation card | `SELECT` where `approved = true`; `INSERT` only with `approved = false`. No update or delete. |
+| `metric_snapshots` | One row per UTC day of dashboard metrics (`jsonb`) | `SELECT` only. Writes use the service role. |
+
+`scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. Nothing in the app reads the table yet; it exists so historical charting becomes possible. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
+
+Donor notifications come from the `new_donor_notification` trigger on `donors`, which POSTs to a Make.com webhook. That URL is a capability URL and is deliberately not committed — the baseline migration documents it with a placeholder.
+
+---
+
+## Further Reading
+
+| Document | What it covers |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, data flow, component map, version history — the working reference for anyone (human or agent) changing this code |
+| [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md) | Setting up and operating the daily metrics snapshot |
+| [`docs/DEV_WORKFLOW_AUDIT.md`](docs/DEV_WORKFLOW_AUDIT.md) | The August 2026 audit that produced the current CI, security and mobile-development setup — kept as a historical record |
+| [`.env.example`](.env.example) | Annotated list of every environment variable |
 
 ---
 
 ## Licence
 
-MIT
+[MIT](LICENSE)
