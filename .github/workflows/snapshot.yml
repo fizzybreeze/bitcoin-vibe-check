@@ -1,0 +1,37 @@
+name: Daily Snapshot
+
+on:
+  schedule:
+    # 06:00 UTC daily. Deliberately not on the hour boundary that every other
+    # scheduled job on GitHub uses, to avoid the busiest queue window.
+    - cron: '17 6 * * *'
+  # Lets you trigger a run by hand from the GitHub mobile app — the thing the
+  # old Proxmox cron could never do.
+  workflow_dispatch:
+
+# Never let two snapshot runs overlap; the later one wins.
+concurrency:
+  group: snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Capture metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - name: Capture snapshot
+        run: node scripts/snapshot.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BGEOMETRICS_API_KEY: ${{ secrets.BGEOMETRICS_API_KEY }}

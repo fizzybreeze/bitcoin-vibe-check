@@ -1,215 +1,91 @@
-# Daily Metrics Snapshot — Setup Guide
+# Daily Metrics Snapshot
 
-Runs `scripts/snapshot.js` once a day on a dedicated Proxmox LXC container.
-Appends one row of Bitcoin metrics to a SQLite database at `~/btcvc/metrics.db`.
+`scripts/snapshot.js` captures one row of Bitcoin metrics per day into the
+Supabase `metric_snapshots` table.
 
----
+It runs on **GitHub Actions** — see `.github/workflows/snapshot.yml`. There is
+nothing to install and no server to maintain.
 
-## Step 1 — Create the LXC container in Proxmox
-
-In the Proxmox web UI:
-
-1. Click **Create CT** (top right)
-2. Fill in the wizard:
-   - **Hostname**: `btcvc-snapshot`
-   - **Template**: Debian 12 (download it from the template list if you haven't already)
-   - **Disk**: 8 GB
-   - **CPU**: 1 core
-   - **RAM**: 512 MB (no swap needed)
-   - **Network**: DHCP on your LAN bridge
-3. Click **Finish**, then **Start**
-4. Click **Console** to get a shell, or SSH in once it boots
+> **Previously:** this job ran on a Proxmox LXC container on a home LAN, writing
+> to a SQLite file at `~/btcvc/metrics.db`. That setup could not be observed or
+> restarted from a phone, had no alerting, and — because the data sat on a home
+> network — the deployed app could never read it. It also depended on
+> `better-sqlite3`, a native module that was never actually a dependency of this
+> project. All of that is retired.
 
 ---
 
-## Step 2 — Install Node.js
+## Schedule
 
-Inside the container:
+| | |
+|---|---|
+| **Cron** | `17 6 * * *` — 06:17 UTC daily |
+| **Manual run** | Actions → Daily Snapshot → *Run workflow* (works from the GitHub mobile app) |
+| **Failures** | Show up in the Actions tab and email you, like any other workflow |
 
-```bash
-apt update && apt upgrade -y
+## Required secrets
 
-# Install Node.js 22 LTS via NodeSource
-apt install -y curl
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt install -y nodejs
+Set these under **Settings → Secrets and variables → Actions**:
 
-# Verify
-node -v   # should print v22.x.x
-npm -v
-```
+| Secret | Where to find it | Notes |
+|---|---|---|
+| `SUPABASE_URL` | Supabase → Project Settings → API | Same URL the app uses |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API | **Service role, not anon.** Writes bypass RLS by design |
+| `BGEOMETRICS_API_KEY` | BGeometrics dashboard | Optional — without it the MVRV fields are null |
 
----
+> ⚠️ The service role key must never appear in a `VITE_`-prefixed variable.
+> Those are compiled into the client bundle and readable by anyone on the site.
+> It belongs only in GitHub Actions secrets and Vercel server-side env vars.
 
-## Step 3 — Get the snapshot script onto the container
+The job **fails fast** if `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is
+missing, rather than collecting data and silently dropping it.
 
-You have two options:
+## Where the data goes
 
-**Option A — clone the repo (recommended if you want easy updates)**
+`public.metric_snapshots`:
 
-```bash
-apt install -y git
-git clone https://github.com/fizzybreeze/bitcoin-vibe-check.git /opt/btcvc
-cd /opt/btcvc
-npm install --omit=dev
-npm install better-sqlite3
-```
+| Column | Type | |
+|---|---|---|
+| `id` | `bigint` | identity primary key |
+| `captured_at` | `timestamptz` | when the run happened |
+| `captured_on` | `date` | generated from `captured_at` in UTC, **unique** |
+| `metrics` | `jsonb` | the full metric object |
 
-**Option B — copy just the script**
+The unique index on `captured_on` means the script **upserts**: re-running it on
+the same day corrects that day's row instead of adding a duplicate. So a manual
+re-run after a failure is always safe.
 
-```bash
-mkdir -p /opt/btcvc/scripts
-# SCP from your local machine, run from the repo root:
-# scp scripts/snapshot.js root@<container-ip>:/opt/btcvc/scripts/
+RLS is enabled with public read and no anon write. The data is aggregate market
+data that is already public at source, and the dashboard is expected to chart
+it; writes are service-role only.
 
-cd /opt/btcvc
-npm init -y
-npm install better-sqlite3
-```
-
-> **Note:** `better-sqlite3` is a native module — it compiles on install.
-> If you see build errors, run `apt install -y python3 make g++` first, then retry `npm install better-sqlite3`.
-
----
-
-## Step 4 — Add your BGeometrics API key
-
-The MVRV data requires a free API key from [bgeometrics.com](https://bgeometrics.com).
-
-Create an environment file:
+## Running it locally
 
 ```bash
-nano /opt/btcvc/.env
-```
-
-Add this line (replace with your actual key):
-
-```
-BGEOMETRICS_API_KEY=your_key_here
-```
-
-Save and exit (`Ctrl+X`, then `Y`).
-
----
-
-## Step 5 — Test the script manually
-
-```bash
-cd /opt/btcvc
-# Load the env var for this test run
-export $(cat .env | xargs)
+SUPABASE_URL=... \
+SUPABASE_SERVICE_ROLE_KEY=... \
+BGEOMETRICS_API_KEY=... \
 node scripts/snapshot.js
 ```
 
-You should see output like:
+It refuses to write if no price could be fetched, so a run where every upstream
+API is down goes red instead of storing a placeholder row that looks like a real
+day of data.
 
-```
-[snapshot] Starting — 2026-06-20T01:00:00.000Z
-[snapshot] Done — wrote snapshot to /root/btcvc/metrics.db
-[snapshot] BTC/USD: $105,432 | F&G: 72 (Greed) | MVRV: 2.14
-```
+## What it captures
 
-If you see `Null fields` warnings for some metrics, that's fine — it means one API was temporarily slow. The row still writes with whatever data was available.
+Roughly 28 fields per day, sourced from CoinPaprika, Binance, mempool.space,
+alternative.me and BGeometrics:
 
----
+- **Price & market** — price, 24h volume, market cap, 24h change, ATH and
+  distance from it, BTC dominance
+- **Cycle indicators** — 200-day MA, Mayer Multiple, Power Law fair value, MVRV
+- **Fees** — fastest / 30m / 1h / economy, in sats per vbyte
+- **Network** — block height, difficulty change, remaining blocks, hash rate and
+  its 30-day trend
+- **Mempool** — transaction count, vsize
+- **Lightning** — capacity, channels, nodes
+- **Sentiment** — Fear & Greed value and label
 
-## Step 6 — Set up the cron job
-
-```bash
-crontab -e
-```
-
-Add this line (runs at 1am UTC daily):
-
-```
-0 1 * * * export $(cat /opt/btcvc/.env | xargs) && /usr/bin/node /opt/btcvc/scripts/snapshot.js >> /var/log/btcvc-snapshot.log 2>&1
-```
-
-Save and exit. Verify it was saved:
-
-```bash
-crontab -l
-```
-
----
-
-## Step 7 — View your data
-
-**From the command line (on the container):**
-
-```bash
-sqlite3 ~/btcvc/metrics.db
-
-# Most recent snapshot
-SELECT captured_at, json_extract(metrics, '$.price_usd'), json_extract(metrics, '$.fear_greed_value') FROM snapshots ORDER BY id DESC LIMIT 1;
-
-# All snapshots, date and price
-SELECT captured_at, json_extract(metrics, '$.price_usd') FROM snapshots ORDER BY id;
-
-# Exit
-.quit
-```
-
-**From your Mac (GUI — recommended):**
-
-1. Download [DB Browser for SQLite](https://sqlitebrowser.org) — free
-2. On the container, check its IP: `hostname -I`
-3. Mount the container's filesystem via SFTP:
-   - In Finder: **Go > Connect to Server** > `sftp://root@<container-ip>`
-   - Or use [Cyberduck](https://cyberduck.io) / [Transmit](https://panic.com/transmit/)
-4. Navigate to `/root/btcvc/metrics.db`, copy it to your Mac
-5. Open with DB Browser — you can browse rows, run SQL queries, and export to CSV
-
-> For ongoing access, set up a daily `scp` from the container to your file server,
-> or just re-copy the file whenever you want to analyse.
-
----
-
-## Troubleshooting
-
-**Check the log:**
-```bash
-tail -f /var/log/btcvc-snapshot.log
-```
-
-**Run manually to debug:**
-```bash
-export $(cat /opt/btcvc/.env | xargs)
-node /opt/btcvc/scripts/snapshot.js
-```
-
-**`better-sqlite3` fails to install:**
-```bash
-apt install -y python3 make g++
-npm install better-sqlite3
-```
-
-**BGeometrics returns null every day:**
-The free tier allows 15 requests/day. The cron runs once daily, so you're well within limits.
-Check your key is correct in `/opt/btcvc/.env`.
-
----
-
-## Useful SQL queries once you have data
-
-```sql
--- Price on each date
-SELECT date(captured_at), json_extract(metrics, '$.price_usd') AS price
-FROM snapshots ORDER BY captured_at;
-
--- Fear & Greed over time
-SELECT date(captured_at), json_extract(metrics, '$.fear_greed_value') AS fng, json_extract(metrics, '$.fear_greed_label') AS label
-FROM snapshots ORDER BY captured_at;
-
--- MVRV trend
-SELECT date(captured_at), json_extract(metrics, '$.mvrv_value') AS mvrv
-FROM snapshots WHERE json_extract(metrics, '$.mvrv_value') IS NOT NULL ORDER BY captured_at;
-
--- Days where F&G was extreme greed
-SELECT date(captured_at), json_extract(metrics, '$.price_usd'), json_extract(metrics, '$.fear_greed_value')
-FROM snapshots WHERE json_extract(metrics, '$.fear_greed_label') = 'Extreme Greed' ORDER BY captured_at;
-
--- Fee environment over time
-SELECT date(captured_at), json_extract(metrics, '$.fee_fastest_sv') AS fast, json_extract(metrics, '$.fee_economy_sv') AS economy
-FROM snapshots ORDER BY captured_at;
-```
+Individual sources failing is tolerated — those fields land as `null` and the
+run logs which ones. Only a missing price aborts the write.
