@@ -311,6 +311,7 @@ Donor notifications come from the `new_donor_notification` trigger on `donors`, 
 | Document | What it covers |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, data flow, component map, version history — the working reference for anyone (human or agent) changing this code |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Where the product could go next, and what it deliberately will not do — intent, not commitment |
 | [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md) | Setting up and operating the daily metrics snapshot |
 | [`docs/DEV_WORKFLOW_AUDIT.md`](docs/DEV_WORKFLOW_AUDIT.md) | The August 2026 audit that produced the current CI, security and mobile-development setup — kept as a historical record |
 | [`.env.example`](.env.example) | Annotated list of every environment variable |
