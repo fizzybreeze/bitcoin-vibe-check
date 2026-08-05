@@ -4,6 +4,8 @@
 
 A real-time Bitcoin dashboard that surfaces everything you need to understand the current state of the network — price, sentiment, fees, mempool, halving countdown, and more — in a single dark-themed page. Built for people who want a fast, information-dense overview without navigating multiple block explorers or exchanges.
 
+Where the product is headed: see the [productisation proposal](docs/PRODUCT_PROPOSAL.md) (positioning, monetisation, and the phased roadmap).
+
 ---
 
 ## Features
