@@ -108,8 +108,9 @@ and the ability to see the last 30 / 90 / 365 days.
 
 **Why.** The data already exists, the table is already publicly readable, and
 "how does today compare" is the question the current dashboard cannot answer at
-all. No other free Bitcoin dashboard charts *its own* composite over time,
-because no other one has a composite.
+all. A composite is also the one series that is ours by construction — anyone can
+chart price, but the Vibe Score only exists here, so its history is the part of
+this that cannot simply be looked up elsewhere.
 
 **How.** `metric_snapshots` has a `SELECT`-to-public RLS policy, so
 `src/lib/supabase.js` can query it directly with the anon key — no new serverless
@@ -152,10 +153,10 @@ correctly at small sizes in a chat list, not just at 1200×630 in a preview tool
 
 Two problems, one theme: alerts exist but do not yet do the job.
 
-**Fee-window alerts.** "Tell me when fees drop below 5 sat/vB" is the most
-practically useful alert this dashboard could offer, and nearly nobody offers it.
-Price alerts are a commodity; a nudge that saves someone real money when they
-move coins is a reason to keep the PWA installed. `usePriceAlerts` generalises to
+**Fee-window alerts.** "Tell me when fees drop below 5 sat/vB" is plausibly the
+most practically useful alert this dashboard could offer. Price alerts are a
+commodity; a nudge that saves someone real money when they move coins is a
+reason to keep the PWA installed. `usePriceAlerts` generalises to
 threshold-on-any-metric with modest surgery — extend it to fees, Fear & Greed
 extremes, and Mayer crossings.
 
@@ -195,9 +196,9 @@ function instead.
 
 ### 4.2 Public data API and an embeddable badge
 
-**What.** Document `/api/history` and `/api/vibe` as public read endpoints, then
-ship a one-line embed that renders the current Vibe Score on someone else's
-site with a link back.
+**What.** Promote the direct table read of §3.2 into documented public endpoints
+— `/api/history` and `/api/vibe` — then ship a one-line embed that renders the
+current Vibe Score on someone else's site with a link back.
 
 **Why.** It changes what BVC *is* from a site people must remember to visit into
 a source other people cite. Backlinks, distribution, and a moat that compounds:
@@ -216,10 +217,14 @@ bill is not.
 **live current value** and its history.
 
 **Why.** The whole site is currently one URL competing for one set of keywords.
-Search demand for these terms is steady and evergreen, and BVC has something no
-blog post can match: the number is live and the chart is today's. That is a
-durable ranking advantage, and each page is a natural entry point that lands
-visitors one click from the dashboard.
+Each page would be a natural entry point that lands a visitor one click from the
+dashboard, and BVC has something a static blog post cannot match: the number is
+live and the chart is today's.
+
+**Validate before building.** This item rests entirely on there being real search
+demand for these terms, which nobody has measured. An afternoon in a keyword tool
+decides whether it is worth the routing work — do that first, and if the demand
+is not there, move this to §7 with the numbers attached.
 
 **The catch — this is the first real architectural decision on this list.** It
 needs routing, which the app does not have, and the PWA precache story has to
@@ -321,6 +326,11 @@ considered and rejected on the thesis, not on effort.
   truth about the present, which is worse than having neither.
 - **Rejected items move to §7 with a reason.** A "no" with reasoning attached
   stops the same idea being re-litigated in six months.
+- **No market research went into this.** The arguments here are drawn from the
+  codebase and the thesis, not from competitor analysis, keyword data or user
+  interviews — none of which anyone has done. Claims about what other dashboards
+  offer or what people search for should be treated as assumptions to test before
+  they justify a sprint, and rewritten with evidence once someone has any.
 - **Stale beats absent, but not by much.** If nothing here has moved in a
   quarter, the honest fix is to re-scope it, not to leave it as decoration —
   `docs/DEV_WORKFLOW_AUDIT.md` carries a status banner for exactly this reason.
