@@ -212,7 +212,14 @@ yet — it exists so historical charting becomes possible.
 | Job | Where | Cadence |
 |---|---|---|
 | Daily metrics snapshot | GitHub Actions (`snapshot.yml`) | 06:17 UTC, plus `workflow_dispatch` |
-| `donor-email-worker` | Supabase `pg_cron` → edge function | every minute |
+
+There are no `pg_cron` jobs. A `donor-email-worker` job used to run every minute
+against an edge function that never existed — every response was a 404, while
+pg_cron reported "succeeded" because `net.http_post` only confirms the request
+was queued. Removed in `20260805063000_remove_orphaned_donor_email_worker.sql`.
+
+Donor notifications do **not** depend on it. They come from the
+`new_donor_notification` trigger on `donors`, which POSTs to a Make.com webhook.
 
 ### Workflows
 

@@ -29,8 +29,12 @@ create policy "Allow public read of approved donors"
 
 -- ─── enqueue_donor_email ─────────────────────────────────────────────────────
 -- Orphaned: public.donor_email_queue does not exist and no trigger references
--- this function. Recorded here because it is present in the live database.
--- Safe to drop; left in place because removing it is not a schema-capture task.
+-- this function. Recorded here because it was present in the live database when
+-- this baseline was captured.
+--
+-- SUPERSEDED: dropped in 20260805063000_remove_orphaned_donor_email_worker.sql.
+-- Kept here so the history stays honest — on a fresh apply it is created and
+-- then removed, rather than the baseline being rewritten after the fact.
 
 create or replace function public.enqueue_donor_email()
 returns trigger
