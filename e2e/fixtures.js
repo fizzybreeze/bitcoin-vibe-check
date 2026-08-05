@@ -1,29 +1,4 @@
 const now = Date.now()
-const DAY_MS = 86_400_000
-
-export function makeChartFixture(days = 7) {
-  const prices = []
-  const total_volumes = []
-  for (let i = days; i >= 0; i--) {
-    const ts = now - i * DAY_MS
-    prices.push([ts, 100000 + i * 500])
-    total_volumes.push([ts, 2_000_000_000])
-  }
-  return { prices, total_volumes }
-}
-
-export const priceFixture = {
-  bitcoin: {
-    usd: 105000, gbp: 82000, eur: 96000, cad: 142000, chf: 93000,
-    usd_24h_vol: 35_000_000_000,
-    gbp_24h_vol: 28_000_000_000,
-    eur_24h_vol: 32_000_000_000,
-    cad_24h_vol: 47_000_000_000,
-    chf_24h_vol: 31_000_000_000,
-    usd_24h_change: 2.5,
-    usd_market_cap: 2_100_000_000_000,
-  },
-}
 
 export const feesFixture = {
   fastestFee: 20,
@@ -36,12 +11,6 @@ export const blockHeightFixture = 897000
 
 export const fngFixture = {
   data: [{ value: '72', value_classification: 'Greed' }],
-}
-
-export const globalFixture = {
-  data: {
-    market_cap_percentage: { btc: 64.5 },
-  },
 }
 
 export const difficultyFixture = {
@@ -75,9 +44,6 @@ export const mempoolFixture = {
   total_fee: 950000000,
   fee_histogram: [],
 }
-
-// /coins/markets — price 105,000 is ~3.7% below ATH of 109,000
-export const marketsFixture = [{ ath: 109000 }]
 
 // CoinPaprika /v1/tickers/btc-bitcoin — price, volume, change, ATH
 export const paprikaTickerFixture = {
@@ -119,62 +85,45 @@ export const hashrate1mFixture = {
   ],
 }
 
-export const TX_ID = 'a'.repeat(64)
-
-export const txFixture = {
-  txid: TX_ID,
-  status: { confirmed: true, block_height: 895000 },
-  vsize: 250,
-  fee: 3750,
-  vout: [{ value: 150_000_000 }],  // 1.5000 BTC
-}
-
-export const ADDRESS = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'
-
-export const addressFixture = {
-  address: ADDRESS,
-  chain_stats: {
-    funded_txo_sum: 100_000_000,
-    spent_txo_sum: 40_000_000,  // balance = 60,000,000 sats → 0.6000 BTC
-    tx_count: 15,
-  },
-  mempool_stats: { tx_count: 0 },
-}
-
 // /api/chain-data — serverless proxy response for BGeometrics data
 export const chainDataFixture = {
   mvrv: { value: 2.15, date: '2026-06-10' },
   etf:  { btcHeld: 1_100_000, btcHeld7dAgo: 1_085_000, date: '2026-06-10' },
 }
 
-// Binance klines — 200 daily candles at a fixed close of $103,000
-// Shape: [openTime, open, high, low, close, volume, closeTime, quoteVolume, ...]
-export const klines200dFixture = Array.from({ length: 200 }, (_, i) => [
-  now - (200 - i) * DAY_MS,
-  '100000', '105000', '95000', '103000', '500',
-  now - (200 - i) * DAY_MS + DAY_MS - 1,
-  '51500000000', '1000', '0', '0', '1',
-])
+// Kraken OHLC candles.
+// Shape: [time_SECONDS, open, high, low, close, vwap, volume_base, count]
+// Note index 0 is seconds (Binance used milliseconds) and index 6 is volume in
+// BTC rather than USD — see src/lib/ohlc.js.
+const nowS = Math.floor(now / 1000)
+const DAY_S = 86_400
 
-// Generic kline series for the chart range toggles (1D/7D/1M/1Y), which request
-// varying interval+limit combinations. Prices ramp gently so the chart renders a
-// visible line and computeChartChange produces a non-zero result.
-export function makeKlines(count, stepMs = DAY_MS) {
-  return Array.from({ length: count }, (_, i) => {
-    const open = now - (count - i) * stepMs
-    const close = 100_000 + i * 10
-    return [
-      open,
-      String(close - 500), String(close + 500), String(close - 800), String(close), '500',
-      open + stepMs - 1,
-      '51500000000', '1000', '0', '0', '1',
-    ]
-  })
+function krakenCandle(timeSeconds, close) {
+  return [
+    timeSeconds,
+    String(close - 500), String(close + 500), String(close - 800),
+    String(close), String(close), '500', 1000,
+  ]
 }
 
-// Milliseconds per Binance interval string, for sizing generated candles.
-export const INTERVAL_MS = {
-  '1h': 3_600_000,
-  '4h': 14_400_000,
-  '1d': DAY_MS,
+// 200 daily candles at a fixed close of $103,000 → 200DMA is exactly $103,000.
+export const ohlc200dFixture = Array.from({ length: 200 }, (_, i) =>
+  krakenCandle(nowS - (200 - i) * DAY_S, 103_000)
+)
+
+// Generic candle series for the chart range toggles (1D/7D/1M/1Y). Prices ramp
+// gently so the chart renders a visible line and computeChartChange produces a
+// non-zero result.
+export function makeKrakenCandles(count, stepSeconds = DAY_S) {
+  return Array.from({ length: count }, (_, i) =>
+    krakenCandle(nowS - (count - i) * stepSeconds, 100_000 + i * 10)
+  )
+}
+
+// Seconds per Kraken interval value (which is in minutes).
+export const KRAKEN_INTERVAL_SECONDS = { 60: 3_600, 240: 14_400, 1440: DAY_S }
+
+/** Wrap candles in Kraken's response envelope, under the canonical pair key. */
+export function krakenOhlcResponse(candles) {
+  return { error: [], result: { XXBTZUSD: candles, last: nowS } }
 }

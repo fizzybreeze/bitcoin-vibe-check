@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Version | Changes |
 |---|---|
+| v1.4.4 | **US fix (#10).** The browser chart still called Binance, which answers US jurisdictions with HTTP 451 — so US visitors saw no price chart, no 200-day MA and no Mayer Multiple. Confirmed by VPN test. `fetchChart` and the 200-day series now use Kraken OHLC. Kraken primitives consolidated into `src/lib/ohlc.js`, with `scripts/lib/ohlc.js` (from #9) reduced to a thin wrapper so both callers share one implementation. Vestigial CoinGecko and TxLookup e2e fixtures removed |
 | v1.4.3 | Infrastructure. Daily metrics snapshot moved off a home Proxmox box and local SQLite to GitHub Actions + a new Supabase `metric_snapshots` table (drops the unlisted `better-sqlite3` dependency; the data is now queryable by the app); existing schema captured as a baseline migration; `vercel.json` committed with security and caching headers; `api/chain-data.js` CORS narrowed from `*` to this project's own origins; Dependabot and a PR template added |
 | v1.4.2 | Tooling, not app behaviour. Supabase RLS enabled on `donors` with a matching INSERT policy (schema now tracked in `supabase/migrations/`); lint reduced from 16 errors to 0; dead `OnChainSignalsCard` and `FngArc` removed; GitHub Actions CI + E2E workflows added with `main` protected; e2e suite made hermetic (17/17, no network); Node pinned to 24.x; `.claude/` set up with a SessionStart hook, permission allowlist and `/ship` + `/verify` commands; `.env.example` added and this file corrected |
 | v1.4.1 | Social share updated for v1.4: removed dead toggles (Institutional Pulse, On-Chain Signals); added Market Sentiment toggle; Network Health share card updated to match live card; Cycle Indicators share card expanded to 2x2 grid (MVRV, Power Law, 200-Day MA, Mayer Multiple) |
@@ -62,6 +63,7 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/utils.js` | Pure helpers: formatting, halving math, dominance labels, tx/address utils |
 | `src/utils/cycleCalculations.js` | Power Law fair value, Mayer Multiple |
 | `src/lib/calculations.js` | Pure calculation functions (ATH distance, sats per fiat, supply issued, sentiment summary, hash rate trend, mempool pressure) |
+| `src/lib/ohlc.js` | Kraken OHLC primitives — URL building, envelope unwrapping, candle parsing. Shared by the chart and, via `scripts/lib/ohlc.js`, the snapshot job |
 | `src/lib/supabase.js` | Supabase client (donor name submissions) — returns `null` when env vars are absent |
 | `src/index.css` | Tailwind v4 import and dark-mode variant |
 | `src/hooks/usePersistedState.js` | `useState` mirrored to localStorage |
@@ -89,15 +91,15 @@ On mount, `loadData()` fires parallel API calls via `Promise.allSettled`:
 - **mempool.space** — fee tiers, block height, difficulty adjustment, mempool stats, recent blocks, hash rate, Lightning stats
 - **alternative.me** — Fear & Greed index (single `?limit=30` call serves both the current value and the sparkline)
 - **`/api/chain-data`** — own serverless route, proxying BGeometrics MVRV
-- **Binance** — 200 daily klines for the 200-day MA and Mayer Multiple
+- **Kraken OHLC** — 200 daily candles for the 200-day MA and Mayer Multiple
 
 After `loadData()` resolves, results are merged with `localStorage` (key `btc-cache`). The cache write is partial — only non-null fields overwrite stored values. Volume history (last 7 days) is tracked separately under `btc-vol-history`.
 
 Prices are then kept live via a **Kraken WebSocket v2** connection (`wss://ws.kraken.com/v2`), subscribing to the `ticker` channel for BTC/USD, BTC/GBP, BTC/EUR, BTC/CAD, BTC/CHF. The rest of the KPI data refreshes on a 60-second `setInterval`.
 
-Chart data (`fetchChart`) comes from **Binance klines**, with the interval and limit derived from the selected range (1D → `1h`/24, 7D → `4h`/42, 1M → `1d`/30, 1Y → `1d`/365). Fetched charts are memoised for the session in a `useRef(new Map())` keyed by range, and the other three ranges are prefetched in the background once the active one loads.
+Chart data (`fetchChart`) comes from **Kraken OHLC** via `src/lib/ohlc.js`, with the interval derived from the selected range (1D → 60min/24 candles, 7D → 240min/42, 1M → 1440min/30, 1Y → 1440min/365). Kraken has no `limit` parameter and returns up to 720 candles, so the app slices client-side. Fetched charts are memoised for the session in a `useRef(new Map())` keyed by range, and the other three ranges are prefetched in the background once the active one loads.
 
-> **CoinGecko is no longer used.** It was replaced by CoinPaprika (market data) and Binance (charts). Some vestigial CoinGecko routes remain mocked in `e2e/dashboard.spec.js`; they simply never match.
+> **CoinGecko is no longer used.** It was replaced by CoinPaprika (market data) and Kraken (charts). The vestigial CoinGecko mocks were removed from `e2e/dashboard.spec.js`.
 
 ### Components
 
@@ -152,7 +154,7 @@ deployed site — only publishable/anon keys belong there.
 | `BGEOMETRICS_API_KEY` | `api/chain-data.js` | Server-side only. MVRV data; free tier is 15 req/day |
 
 > `VITE_COINGECKO_API_KEY` is **no longer read by any code** — CoinGecko was
-> replaced by CoinPaprika and Binance. If it is still set in Vercel it can be
+> replaced by CoinPaprika and Kraken. If it is still set in Vercel it can be
 > deleted. All remaining data sources are keyless except BGeometrics.
 
 > `src/lib/supabase.js` fails **soft** — `createClient` returns `null` when its
@@ -165,24 +167,26 @@ All keyless except BGeometrics, which is proxied server-side.
 | API | Endpoint purpose |
 |---|---|
 | `api.coinpaprika.com` | Price, 24h volume, market cap, BTC dominance |
-| `api.binance.com` | Klines — chart data for every range, plus the 200-day series for MA and Mayer Multiple. **Browser only** — see the warning below |
-| `api.kraken.com` | REST ticker, seeding prices before the socket connects |
+| `api.kraken.com` | OHLC candles — chart data for every range, plus the 200-day series for MA and Mayer Multiple. Also the REST ticker that seeds prices before the socket connects |
 | `wss://ws.kraken.com/v2` | Real-time BTC price ticker (WebSocket), 5 currency pairs |
 | `mempool.space` | Fee tiers, block height, difficulty, mempool, recent blocks, hash rate, Lightning stats |
 | `api.alternative.me/fng` | Fear & Greed index — single `?limit=30` call used for both current value and 30-day sparkline |
 | `/api/chain-data` | Own serverless route → BGeometrics MVRV, cached 24h at the CDN edge |
 
-> ⚠️ **Never call Binance from server-side code.** It answers US jurisdictions
-> with HTTP 451, and both GitHub Actions runners and Vercel functions are
-> US-hosted, so a server-side Binance fetch fails 100% of the time rather than
-> intermittently. The snapshot job hit exactly this and silently recorded a null
-> 200-day MA on every run; it now uses Kraken OHLC
-> (`scripts/lib/ohlc.js`), which does not geo-block datacentres.
+> ⚠️ **Do not reintroduce Binance anywhere.** It answers US jurisdictions with
+> HTTP 451. This bit the project twice:
 >
-> The browser app still uses Binance, which works because the request comes from
-> the visitor's own IP — but that likely means **US visitors see no chart and no
-> 200-day MA / Mayer Multiple**. Tracked separately; do not "fix" the snapshot
-> back to Binance.
+> 1. **The snapshot job** (#9) — GitHub Actions runners are US-hosted, so the
+>    fetch failed 100% of the time and silently recorded a null 200-day MA on
+>    every run.
+> 2. **The browser app** (#10) — `fetchChart` runs client-side from each
+>    visitor's own IP, so it worked fine outside the US while US visitors saw no
+>    price chart, no 200-day MA and no Mayer Multiple. Confirmed by VPN test.
+>
+> Both now use Kraken OHLC. The primitives live in `src/lib/ohlc.js`;
+> `scripts/lib/ohlc.js` wraps them for the snapshot job, which wants a `null`
+> rather than a throw when Kraken reports an error, and refuses to average a
+> series shorter than 200 candles because its output is persisted permanently.
 
 ### Database (Supabase Postgres)
 

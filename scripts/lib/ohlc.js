@@ -1,48 +1,40 @@
 // Daily OHLC helpers for the snapshot job.
 //
-// The job used to read Binance klines, the same source the browser app uses.
-// That works in a browser but not from GitHub Actions: Binance answers US
-// jurisdictions with HTTP 451, and Actions runners are US-hosted, so the 200-day
-// MA and Mayer Multiple were null on every single run. Kraken is already a
-// trusted source in this project, needs no key, and does not geo-block
-// datacentres.
-//
-// Kraken OHLC response shape:
-//   { error: [], result: { XXBTZUSD: [[time, o, h, l, c, vwap, vol, count], …],
-//                          last: 1688669400 } }
-// Close sits at index 4, the same position as in a Binance kline, so the mean
-// below is unchanged from the original.
+// The Kraken primitives moved to src/lib/ohlc.js when the browser app hit the
+// same Binance geo-block (#10) and needed them too. This module stays as the
+// snapshot job's entry point so scripts/snapshot.js is unchanged, and keeps the
+// two behaviours that are specific to persisting a historical record.
 
-export const KRAKEN_OHLC_URL =
-  'https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1440'
+import {
+  KRAKEN_INTERVAL,
+  krakenOhlcUrl,
+  extractKrakenOhlc as extractOrThrow,
+} from '../../src/lib/ohlc.js'
+
+export const KRAKEN_OHLC_URL = krakenOhlcUrl(KRAKEN_INTERVAL.DAY)
 
 const MA_WINDOW = 200
 
 /**
- * Pull the candle array out of a Kraken OHLC response.
+ * Pull the candle array out of a Kraken OHLC response, or null.
  *
- * The pair key in `result` is not the one requested — asking for `XBTUSD`
- * returns `XXBTZUSD` — so the series is found by shape rather than by name.
- * Returns null on an error response or an unrecognised body.
+ * The shared helper throws when Kraken reports an error, because the browser
+ * chart wants that to reach its retry-and-error path. This job is different: it
+ * already treats every source as best-effort via safeFetch, and a null here
+ * simply leaves the MA fields empty for the day. So the throw is absorbed.
  */
 export function extractKrakenOhlc(raw) {
-  if (!raw || typeof raw !== 'object') return null
-  if (Array.isArray(raw.error) && raw.error.length > 0) return null
-
-  const result = raw.result
-  if (!result || typeof result !== 'object') return null
-
-  // `last` is a cursor, not a series; everything else is the candle array.
-  const series = Object.entries(result)
-    .find(([key, value]) => key !== 'last' && Array.isArray(value))
-
-  return series ? series[1] : null
+  try {
+    return extractOrThrow(raw)
+  } catch {
+    return null
+  }
 }
 
 /**
  * Mean close over the trailing 200 candles.
  *
- * Unlike the browser-side copy, this refuses to compute from a short series.
+ * Unlike the browser-side chart, this refuses to compute from a short series.
  * These values are persisted as a historical record, and averaging 40 candles
  * into a column called "200-day MA" would put a plausible-looking wrong number
  * into the series permanently.
