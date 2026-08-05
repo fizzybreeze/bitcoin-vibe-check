@@ -14,8 +14,32 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}"
 
-echo "[session-start] installing npm dependencies…"
-npm install --no-audit --no-fund
+# `npm ci` rather than `npm install`, because install rewrites package-lock.json
+# whenever the local npm differs from the one that generated it — silently
+# dirtying the working tree on every session and leaking unrelated lockfile
+# churn into whatever PR is open. `npm ci` never writes to the lockfile.
+#
+# The tradeoff is that `npm ci` deletes node_modules and reinstalls from
+# scratch, which is wasteful on a resumed session where nothing changed. So it
+# runs only when the lockfile has actually moved since the last install. The
+# stamp lives in .git/ so it can never itself be committed.
+STAMP=".git/.session-start-deps"
+
+if [ ! -f package-lock.json ]; then
+  # No lockfile means npm ci cannot run at all. Should not happen here, but a
+  # hook that runs on every session must not hard-fail under `set -e`.
+  echo "[session-start] no package-lock.json — falling back to npm install"
+  npm install --no-audit --no-fund
+else
+  LOCK_HASH="$(sha256sum package-lock.json | cut -d' ' -f1)"
+  if [ -d node_modules ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$LOCK_HASH" ]; then
+    echo "[session-start] dependencies already match package-lock.json"
+  else
+    echo "[session-start] installing npm dependencies…"
+    npm ci --no-audit --no-fund
+    printf '%s' "$LOCK_HASH" > "$STAMP"
+  fi
+fi
 
 # Playwright pins an exact chromium build. Some containers ship a different
 # build and block cdn.playwright.dev, so the download cannot always succeed.
