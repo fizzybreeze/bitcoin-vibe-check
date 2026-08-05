@@ -41,7 +41,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **200-Day Moving Average** — computed from the last 200 daily closes; shows current price relative to the trend
 - **Mayer Multiple** — ratio of current price to the 200-day MA; readings above 2.4 have historically indicated overheating
 - Displayed in a **2×2 grid layout** on tablet and desktop, single column on mobile
-- MVRV data is fetched via a serverless proxy from BGeometrics; the other three metrics are derived from Binance daily OHLC data
+- MVRV data is fetched via a serverless proxy from BGeometrics; the other three metrics are derived from Kraken daily OHLC data
 
 ### Price Chart
 - Interactive area chart with overlaid volume bars
@@ -49,7 +49,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Range percentage change displayed alongside the chart label
 - **High and low reference lines** for the selected period
 - **Chart locked to USD** with a clear "Chart in USD" label
-- **Volume bars show Binance BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
+- **Volume bars show Kraken BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
 - Chart data is cached per range/currency combination for the session to avoid redundant API requests
 
@@ -127,7 +127,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | Source | What it provides |
 |---|---|
 | [CoinPaprika API](https://api.coinpaprika.com) | BTC price, 24h volume, market cap, 24h change, ATH, BTC dominance |
-| [Binance API](https://binance-docs.github.io/apidocs/spot/en/) | Historical OHLC data for the price chart and 200-day MA / Mayer Multiple calculations |
+| [Kraken API](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data) | Historical OHLC data for the price chart and 200-day MA / Mayer Multiple calculations. Replaced Binance, which blocks US IP addresses |
 | [BGeometrics](https://bgeometrics.com) (via serverless proxy) | MVRV Ratio |
 | [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
 | [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Crypto Fear & Greed index score and 30-day history |

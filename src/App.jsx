@@ -22,6 +22,10 @@ import {
   computeVibeLabel, computeHashRateTrend, calcFiatFee,
 } from './lib/calculations.js'
 import { calc200DMA } from './utils/cycleCalculations.js'
+import {
+  KRAKEN_INTERVAL, krakenParamsForDays, krakenOhlcUrl,
+  extractKrakenOhlc, parseKrakenOhlc,
+} from './lib/ohlc.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import CardTooltip from './components/CardTooltip.jsx'
 
@@ -62,30 +66,6 @@ const WS_SYMBOL_MAP = {
   'BTC/EUR': 'priceEur',
   'BTC/CAD': 'priceCad',
   'BTC/CHF': 'priceChf',
-}
-
-function parseBinanceKlines(klines, days) {
-  if (!klines?.length) return null
-  if (days === 1) {
-    return klines.map(k => ({
-      date: new Date(k[0]).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-      price: Math.round(parseFloat(k[4])),
-      volume: parseFloat(k[7]),
-    }))
-  }
-  if (days === 7) {
-    const groups = {}
-    for (const k of klines) {
-      const date = new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      groups[date] = { date, price: Math.round(parseFloat(k[4])), volume: (groups[date]?.volume ?? 0) + parseFloat(k[7]) }
-    }
-    return Object.values(groups)
-  }
-  return klines.map(k => ({
-    date: new Date(k[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-    price: Math.round(parseFloat(k[4])),
-    volume: parseFloat(k[7]),
-  }))
 }
 
 async function loadData() {
@@ -150,17 +130,14 @@ async function loadData() {
 }
 
 async function fetchChart(days) {
-  const { interval, limit } =
-    days === 1   ? { interval: '1h',  limit: 24  } :
-    days === 7   ? { interval: '4h',  limit: 42  } :
-    days === 30  ? { interval: '1d',  limit: 30  } :
-                   { interval: '1d',  limit: 365 }
-  const res = await fetch(
-    `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
-  )
+  const { interval, count } = krakenParamsForDays(days)
+  const res = await fetch(krakenOhlcUrl(interval))
   if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
-  const klines = await res.json()
-  return parseBinanceKlines(klines, days)
+  // Kraken reports its own errors inside a 200 response, so extractKrakenOhlc
+  // throws where res.ok would have sailed past. The caller already retries.
+  const candles = extractKrakenOhlc(await res.json())
+  if (!candles) throw new Error('chart fetch failed: no candles in response')
+  return parseKrakenOhlc(candles, days, count)
 }
 
 function readCache() {
@@ -796,7 +773,7 @@ function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading })
 }
 
 const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
-const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Binance's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinGecko — the two figures are not directly comparable."
+const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable."
 
 function VolumeCard({ volumeUsd, volume, currency, btcDominance, volHistory, marketCapUsd, price }) {
   const vol7dAvg = computeVol7dAvg(volHistory)
@@ -1360,19 +1337,20 @@ export default function App() {
     return () => { active = false; clearInterval(id) }
   }, [])
 
-  // Fetch 200-day Binance klines for 200DMA and Mayer Multiple; refresh every 6 hours
+  // Fetch 200 daily candles for 200DMA and Mayer Multiple; refresh every 6 hours.
+  // calc200DMA reads index 4 (close), the same index in Kraken's shape as in
+  // Binance's, so it consumes these candles unchanged.
   useEffect(() => {
     let active = true
     async function fetchOhlc200() {
       setOhlcLoading(true)
       setOhlcError(null)
       try {
-        const res = await fetch(
-          'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'
-        )
+        const res = await fetch(krakenOhlcUrl(KRAKEN_INTERVAL.DAY))
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (active) setOhlcData200(data)
+        const candles = extractKrakenOhlc(await res.json())
+        if (!candles) throw new Error('no candles in response')
+        if (active) setOhlcData200(candles.slice(-200))
       } catch (err) {
         if (active) setOhlcError(err.message)
       } finally {
