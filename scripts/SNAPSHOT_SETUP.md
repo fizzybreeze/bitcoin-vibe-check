@@ -74,7 +74,7 @@ day of data.
 
 ## What it captures
 
-Roughly 28 fields per day, sourced from CoinPaprika, Binance, mempool.space,
+Roughly 28 fields per day, sourced from CoinPaprika, Kraken, mempool.space,
 alternative.me and BGeometrics:
 
 - **Price & market** — price, 24h volume, market cap, 24h change, ATH and

@@ -19,6 +19,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+// Shared with the app so the Kraken response shape is parsed in exactly one place.
+import { KRAKEN_INTERVAL, krakenOhlcUrl, extractKrakenOhlc } from '../src/lib/ohlc.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -114,7 +116,10 @@ async function main() {
     safeFetch('https://api.alternative.me/fng/?limit=1'),
     safeFetch('https://mempool.space/api/v1/mining/hashrate/3d'),
     safeFetch('https://mempool.space/api/v1/mining/hashrate/1m'),
-    safeFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=200'),
+    // Kraken, not Binance: this job runs on GitHub's US-based runners, and
+    // Binance geo-blocks US IPs. Using Binance here would silently null out
+    // ma_200d_usd and mayer_multiple on every single run.
+    safeFetch(krakenOhlcUrl(KRAKEN_INTERVAL.DAY)),
     safeFetch('https://api.bgeometrics.com/v1/mvrv', BGEOMETRICS_KEY
       ? { headers: { Authorization: `Bearer ${BGEOMETRICS_KEY}` } }
       : {}),
@@ -129,8 +134,15 @@ async function main() {
   const athUsd        = parseFloat(paprika.ath_price)        || null
   const dominance     = paprikaGlobalRaw?.bitcoin_dominance_percentage ?? null
 
-  // Parse Binance 200d
-  const ma200         = calc200DMA(ohlc200Raw)
+  // Parse Kraken daily candles for the 200-day series. calc200DMA reads index 4
+  // (close), which is the same index in Kraken's shape as in Binance's.
+  let ohlc200Candles = null
+  try {
+    ohlc200Candles = extractKrakenOhlc(ohlc200Raw)
+  } catch (err) {
+    console.warn(`[snapshot] Kraken OHLC error: ${err.message}`)
+  }
+  const ma200         = calc200DMA(ohlc200Candles?.slice(-200))
   const mayerMultiple = calcMayerMultiple(priceUsd, ma200)
   const powerLawFv    = calcPowerLawFairValue()
 

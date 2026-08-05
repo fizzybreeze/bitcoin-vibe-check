@@ -5,7 +5,8 @@ import {
   priceFixture, feesFixture, blockHeightFixture, fngFixture, makeChartFixture,
   globalFixture, difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   marketsFixture, hashrate3dFixture, hashrate1mFixture,
-  chainDataFixture, klines200dFixture, makeKlines, INTERVAL_MS,
+  chainDataFixture, ohlc200dFixture, makeKrakenCandles,
+  KRAKEN_INTERVAL_SECONDS, krakenOhlcResponse,
   paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
 } from './fixtures.js'
 
@@ -70,17 +71,17 @@ async function mockApis(page) {
   await page.route('/api/chain-data', route =>
     route.fulfill({ json: chainDataFixture })
   )
-  // Binance klines. limit=200 is the 200DMA / Mayer Multiple series and has a
-  // dedicated fixture the cycle-indicator assertions depend on; every other
-  // interval+limit combination is a chart range toggle (1D/7D/1M/1Y).
-  await page.route('https://api.binance.com/api/v3/klines*', route => {
+  // Kraken OHLC — chart ranges and the 200-day series. Kraken has no limit
+  // parameter, so the app slices client-side; the daily request therefore serves
+  // both the 1M/1Y toggles and the 200DMA. Return 200 fixed-close candles for
+  // the daily interval so the cycle-indicator assertions stay deterministic.
+  await page.route('https://api.kraken.com/0/public/OHLC*', route => {
     const url      = new URL(route.request().url())
-    const limit    = parseInt(url.searchParams.get('limit')) || 200
-    const interval = url.searchParams.get('interval') || '1d'
-    if (limit === 200 && interval === '1d') {
-      return route.fulfill({ json: klines200dFixture })
-    }
-    route.fulfill({ json: makeKlines(limit, INTERVAL_MS[interval] ?? 86_400_000) })
+    const interval = parseInt(url.searchParams.get('interval')) || 1440
+    const candles  = interval === 1440
+      ? ohlc200dFixture
+      : makeKrakenCandles(200, KRAKEN_INTERVAL_SECONDS[interval] ?? 86_400)
+    route.fulfill({ json: krakenOhlcResponse(candles) })
   })
 
   // Third-party scripts. These are not part of the dashboard under test and are

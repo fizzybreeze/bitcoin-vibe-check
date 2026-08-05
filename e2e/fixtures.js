@@ -147,34 +147,43 @@ export const chainDataFixture = {
   etf:  { btcHeld: 1_100_000, btcHeld7dAgo: 1_085_000, date: '2026-06-10' },
 }
 
-// Binance klines — 200 daily candles at a fixed close of $103,000
-// Shape: [openTime, open, high, low, close, volume, closeTime, quoteVolume, ...]
-export const klines200dFixture = Array.from({ length: 200 }, (_, i) => [
-  now - (200 - i) * DAY_MS,
-  '100000', '105000', '95000', '103000', '500',
-  now - (200 - i) * DAY_MS + DAY_MS - 1,
-  '51500000000', '1000', '0', '0', '1',
-])
+// Kraken OHLC candles.
+// Shape: [time_SECONDS, open, high, low, close, vwap, volume_base, count]
+// Note index 0 is seconds (Binance used milliseconds) and index 6 is volume in
+// BTC rather than USD — see src/lib/ohlc.js.
+const nowS = Math.floor(now / 1000)
+const DAY_S = 86_400
 
-// Generic kline series for the chart range toggles (1D/7D/1M/1Y), which request
-// varying interval+limit combinations. Prices ramp gently so the chart renders a
-// visible line and computeChartChange produces a non-zero result.
-export function makeKlines(count, stepMs = DAY_MS) {
-  return Array.from({ length: count }, (_, i) => {
-    const open = now - (count - i) * stepMs
-    const close = 100_000 + i * 10
-    return [
-      open,
-      String(close - 500), String(close + 500), String(close - 800), String(close), '500',
-      open + stepMs - 1,
-      '51500000000', '1000', '0', '0', '1',
-    ]
-  })
+function krakenCandle(timeSeconds, close) {
+  return [
+    timeSeconds,
+    String(close - 500), String(close + 500), String(close - 800),
+    String(close), String(close), '500', 1000,
+  ]
 }
 
-// Milliseconds per Binance interval string, for sizing generated candles.
-export const INTERVAL_MS = {
-  '1h': 3_600_000,
-  '4h': 14_400_000,
-  '1d': DAY_MS,
+// 200 daily candles at a fixed close of $103,000 → 200DMA is exactly $103,000.
+export const ohlc200dFixture = Array.from({ length: 200 }, (_, i) =>
+  krakenCandle(nowS - (200 - i) * DAY_S, 103_000)
+)
+
+// Generic candle series for the chart range toggles (1D/7D/1M/1Y). Prices ramp
+// gently so the chart renders a visible line and computeChartChange produces a
+// non-zero result.
+export function makeKrakenCandles(count, stepSeconds = DAY_S) {
+  return Array.from({ length: count }, (_, i) =>
+    krakenCandle(nowS - (count - i) * stepSeconds, 100_000 + i * 10)
+  )
+}
+
+// Seconds per Kraken interval value (minutes), for sizing generated candles.
+export const KRAKEN_INTERVAL_SECONDS = {
+  60: 3_600,
+  240: 14_400,
+  1440: DAY_S,
+}
+
+/** Wrap candles in Kraken's response envelope, under the canonical pair key. */
+export function krakenOhlcResponse(candles) {
+  return { error: [], result: { XXBTZUSD: candles, last: nowS } }
 }
