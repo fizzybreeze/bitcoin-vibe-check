@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Version | Changes |
 |---|---|
+| v1.6.2 | **Visual regression at the mobile viewport (#18).** A third Playwright project, `visual`, pixel-compares four structurally fragile cards — Cycle Indicators, Network Pulse, BTC Price, Recent Blocks — at 390×844. This covers the one failure mode both review paths miss simultaneously: a Tailwind class change that wrecks the mobile layout passes every text assertion *and* is invisible in a phone-sized diff. Verified non-vacuous by widening the Cycle Indicators grid gap before committing: **only** that card went red (368px → 440px, ratio 0.20 against a 0.01 threshold) while the other three stayed green — targeted, no collateral churn. Three decisions worth keeping. **`updateSnapshots: 'none'`**, because Playwright's default `'missing'` writes an absent baseline and *passes* — and since CI never commits what it writes, the baseline would be regenerated every run and compared against itself, leaving the suite permanently green and permanently vacuous. **The clock is frozen** via `page.clock.setFixedTime`, with the block fixtures derived from the same instant (`makeBlocksFixture`), because `calcPowerLawFairValue()` reads `Date.now()` — the Cycle Indicators baseline would otherwise go stale *overnight, every night*; confirmed by the card rendering $173,409 (the frozen date) rather than $174,200 (the real one). `setFixedTime` rather than `install`/`pauseAt` so the app's own timers keep running and the load path is untouched. **Baselines are generated on the runner, never locally** — they are only valid for one rendering environment — via `visual-baselines.yml`, triggered by the `update-visual-baselines` label, which commits them to the PR branch and removes the label so it can be re-run. That workflow is also the standing answer to the issue's stated maintenance cost: regenerating after an intentional design change needs no local browser. Four `data-testid`s added to the card roots |
 | v1.6.1 | **The e2e suite finally looks at a phone (#17).** `playwright.config.js` gains two projects — `desktop` (1280×720) and `mobile` (iPhone 13, 390×844) — so every spec runs twice. Both are pinned to **chromium**: CI installs no other browser, and the `iPhone 13` descriptor carries `defaultBrowserType: 'webkit'`, which would have errored the run rather than widened it. The finding worth recording is that **all 19 existing tests passed at 390px unchanged**, so the `test.skip()` guards the issue anticipated were never needed — and that is the problem, not the reassurance. Those locators are deliberately loose (`.first()`, union regexes) to survive both layouts, which makes them good *content* assertions and useless as *layout* ones; running them twice would have caught none of the mobile bugs in this project's history. So `responsive.spec.js` adds the checks that would have: no horizontal document overflow (the genesis-hash-off-the-side failure, reported with the offending elements named so a red check is actionable from a phone), `NetworkHeartbeatCard` asserted present on mobile **and** absent on desktop, and the halving countdown asserted to render exactly one of its two always-in-the-DOM layouts — a duplicate that `.first()` would never see. The overflow assertion was verified non-vacuous against an injected 549px-wide element before being committed. `screenshot.spec.js` captures the full page at phone width and `e2e.yml` uploads it as its own `mobile-screenshot` artifact, separate from `playwright-report`, so reviewing a *green* run is one tap rather than unpacking a report bundle; the newsletter modal is suppressed via the localStorage flag the app already checks rather than raced. `mockApis` extracted to `e2e/mocks.js` (not `*.spec.js`, so Playwright's `testMatch` leaves it alone). `playwrightProjects.test.js` pins the project set, because deleting the mobile project would fail no e2e test — the suite would simply go back to covering half of what it does now |
 | v1.6.0 | **A live link preview** (roadmap §3.3). `/og-live.png` rewrites to `api/og.js`, which renders a 1200×630 PNG at request time — current price, 24h change, ATH distance, Vibe Score with its temperature label, the summary sentence and Fear & Greed — via `@vercel/og` (Satori). `og:image` and `twitter:image` in `index.html` repoint at it. Three decisions worth keeping: **MVRV is deliberately not fetched**, because unfurler traffic would spend the 15-request/day BGeometrics quota the live card depends on (valuation falls back to the Mayer Multiple alone, which `computeVibeScore` already handles); **every failure path redirects to the old static `/og-image.png`**, including `@vercel/og` failing to load, which is why it is a dynamic import — unfurlers do not retry, so a 500 is a blank preview; and **the ₿ character never reaches the image**, because Satori's bundled Geist has no U+20BF glyph and would draw a tofu box in every chat, so the card spells the name out and `ogImage.test.js` pins the whole allowed character set. Layout lives in `api/lib/ogView.js` as a pure model + element tree, so it is testable without rasterising. `src/lib/vibePalette.js` holds both label→hex scales, shared with `ShareCanvas`: the Vibe temperature labels, and Fear & Greed — which is coloured by **the classification alternative.me sends, not by the number**, after the first live preview drew "25 · Extreme Fear" in the amber reserved for Fear. Their bands are theirs to move; the label is what the reader sees. The same disagreement was fixed a second time in `computeVibeSummary`: its **sentiment phrase bands now mirror alternative.me's classification** (0–25 extreme fear, 26–46 fear, 47–54 neutral, 55–75 greed, 76+ extreme greed) rather than being chosen here, since that dimension's value *is* the Fear & Greed score. This changes the live dashboard's header sentence near those edges, not only the preview card |
 | v1.5.0 | **The Vibe Score** (roadmap §3.1). One composite 0–100 reading of how hot the market is running, composed in `computeVibeScore` from data already fetched — no new source, no new request. Lives in the lower half of the BTC Price card, which was empty on desktop because the chart beside it sets the row height. Weights: sentiment 30%, valuation 30%, momentum 25%, congestion 10%, network 5%; anchors and formula published in the card tooltip and below. Two design decisions worth keeping: the score is **single-polarity** (every dimension scaled so higher = hotter) because a contrarian valuation dimension cancels the pro-cyclical ones and flattens the range to ~38–72, and momentum reads **30-day price change** rather than price-vs-200d-MA, which is the Mayer Multiple already counted under valuation. Missing inputs drop their dimension and the remaining weights renormalise, subject to a floor of 3 dimensions and 0.6 weight. `computeVibeLabel` retired — the header sentence is now derived from the same dimension values as the number, so the two cannot disagree. `BtcPriceCard` and `Skeleton` extracted from `App.jsx`; the 30-day hash-rate fetch lifted out of `NetworkPulseCard` to App. `/preview` slash command added |
@@ -43,7 +44,7 @@ All four must pass before pushing. `/verify` runs them in one go.
 | `npm run lint` | zero errors — the config is clean, so any error is new |
 | `npm test` | all green |
 | `npm run build` | succeeds |
-| `npm run test:e2e` | all green — required for any UI change. Runs every spec twice, desktop and mobile; `--project=mobile` narrows it while iterating |
+| `npm run test:e2e` | all green — required for any UI change. Runs the behavioural specs twice, desktop and mobile, plus the `visual` pixel-comparison project; `--project=mobile` narrows it while iterating |
 | `npm run test:smoke` | **not** part of the pre-push gates — it hits the deployed site, so it can only be meaningful after a merge. Run it (or the `smoke.yml` dispatch) when you want to confirm production is actually healthy |
 
 Rules that hold regardless:
@@ -111,7 +112,8 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `vercel.json` | Deploy config and security/caching headers — kept in the repo so it is reviewable |
 | `supabase/migrations/` | Schema as code — every DB change belongs here |
 | `src/__tests__/` · `src/**/__tests__/` | Vitest unit tests |
-| `e2e/` | Playwright dashboard tests (fully mocked — no network). Runs twice, once per project: `desktop` (1280×720) and `mobile` (iPhone 13, 390×844). `mocks.js` holds the shared upstream stubs; `responsive.spec.js` the breakpoint assertions; `screenshot.spec.js` the mobile-only capture |
+| `e2e/` | Playwright dashboard tests (fully mocked — no network). Three projects: `desktop` (1280×720), `mobile` (iPhone 13, 390×844) and `visual` (mobile viewport, pixel comparison). `mocks.js` holds the shared upstream stubs; `responsive.spec.js` the breakpoint assertions; `screenshot.spec.js` the mobile-only capture; `visual.spec.js` the snapshots |
+| `e2e/__screenshots__/` | Visual-regression baselines. **Generated in CI, never locally** — see the `update-visual-baselines` label below |
 | `smoke/` | Playwright tests against the **deployed** site — real upstreams, no mocks. Kept out of `e2e/` on purpose: `playwright.config.js` has `testDir: './e2e'` with no `testMatch`, so a spec placed there would join `npm run test:e2e` and break its hermeticity |
 | `playwright.smoke.config.js` | Smoke config — `baseURL` defaults to production, overridable via `SMOKE_BASE_URL` |
 | `.claude/hooks/session-start.sh` | Installs deps + resolves a chromium for remote sessions |
@@ -221,6 +223,39 @@ what stops the words and the number contradicting each other on screen.
 > recompute — storing the score itself puts a permanent discontinuity in the
 > series at every weight change.
 
+### Visual regression
+
+`e2e/visual.spec.js`, in its own `visual` Playwright project. Covers the failure
+mode nothing else does: a Tailwind class change that wrecks the mobile layout
+passes every text assertion in the suite *and* is invisible in a diff on a
+phone, so both review paths are blind at once.
+
+Four cards are snapshotted — Cycle Indicators, Network Pulse, BTC Price, Recent
+Blocks — chosen because they are the structurally fragile ones. Component-level
+rather than full-page, so a change to one card does not churn the other three.
+
+Three rules that are load-bearing:
+
+- **Baselines are generated in CI, never locally.** They are pixel comparisons,
+  so they are only valid for the environment that produced them; a baseline made
+  on a laptop fails on the runner over font antialiasing alone, and a check that
+  cries wolf is a check people learn to ignore. Add the
+  `update-visual-baselines` label to a PR and `visual-baselines.yml` commits the
+  new baselines for you.
+- **`updateSnapshots: 'none'`.** Playwright's default is `'missing'`, which
+  *writes* an absent baseline and passes. Since CI never commits what it writes,
+  the baseline would be regenerated on every run and compared against itself —
+  permanently green, permanently vacuous. A missing baseline must fail.
+- **The clock is frozen** at a fixed instant, and the block fixtures derive from
+  that same instant. Three things in these cards read `Date.now()`: the Power
+  Law fair value (a function of days since genesis, so it drifts *every day*),
+  the "N min ago" on the latest block, and the header's "Updated HH:MM". Without
+  freezing, the Cycle Indicators baseline goes stale overnight, every night.
+
+> If the churn ever outweighs the value, deleting `visual.spec.js` and its
+> baselines is a legitimate outcome — that tradeoff was made with eyes open when
+> this shipped, and #18 says so explicitly.
+
 ### Sound
 
 Optional audio feedback via Web Audio API (`btc-vibe-sound-enabled` in localStorage). `playBlockThud` fires on new block; `playPriceTick` fires on price change (debounced to 1/s).
@@ -322,6 +357,7 @@ Donor notifications do **not** depend on it. They come from the
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium, desktop + mobile projects. Uploads `playwright-report` and, separately, a `mobile-screenshot` artifact of the dashboard at 390×844. Required check: `Playwright (chromium)` |
+| `visual-baselines.yml` | `update-visual-baselines` label on a PR + manual | regenerates the visual baselines **on the runner** and commits them to the PR branch, then removes the label. The only sanctioned way to update them |
 | `snapshot.yml` | daily cron + manual | daily metrics → `metric_snapshots` |
 | `smoke.yml` | daily cron + manual | Playwright against the **deployed** site, real upstreams. Not a required check — it verifies production, which by definition exists only after merge |
 | `claude.yml` | `@claude` mention | responds on issues, PRs and review comments |

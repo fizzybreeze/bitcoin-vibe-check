@@ -17,7 +17,32 @@ function project(name) {
 
 describe('Playwright projects', () => {
   it('runs the suite at both a desktop and a mobile viewport', () => {
-    expect(config.projects?.map(p => p.name)).toEqual(['desktop', 'mobile'])
+    expect(config.projects?.map(p => p.name)).toEqual(['desktop', 'mobile', 'visual'])
+  })
+
+  it('renders the visual project at the same viewport as the mobile one', () => {
+    // The baselines are only meaningful as a check on the layout the mobile
+    // specs assert against. If the two viewports drift apart, the snapshots
+    // start guarding a rendering no test describes.
+    expect(project('visual').use.viewport).toEqual(project('mobile').use.viewport)
+  })
+
+  it('keeps the visual spec out of the behavioural projects, and vice versa', () => {
+    // Pixel comparison is the one part of the suite that can fail for reasons
+    // other than a bug, so it stays in its own project — `--project=mobile`
+    // has to remain trustworthy while iterating on layout.
+    expect(project('visual').testMatch).toEqual(/visual\.spec\.js/)
+    for (const name of ['desktop', 'mobile']) {
+      expect(project(name).testIgnore).toEqual(/visual\.spec\.js/)
+    }
+  })
+
+  it('fails rather than self-heals when a baseline is missing', () => {
+    // Playwright's default is 'missing', which writes an absent baseline and
+    // passes. CI never commits what it writes, so the baseline would be
+    // regenerated every run and compared against itself — permanently green
+    // and permanently vacuous. This is the line that stops that.
+    expect(config.updateSnapshots).toBe('none')
   })
 
   it('gives the mobile project a phone-sized viewport', () => {

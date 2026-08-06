@@ -1,0 +1,99 @@
+name: Visual baselines
+
+# Regenerates the visual-regression baselines and commits them back to the PR
+# branch.
+#
+# This exists because the baselines are pixel comparisons, so they are only
+# valid for the rendering environment that produced them. Generated on a laptop
+# or in a dev container they fail in CI on font antialiasing alone — a false
+# red that teaches everyone to ignore the check. So there is exactly one machine
+# allowed to produce them: this runner.
+#
+# It is also the answer to the maintenance cost of snapshot tests. Every
+# intentional design change invalidates a baseline; rather than that being a
+# chore requiring a local browser, add the `update-visual-baselines` label to
+# the PR and the new baselines are committed for you. The label is removed
+# afterwards, so re-labelling re-runs it.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: visual-baselines-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: Regenerate baselines
+    # On a labelled PR, only react to our own label — every other label event
+    # would otherwise start a run that does nothing.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'update-visual-baselines'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `pull_request` checks out a detached merge ref, which cannot be
+          # pushed. Take the actual head branch so the commit has somewhere to
+          # land.
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache browsers
+        uses: actions/cache@v6
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # --update-snapshots overrides the config's `updateSnapshots: 'none'`,
+      # which is what makes a missing baseline a hard failure everywhere else.
+      - name: Regenerate baselines
+        run: npx playwright test --project=visual --update-snapshots
+
+      - name: Commit baselines
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add e2e/__screenshots__
+          if git diff --cached --quiet; then
+            echo "Baselines already match this runner — nothing to commit."
+            exit 0
+          fi
+          git commit -m "test(visual): regenerate baselines in CI"
+          git push origin HEAD:"${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+      # Removing it means adding the label again re-runs this, rather than the
+      # label being a one-shot that has to be toggled off by hand.
+      - name: Remove the label
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method DELETE \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/update-visual-baselines"

@@ -95,7 +95,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full flex flex-col">
+    <div data-testid="card-btc-price" className="rounded-2xl bg-gray-900 p-6 h-full flex flex-col">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
