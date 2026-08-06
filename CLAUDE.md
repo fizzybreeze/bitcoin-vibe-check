@@ -29,7 +29,8 @@ npm run build     # production build to dist/
 npm run preview   # preview the production build
 npm run lint      # run ESLint
 npm test          # unit tests (vitest)
-npm run test:e2e  # Playwright end-to-end tests
+npm run test:e2e  # Playwright end-to-end tests (mocked, hermetic)
+npm run test:smoke # Playwright against the deployed site (real upstreams)
 ```
 
 ## Definition of done
@@ -42,6 +43,7 @@ All four must pass before pushing. `/verify` runs them in one go.
 | `npm test` | all green |
 | `npm run build` | succeeds |
 | `npm run test:e2e` | all green — required for any UI change |
+| `npm run test:smoke` | **not** part of the pre-push gates — it hits the deployed site, so it can only be meaningful after a merge. Run it (or the `smoke.yml` dispatch) when you want to confirm production is actually healthy |
 
 Rules that hold regardless:
 
@@ -108,7 +110,9 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `vercel.json` | Deploy config and security/caching headers — kept in the repo so it is reviewable |
 | `supabase/migrations/` | Schema as code — every DB change belongs here |
 | `src/__tests__/` · `src/**/__tests__/` | Vitest unit tests |
-| `e2e/` | Playwright dashboard smoke tests (fully mocked — no network) |
+| `e2e/` | Playwright dashboard tests (fully mocked — no network) |
+| `smoke/` | Playwright tests against the **deployed** site — real upstreams, no mocks. Kept out of `e2e/` on purpose: `playwright.config.js` has `testDir: './e2e'` with no `testMatch`, so a spec placed there would join `npm run test:e2e` and break its hermeticity |
+| `playwright.smoke.config.js` | Smoke config — `baseURL` defaults to production, overridable via `SMOKE_BASE_URL` |
 | `.claude/hooks/session-start.sh` | Installs deps + resolves a chromium for remote sessions |
 | `.claude/commands/ship.md` · `verify.md` · `preview.md` | `/ship`, `/verify` and `/preview` — the mobile workflow commands |
 | `vite.config.js` | Vite plugins and the `vite-plugin-pwa` service-worker config (precache + runtime caching) |
@@ -318,6 +322,7 @@ Donor notifications do **not** depend on it. They come from the
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium. Required check: `Playwright (chromium)` |
 | `snapshot.yml` | daily cron + manual | daily metrics → `metric_snapshots` |
+| `smoke.yml` | daily cron + manual | Playwright against the **deployed** site, real upstreams. Not a required check — it verifies production, which by definition exists only after merge |
 | `claude.yml` | `@claude` mention | responds on issues, PRs and review comments |
 
 > `claude.yml` runs only for commenters with **write access** — the action checks
