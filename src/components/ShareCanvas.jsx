@@ -5,8 +5,8 @@ import {
 } from '../lib/calculations.js'
 import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculations.js'
 // Shared with api/og.js — the exported card and the link preview show the same
-// score, so they cannot be allowed to colour it differently.
-import { vibeLabelHex } from '../lib/vibePalette.js'
+// two labelled scales, so they cannot be allowed to colour them differently.
+import { vibeLabelHex, fngLabelHex } from '../lib/vibePalette.js'
 
 const ORANGE = '#fb923c'
 const CARD_BG = '#111827'
@@ -54,14 +54,7 @@ function congestionInfo(vsize) {
 }
 
 function fngColorHex(classification) {
-  const map = {
-    'Extreme Fear': RED,
-    'Fear':         '#fbbf24',
-    'Neutral':      '#facc15',
-    'Greed':        '#a3e635',
-    'Extreme Greed': GREEN,
-  }
-  return map[classification] ?? ORANGE
+  return fngLabelHex(classification) ?? ORANGE
 }
 
 function CardWrapper({ children, style }) {

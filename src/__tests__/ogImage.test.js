@@ -64,6 +64,21 @@ describe('buildOgModel', () => {
     expect(model.summary).toBe('Market fearful.')
   })
 
+  // Caught on the preview: alternative.me returned 25 with "Extreme Fear", and
+  // colouring by the number painted it amber — the Fear colour — inside a string
+  // whose own last word said Extreme Fear. Their bands are theirs to move, and
+  // the label is what the reader sees, so the label decides the colour.
+  it('colours Fear & Greed by the label the source sent, not by the number', () => {
+    expect(buildOgModel({ ...FULL, fngScore: 25, fngLabel: 'Extreme Fear' }).fng)
+      .toEqual({ text: 'Fear & Greed 25 · Extreme Fear', color: '#f87171' })
+  })
+
+  it('falls back to numeric bands only when no classification came back', () => {
+    expect(buildOgModel({ ...FULL, fngScore: 12, fngLabel: null }).fng)
+      .toEqual({ text: 'Fear & Greed 12', color: '#f87171' })
+    expect(buildOgModel({ ...FULL, fngScore: 90, fngLabel: null }).fng.color).toBe('#4ade80')
+  })
+
   it('stamps the time in UTC', () => {
     expect(buildOgModel(FULL).timestamp).toBe('As of 14:05 UTC · 6 August 2026')
     expect(fmtOgTimestamp(new Date('2026-01-09T03:07:00Z')))

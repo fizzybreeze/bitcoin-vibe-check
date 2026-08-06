@@ -6,7 +6,7 @@
 // output is a bitmap nobody can assert against; the model in between is plain
 // strings and colours, and that is where every formatting decision lives.
 
-import { vibeLabelHex } from '../../src/lib/vibePalette.js'
+import { vibeLabelHex, fngLabelHex } from '../../src/lib/vibePalette.js'
 
 export const OG_WIDTH  = 1200
 export const OG_HEIGHT = 630
@@ -53,7 +53,17 @@ export function fmtOgTimestamp(now) {
   return `As of ${time} UTC · ${date}`
 }
 
-function fngHex(score) {
+/**
+ * Colour the Fear & Greed line by the classification alternative.me sent.
+ *
+ * The numeric bands below are a fallback for a response that carries a value
+ * but no label — they are this project's reading of the scale, not the source's,
+ * and where the two disagree the source wins, because its word is the one
+ * printed on the card.
+ */
+function fngHex(score, label) {
+  const byLabel = fngLabelHex(label)
+  if (byLabel) return byLabel
   if (!isNum(score)) return MUTED
   if (score < 25) return RED
   if (score < 45) return '#fbbf24'
@@ -105,7 +115,7 @@ export function buildOgModel({
     summary: vibe?.summary ?? null,
     fng: isNum(fngScore)
       ? { text: `Fear & Greed ${Math.round(fngScore)}${fngLabel ? ` · ${fngLabel}` : ''}`,
-          color: fngHex(fngScore) }
+          color: fngHex(fngScore, fngLabel) }
       : null,
     timestamp: fmtOgTimestamp(now),
   }
