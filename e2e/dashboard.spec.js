@@ -93,11 +93,40 @@ test.describe('Bitcoin Dashboard', () => {
   })
 
   test('sentiment summary line is visible in the header within 10 seconds of load', async ({ page }) => {
-    // With fixture data the vibe label resolves to a descriptive sentence.
-    // Any of these words indicates the computed label is present.
+    // The header sentence is derived from the Vibe Score's dimensions, and which
+    // three it names depends on which are furthest from neutral. Match the union
+    // of every phrase it can produce, so the assertion stays real without
+    // depending on which dimensions happen to lead with these fixtures. The
+    // fallback tagline ("Read the room.") matches none of these.
     await expect(
-      page.locator('header').getByText(/greedy|fearful|neutral|extreme fear|extreme greed/i)
+      page.locator('header').getByText(
+        /extreme fear|fearful|sentiment neutral|greedy|extreme greed|historically cheap|below fair value|fairly valued|richly valued|valuations stretched|price falling|price drifting|price flat|price climbing|price surging|mempool|blocks clearing|blocks filling|hash rate/i
+      )
     ).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  // ── Vibe Score ──────────────────────────────────────────────────────────────
+
+  test('Vibe Score renders a 0-100 integer with a temperature label', async ({ page }) => {
+    const score = page.getByTestId('vibe-score')
+    await expect(score).toBeVisible({ timeout: TIMEOUT })
+    const value = parseInt((await score.textContent()).trim(), 10)
+    expect(Number.isInteger(value)).toBe(true)
+    expect(value).toBeGreaterThanOrEqual(0)
+    expect(value).toBeLessThanOrEqual(100)
+
+    await expect(page.getByTestId('vibe-label')).toHaveText(
+      /^(Ice Cold|Cold|Cool|Warm|Hot|Overheated)$/
+    )
+  })
+
+  test('Vibe Score sits inside the BTC Price card, not the header', async ({ page }) => {
+    await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
+    // The score is the differentiator and belongs in the first card, where it
+    // lands inside the natural screenshot crop.
+    const inHeader = await page.locator('header').getByTestId('vibe-score').count()
+    expect(inHeader).toBe(0)
+    await expect(page.getByText('Vibe Score', { exact: true })).toBeVisible()
   })
 
   // ── BTC Price card ──────────────────────────────────────────────────────────

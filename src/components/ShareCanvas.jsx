@@ -78,8 +78,26 @@ function CardWrapper({ children, style }) {
   )
 }
 
+const VIBE_SHARE_DIMENSIONS = [
+  ['sentiment',  'Sentiment'],
+  ['valuation',  'Valuation'],
+  ['momentum',   'Momentum'],
+  ['congestion', 'Mempool'],
+  ['network',    'Network'],
+]
+
+// Temperature scale for the Vibe Score label — cold blues through to a hot red.
+const VIBE_LABEL_HEX = {
+  'Ice Cold':   '#38bdf8',
+  'Cold':       '#22d3ee',
+  'Cool':       '#2dd4bf',
+  'Warm':       '#fbbf24',
+  'Hot':        ORANGE,
+  'Overheated': RED,
+}
+
 function BtcPriceShareCard({ cardData, currency }) {
-  const { priceUsd, priceGbp, priceEur, priceCad, priceChf, priceChange24h, athUsd } = cardData
+  const { priceUsd, priceGbp, priceEur, priceCad, priceChf, priceChange24h, athUsd, vibe } = cardData
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
   const athPct = computeAthDistance(priceUsd, athUsd)
   const isAtATH = athPct != null && athPct >= -0.1
@@ -97,6 +115,35 @@ function BtcPriceShareCard({ cardData, currency }) {
         <p style={{ ...SUB_STYLE, color: changePos ? GREEN : RED }}>
           {changePos ? '▲' : '▼'} {changePos ? '+' : ''}{priceChange24h.toFixed(2)}% (24h)
         </p>
+      )}
+      {/* Mirrors the live card, which carries the score in this same position.
+          Deliberately shows the components rather than vibe.summary: ShareCanvas
+          already draws that same sentence in the image header as
+          sentimentSummary, and printing it twice in one exported image is the
+          duplication the live card was restructured to avoid. */}
+      {vibe && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <p style={LABEL_STYLE}>Vibe Score</p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+            <span style={{ fontSize: 26, fontWeight: 700, color: ORANGE, lineHeight: 1.1 }}>{vibe.score}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: VIBE_LABEL_HEX[vibe.label] ?? MUTED }}>
+              {vibe.label}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 20px', marginTop: 8 }}>
+            {VIBE_SHARE_DIMENSIONS.map(([key, label]) => {
+              const value = vibe.dimensions?.[key]
+              return (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: MUTED }}>{label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: value == null ? '#4b5563' : '#d1d5db' }}>
+                    {value == null ? '—' : Math.round(value)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
     </>
   )

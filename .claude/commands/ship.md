@@ -1,11 +1,11 @@
 ---
-description: Implement a change end-to-end — branch, build, verify, push, open a PR with auto-merge
+description: Implement a change end-to-end — branch, build, verify, push, open a PR for review
 ---
 
-Take the request below and carry it all the way to an open, auto-merging pull
-request. This is the mobile loop: the user is on a phone and cannot read a large
-diff, run a dev server, or debug a failure interactively. Optimise for their
-attention, not yours.
+Take the request below and carry it all the way to an open pull request, ready
+for a human to merge. This is the mobile loop: the user is on a phone and cannot
+read a large diff, run a dev server, or debug a failure interactively. Optimise
+for their attention, not yours.
 
 **Request:** $ARGUMENTS
 
@@ -63,11 +63,18 @@ attention, not yours.
 10. **Open a PR into `main`.** The body should state what changed, why, and how
     it was verified — with the real numbers from step 5.
 
-11. **Enable auto-merge** so it lands by itself once CI passes.
+11. **Do not enable auto-merge.** It is off in this repo by deliberate choice —
+    see the rule in `CLAUDE.md`. The PR waits for a human to merge it. Never
+    turn it on, and never ask to; if the user wants something merged unattended
+    they will say so themselves.
 
 12. **Report back in three lines**: what you changed, the gate results, and the
     PR link. If anything is genuinely uncertain or you made a judgement call the
     user might disagree with, say so in a fourth line — do not bury it.
+
+13. **Say what to look at on the preview**, in one line, if the change is
+    visual — which card, and at which breakpoint. The PR is not the deliverable;
+    the user seeing the change work is. `/preview` fetches the URL.
 
 ## Why steps 7 and 8 exist
 

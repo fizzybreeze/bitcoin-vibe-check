@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Version | Changes |
 |---|---|
+| v1.5.0 | **The Vibe Score** (roadmap §3.1). One composite 0–100 reading of how hot the market is running, composed in `computeVibeScore` from data already fetched — no new source, no new request. Lives in the lower half of the BTC Price card, which was empty on desktop because the chart beside it sets the row height. Weights: sentiment 30%, valuation 30%, momentum 25%, congestion 10%, network 5%; anchors and formula published in the card tooltip and below. Two design decisions worth keeping: the score is **single-polarity** (every dimension scaled so higher = hotter) because a contrarian valuation dimension cancels the pro-cyclical ones and flattens the range to ~38–72, and momentum reads **30-day price change** rather than price-vs-200d-MA, which is the Mayer Multiple already counted under valuation. Missing inputs drop their dimension and the remaining weights renormalise, subject to a floor of 3 dimensions and 0.6 weight. `computeVibeLabel` retired — the header sentence is now derived from the same dimension values as the number, so the two cannot disagree. `BtcPriceCard` and `Skeleton` extracted from `App.jsx`; the 30-day hash-rate fetch lifted out of `NetworkPulseCard` to App. `/preview` slash command added |
 | v1.4.5 | Documentation, plus the dead config that documenting it exposed. `README.md` brought up to date: corrected the Node prerequisite (24.x, not 18+) and the chart cache description (keyed by range — the chart is USD-only); added `BGEOMETRICS_API_KEY` to the env table; added project-structure, development-workflow, deployment, data/scheduled-jobs and docs-index sections. `docs/DEV_WORKFLOW_AUDIT.md` marked as a historical record with a status table; `scripts/SNAPSHOT_SETUP.md` gained a section on why the 200-day series reads Kraken. **Service-worker caching fixed**: it carried a rule for `api.coingecko.com` — replaced two versions earlier — while CoinPaprika, Kraken and `/api/chain-data` had no rule at all, so the PWA cached a host it never called and dropped the price and chart data it did. `runtimeCaching` now covers exactly the five live sources and is pinned by `pwaRuntimeCaching.test.js`. Stale `VITE_COINGECKO_API_KEY` dropped from `ci.yml`; `package.json` version resynced |
 | v1.4.4 | **US fix (#10).** The browser chart still called Binance, which answers US jurisdictions with HTTP 451 — so US visitors saw no price chart, no 200-day MA and no Mayer Multiple. Confirmed by VPN test. `fetchChart` and the 200-day series now use Kraken OHLC. Kraken primitives consolidated into `src/lib/ohlc.js`, with `scripts/lib/ohlc.js` (from #9) reduced to a thin wrapper so both callers share one implementation. Vestigial CoinGecko and TxLookup e2e fixtures removed |
 | v1.4.3 | Infrastructure. Daily metrics snapshot moved off a home Proxmox box and local SQLite to GitHub Actions + a new Supabase `metric_snapshots` table (drops the unlisted `better-sqlite3` dependency; the data is now queryable by the app); existing schema captured as a baseline migration; `vercel.json` committed with security and caching headers; `api/chain-data.js` CORS narrowed from `*` to this project's own origins; Dependabot and a PR template added |
@@ -52,6 +53,14 @@ Rules that hold regardless:
   `git diff --stat origin/main HEAD`: a file showing **pure deletions you did not
   intend** means you are about to revert merged work. PR #12 nearly reverted six
   PRs this way, with auto-merge already enabled.
+- **Never enable auto-merge.** It is off for this repo by deliberate choice, at
+  both layers: the "Allow auto-merge" repository setting is disabled, and `/ship`
+  is written not to turn it on. A PR that merges the moment CI goes green races
+  the human to production and makes the Vercel preview URL pointless — CI proves
+  the code is *correct*, not that the change *looks right*, and on a visual
+  product those are different questions. Open the PR, say what to look at, and
+  let a person press merge. Do not re-enable it as a convenience, and do not
+  suggest it; if the user wants something merged unattended, they will say so.
 - **Every behaviour change needs a test.** The fast unit suite is what makes it
   safe to review on a phone without reading the whole diff.
 - **Never silence a gate to go green.** Deleting an assertion or adding a blanket
@@ -75,14 +84,16 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/App.jsx` | Most React components, plus all data-fetching and state orchestration |
 | `src/utils.js` | Pure helpers: formatting, halving math, dominance labels, tx/address utils |
 | `src/utils/cycleCalculations.js` | Power Law fair value, Mayer Multiple |
-| `src/lib/calculations.js` | Pure calculation functions (ATH distance, sats per fiat, supply issued, sentiment summary, hash rate trend, mempool pressure) |
+| `src/lib/calculations.js` | Pure calculation functions (Vibe Score and its summary sentence, ATH distance, sats per fiat, supply issued, hash rate trend, mempool pressure) |
 | `src/lib/ohlc.js` | Kraken OHLC primitives — URL building, envelope unwrapping, candle parsing. Shared by the chart and, via `scripts/lib/ohlc.js`, the snapshot job |
 | `src/lib/supabase.js` | Supabase client (donor name submissions) — returns `null` when env vars are absent |
 | `src/index.css` | Tailwind v4 import and dark-mode variant |
 | `src/hooks/usePersistedState.js` | `useState` mirrored to localStorage |
 | `src/hooks/usePriceAlerts.js` | Price alert thresholds and firing logic |
 | `src/hooks/useShareImage.js` | Captures the share canvas via lazy-loaded html2canvas |
+| `src/components/BtcPriceCard.jsx` | BTC price, 24h change, ATH distance — and the **Vibe Score** section that fills the space the chart's height creates beside it |
 | `src/components/CycleIndicatorsCard.jsx` | MVRV, Power Law, 200-Day MA, Mayer Multiple (2×2 grid) |
+| `src/components/Skeleton.jsx` | Shared loading placeholder |
 | `src/components/CardTooltip.jsx` | Info tooltip used across cards |
 | `src/components/ShareButton.jsx` · `ShareModal.jsx` · `ShareCanvas.jsx` | Social share flow — trigger, card picker, off-screen render target |
 | `src/components/shareCards.js` | `SHARE_CARDS` list (separate module so ShareModal only exports components) |
@@ -95,7 +106,7 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/__tests__/` · `src/**/__tests__/` | Vitest unit tests |
 | `e2e/` | Playwright dashboard smoke tests (fully mocked — no network) |
 | `.claude/hooks/session-start.sh` | Installs deps + resolves a chromium for remote sessions |
-| `.claude/commands/ship.md` · `verify.md` | `/ship` and `/verify` — the mobile workflow commands |
+| `.claude/commands/ship.md` · `verify.md` · `preview.md` | `/ship`, `/verify` and `/preview` — the mobile workflow commands |
 | `vite.config.js` | Vite plugins and the `vite-plugin-pwa` service-worker config (precache + runtime caching) |
 | `README.md` | Public-facing: features, data sources, local setup, workflow, deployment |
 | `docs/DEV_WORKFLOW_AUDIT.md` | The 2026-08-04 audit that produced the current CI/security setup. **Historical** — carries a status banner saying what has since changed |
@@ -130,14 +141,14 @@ Chart data (`fetchChart`) comes from **Kraken OHLC** via `src/lib/ohlc.js`, with
 ### Components
 
 Most live in `src/App.jsx`; the rest are in `src/components/` (noted below).
-`src/App.jsx` is ~2,000 lines — when you touch a card in it, consider extracting
+`src/App.jsx` is ~1,900 lines — when you touch a card in it, consider extracting
 that card to `src/components/`, since smaller diffs are what make review on a
 phone practical.
 
 | Component | Description |
 |---|---|
 | `App` | Root — state, effects, layout |
-| `BtcPriceCard` | Live BTC price with 24h change, ATH distance, sats per fiat |
+| `BtcPriceCard` † | Live BTC price with 24h change, ATH distance, and the Vibe Score with its five components |
 | `MarketSentimentCard` | Fear & Greed value, classification and 30-day sparkline |
 | `NetworkPulseCard` | Network health — difficulty adjustment bar and 2×2 stat grid |
 | `NetworkHeartbeatCard` | Block height, avg block time, last-block breathing dot (mobile only; desktop merges this into Recent Blocks) |
@@ -146,7 +157,7 @@ phone practical.
 | `HalvingCountdown` | Blocks remaining, deadline-derived countdown, epoch progress bar |
 | `SatoshiQuote` | Auto-rotating Satoshi quotes in the footer |
 | `KpiCard` | Generic labelled stat card (also exported for tests) |
-| `Skeleton` · `DifficultyBar` · `ChartTooltip` | Small presentational helpers |
+| `Skeleton` † · `DifficultyBar` · `ChartTooltip` | Small presentational helpers |
 | `NewsletterCard` | "Satoshi's Weekly Brief" newsletter signup (Beehiiv embed, shown in sidebar) |
 | `NewsletterModal` | Newsletter modal shown 5 s after first visit; dismissed via localStorage flag |
 | `DonationCard` | Lightning donation CTA (Strike link + name submission to Supabase) |
@@ -158,6 +169,48 @@ phone practical.
 | `CardTooltip` † | Info tooltip used across cards |
 
 † in `src/components/`
+
+### The Vibe Score
+
+`computeVibeScore` in `src/lib/calculations.js`. A pure function over data the
+dashboard already fetched — no network call, no new dependency, no new
+`runtimeCaching` rule.
+
+| Dimension | Input | Anchors (clamped) | Weight |
+|---|---|---|---|
+| Sentiment | Fear & Greed | 0–100 direct | 30% |
+| Valuation | mean of Mayer Multiple and MVRV | Mayer 0.8 → 2.4; MVRV 1.0 → 3.7 | 30% |
+| Momentum | 30-day price change from the 200-day candle series | −25% → +25% | 25% |
+| Congestion | mean of fastest fee tier and mempool pressure | log₁₀ 1 → 100 sat/vB; 0 → 200k txs | 10% |
+| Network | 30-day hash-rate trend | −10% → +15% | 5% |
+
+Three rules that are load-bearing, not stylistic:
+
+- **Single polarity.** Every dimension is scaled so higher means hotter. The
+  roadmap originally proposed a contrarian valuation dimension inside an
+  otherwise pro-cyclical composite; scored against five historical market
+  states that version spanned only 38–72 and read the December 2022 bottom as
+  45 — "slightly below neutral". Single polarity spans 8–76 on the same inputs.
+  It also keeps the number descriptive: a score where *cheap* pushes the value
+  up is a buy signal by another name, and signals are in §7's not-doing list.
+- **Momentum is not the Mayer Multiple.** Mayer *is* price ÷ 200-day MA, so
+  sourcing momentum from the same ratio would have put 35% of the score on one
+  number. It reads 30-day price change instead, off candles already in memory.
+- **Degrade, never vanish.** A missing input drops its dimension and the rest
+  renormalise — MVRV rides a 15-request/day free tier and will be absent
+  sometimes. Below 3 dimensions or 0.6 of the weight the function returns
+  `null` and the card says so rather than inventing a number.
+
+The header sentence comes from `computeVibeSummary`, over the same dimension
+values, naming the three furthest from neutral. Deriving both from one source is
+what stops the words and the number contradicting each other on screen.
+
+> **The weights are not calibrated against anything.** `metric_snapshots` held 2
+> rows when this shipped, so there was no history to fit them to. They are
+> chosen for legibility and live in `VIBE_WEIGHTS`/`VIBE_ANCHORS` so they are
+> cheap to revise. If the score is ever persisted, persist the *inputs* and
+> recompute — storing the score itself puts a permanent discontinuity in the
+> series at every weight change.
 
 ### Sound
 

@@ -41,10 +41,20 @@
 > | 🔵 Repo hygiene (artifacts, Node pin, `vercel.json`, migrations, CLAUDE.md drift) | ✅ Fixed — see the notes above on the Node version |
 >
 > Recommendations from §6 also landed: `.claude/settings.json`, the SessionStart
-> hook, and the `/ship` and `/verify` slash commands. `/preview` and `/fixci`
-> (§6.4) were **not** written — they remain the obvious next additions. The
+> hook, and the `/ship`, `/verify` and `/preview` slash commands. `/fixci`
+> (§6.4) was **not** written — it remains the obvious next addition. The
 > `name` length constraint suggested in §2 shipped with the RLS migration as
 > `donors_name_length` (2–50 characters).
+>
+> **One recommendation below has since been reversed: auto-merge.** §4.3 calls it
+> "the mobile superpower" and §6.4 has `/ship` enable it. In practice it defeats
+> the very check §4.3 relies on elsewhere — the preview URL opened on a real
+> phone. A PR that merges itself the moment CI goes green reaches production
+> before anyone has looked at it, and CI cannot tell you whether a change *looks*
+> right. Auto-merge is now disabled at the repository setting and `/ship` is
+> written not to enable it. The rest of the recommendation stands: short-lived
+> `claude/*` branches, required checks, merge via PR — just with a human pressing
+> the button.
 >
 > Two things arrived after this audit and so are absent below: the Binance
 > geo-block that broke the snapshot job and then the browser chart (both now on
