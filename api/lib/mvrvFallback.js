@@ -11,6 +11,15 @@
 // BGeometrics' own, which is typically the day before the capture.
 export const MAX_SNAPSHOT_AGE_DAYS = 7
 
+// How many rows the query asks for, derived from the cap rather than picked.
+// The snapshot job writes a row every day whether or not BGeometrics answered
+// it, so a multi-day outage fills the newest rows with null MVRVs — a window
+// narrower than the cap would 503 while a usable row sat just outside it, and
+// the effective cap would silently be the limit rather than the number
+// documented here. `mvrv_date` also trails `captured_on` by about a day, hence
+// the slack.
+export const SNAPSHOT_QUERY_LIMIT = MAX_SNAPSHOT_AGE_DAYS + 3
+
 const DAY_MS = 86_400_000
 
 // `mvrv_date` is a plain YYYY-MM-DD, the same shape the live route returns.
@@ -21,19 +30,37 @@ function parseUtcDate(value) {
   return Number.isFinite(ms) ? ms : null
 }
 
+/**
+ * Is this a number the card and the Vibe Score can actually use?
+ *
+ * 0 and negatives are not plausible MVRVs, and a null, a string or a NaN would
+ * reach `mvrv.toFixed(2)` on the card and skew — rather than drop — the
+ * valuation dimension. Exported because **the live BGeometrics path needs the
+ * same guard**: a 200 response carrying `mvrv: null` is not a working MVRV, and
+ * treating it as one would cache a blank card for 24 hours without ever
+ * consulting the fallback this module exists to provide.
+ */
+export function usableMvrvValue(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+// The date as the card should print it, or null if it is not one. Live values
+// are fresh by definition, so an unusable date costs the caption, not the
+// number; stored ones are refused outright, since staleness cannot be judged
+// without it.
+export function usableMvrvDate(value) {
+  return parseUtcDate(value) == null ? null : value
+}
+
 function usableMvrv(row) {
   const metrics = row?.metrics
   if (!metrics || typeof metrics !== 'object') return null
-
-  const value = metrics.mvrv_value
-  // 0 is not a plausible MVRV, and a non-finite one would render as "NaN" on
-  // the card and skew the Vibe Score's valuation dimension rather than drop it.
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  if (!usableMvrvValue(metrics.mvrv_value)) return null
 
   const dateMs = parseUtcDate(metrics.mvrv_date)
   if (dateMs == null) return null
 
-  return { value, date: metrics.mvrv_date, dateMs }
+  return { value: metrics.mvrv_value, date: metrics.mvrv_date, dateMs }
 }
 
 /**
@@ -55,19 +82,26 @@ function usableMvrv(row) {
  *   new ones — and the card would look healthy the whole time. Past
  *   `MAX_SNAPSHOT_AGE_DAYS` the honest answer is the one the card already knows
  *   how to render: no MVRV.
+ *
+ * - **A future date is not fresh, it is wrong.** Ordering by date means a row
+ *   dated tomorrow wins every comparison, and the cap only rejects on the old
+ *   side — so one bad upstream date would pin that row as the fallback for
+ *   good. Future-dated rows are dropped from the running instead.
  */
 export function pickSnapshotMvrv(rows, { now = Date.now(), maxAgeDays = MAX_SNAPSHOT_AGE_DAYS } = {}) {
   if (!Array.isArray(rows)) return null
 
-  const candidates = rows.map(usableMvrv).filter(Boolean)
-  if (candidates.length === 0) return null
-
-  const newest = candidates.reduce((a, b) => (b.dateMs > a.dateMs ? b : a))
   // Whole UTC days apart, not elapsed milliseconds: `mvrv_date` has day
   // granularity, so a millisecond comparison would make the cap mean "6 days
   // and some hours" at 09:00 and something else at 23:00.
-  const ageDays = Math.floor(now / DAY_MS) - newest.dateMs / DAY_MS
-  if (ageDays > maxAgeDays) return null
+  const today   = Math.floor(now / DAY_MS)
+  const ageDays = (row) => today - row.dateMs / DAY_MS
+
+  const candidates = rows.map(usableMvrv).filter(Boolean).filter(r => ageDays(r) >= 0)
+  if (candidates.length === 0) return null
+
+  const newest = candidates.reduce((a, b) => (b.dateMs > a.dateMs ? b : a))
+  if (ageDays(newest) > maxAgeDays) return null
 
   return { value: newest.value, date: newest.date, source: 'snapshot' }
 }
@@ -80,9 +114,10 @@ export function pickSnapshotMvrv(rows, { now = Date.now(), maxAgeDays = MAX_SNAP
  * the project vars are absent, which is how `src/lib/supabase.js` behaves and is
  * what keeps a missing var a missing fallback rather than a crashed route.
  *
- * `limit` is deliberately more than 1: see pickSnapshotMvrv above.
+ * `limit` is deliberately more than 1, and wide enough to cover the staleness
+ * cap: see SNAPSHOT_QUERY_LIMIT and pickSnapshotMvrv above.
  */
-export function snapshotQuery({ url, key, limit = 5 } = {}) {
+export function snapshotQuery({ url, key, limit = SNAPSHOT_QUERY_LIMIT } = {}) {
   if (!url || !key) return null
   const base = String(url).replace(/\/+$/, '')
   return {

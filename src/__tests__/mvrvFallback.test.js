@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { pickSnapshotMvrv, snapshotQuery, MAX_SNAPSHOT_AGE_DAYS } from '../../api/lib/mvrvFallback.js'
+import {
+  pickSnapshotMvrv, snapshotQuery, MAX_SNAPSHOT_AGE_DAYS, SNAPSHOT_QUERY_LIMIT,
+} from '../../api/lib/mvrvFallback.js'
 import handler from '../../api/chain-data.js'
 
 // Roadmap §3.2b: when the BGeometrics budget (15 req/day) is exhausted,
@@ -77,6 +79,24 @@ describe('pickSnapshotMvrv', () => {
     }
   })
 
+  // Ordering is by date and the cap only rejects on the old side, so a row
+  // dated in the future would win every comparison and pin itself as the
+  // fallback permanently.
+  it('ignores a future-dated row and serves the newest real one instead', () => {
+    const rows = [
+      row('2026-08-06', { mvrv_value: 9.99, mvrv_date: '2027-01-01' }),
+      row('2026-08-06', FULL_ROW),
+    ]
+    expect(pickSnapshotMvrv(rows, { now: NOW })).toEqual({
+      value: 2.15, date: '2026-08-05', source: 'snapshot',
+    })
+  })
+
+  it('returns nothing when the only row is future-dated', () => {
+    expect(pickSnapshotMvrv([row('2026-08-06', { mvrv_value: 9.99, mvrv_date: '2027-01-01' })], { now: NOW }))
+      .toBeNull()
+  })
+
   it('survives an empty table, a malformed response and a missing metrics object', () => {
     expect(pickSnapshotMvrv([], { now: NOW })).toBeNull()
     expect(pickSnapshotMvrv(null, { now: NOW })).toBeNull()
@@ -93,14 +113,31 @@ describe('snapshotQuery', () => {
     expect(q.headers).toEqual({ apikey: 'anon-key', Authorization: 'Bearer anon-key' })
   })
 
-  // Reading more than the newest row is what makes the null-MVRV case above
-  // recoverable rather than a coin flip.
-  it('asks for more than one row', () => {
+  // A window narrower than the staleness cap would 503 while a usable row sat
+  // just outside it — the effective cap would be the limit, not the documented
+  // number. The job writes a row a day whether or not BGeometrics answered, so
+  // an outage fills that window with null MVRVs.
+  it('asks for enough rows to cover the whole staleness cap', () => {
     const limit = parseInt(
       new URL(snapshotQuery({ url: 'https://proj.supabase.co', key: 'k' }).url).searchParams.get('limit'),
       10,
     )
-    expect(limit).toBeGreaterThan(1)
+    expect(limit).toBe(SNAPSHOT_QUERY_LIMIT)
+    expect(limit).toBeGreaterThan(MAX_SNAPSHOT_AGE_DAYS)
+  })
+
+  // The scenario that check exists for, end to end: BGeometrics has been down
+  // for days, every recent row has a null MVRV, and a usable one is still
+  // inside the cap.
+  it('still finds a usable row after a multi-day gap of MVRV-less rows', () => {
+    const rows = []
+    for (let i = 0; i < SNAPSHOT_QUERY_LIMIT; i++) {
+      const day = new Date(NOW - i * 86_400_000).toISOString().slice(0, 10)
+      rows.push(row(day, i < 5
+        ? { mvrv_value: null, mvrv_date: null }
+        : { mvrv_value: 2.05, mvrv_date: new Date(NOW - (i + 1) * 86_400_000).toISOString().slice(0, 10) }))
+    }
+    expect(pickSnapshotMvrv(rows, { now: NOW })?.value).toBe(2.05)
   })
 
   it('tolerates a trailing slash on the project URL', () => {
@@ -182,6 +219,51 @@ describe('/api/chain-data fallback', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body.mvrv).toEqual({ value: 2.15, date: '2026-08-05', source: 'snapshot' })
+  })
+
+  // BGeometrics answering 200 with an unusable number is not a working MVRV.
+  // Treating it as one would cache a blank card for 24 hours and never consult
+  // the fallback at all — the failure this whole route exists to remove.
+  it('falls back when BGeometrics answers 200 with an unusable value', async () => {
+    for (const mvrv of [null, undefined, 0, -1, '2.42', NaN]) {
+      res = makeRes()
+      vi.stubGlobal('fetch', routeFetch({
+        [BGEOM]: ok([{ d: '2026-08-05', mvrv }]),
+        'https://proj.supabase.co': ok([row('2026-08-06', FULL_ROW)]),
+      }))
+
+      await handler({ headers: {} }, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body.mvrv).toEqual({ value: 2.15, date: '2026-08-05', source: 'snapshot' })
+    }
+  })
+
+  // A live number is fresh by definition, so a date it cannot print is worth a
+  // missing caption, not a discarded value.
+  it('keeps a live value whose date is unusable, without a date', async () => {
+    vi.stubGlobal('fetch', routeFetch({ [BGEOM]: ok([{ d: 'not-a-date', mvrv: 2.42 }]) }))
+
+    await handler({ headers: {} }, res)
+    expect(res.body.mvrv).toEqual({ value: 2.42, date: null, source: 'live' })
+  })
+
+  // An env var declared and left empty is the shape .env.example ships and what
+  // Vercel stores for a cleared field — it is not nullish, so `??` would accept
+  // it and the documented VITE_ fallback would never fire.
+  it('treats an empty project var as absent and uses the VITE_ pair', async () => {
+    vi.stubEnv('SUPABASE_URL', '')
+    vi.stubEnv('SUPABASE_ANON_KEY', '')
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://proj.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
+
+    vi.stubGlobal('fetch', routeFetch({
+      [BGEOM]: fail(429),
+      'https://proj.supabase.co': ok([row('2026-08-06', FULL_ROW)]),
+    }))
+
+    await handler({ headers: {} }, res)
+    expect(res.body.mvrv.source).toBe('snapshot')
   })
 
   it('falls back when the BGeometrics call throws outright', async () => {

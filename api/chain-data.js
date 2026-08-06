@@ -15,13 +15,16 @@
 // Verified field shapes:
 //   MVRV (BGeometrics): [{d: 'YYYY-MM-DD', unixTs: number, mvrv: number}, ...]
 
-import { pickSnapshotMvrv, snapshotQuery } from './lib/mvrvFallback.js'
+import {
+  pickSnapshotMvrv, snapshotQuery, usableMvrvValue, usableMvrvDate,
+} from './lib/mvrvFallback.js'
 
 // A live answer holds for a day, which is what keeps the route inside 15
 // requests. A fallback answer must not: it would outlive the outage that caused
 // it and keep the stale number on the card long after BGeometrics recovered.
 // An hour is short enough that the live value returns the same morning, and long
-// enough that retrying against an exhausted budget stays ~24 attempts a day.
+// enough that retrying against an exhausted budget stays ~24 attempts a day —
+// self-limiting, since the first success caches for 24 hours again.
 const LIVE_CACHE_SECONDS     = 86400
 const FALLBACK_CACHE_SECONDS = 3600
 
@@ -67,7 +70,12 @@ async function fetchLiveMvrv() {
     if (!Array.isArray(data) || data.length === 0) return null
     const sorted = [...data].sort((a, b) => new Date(a.d) - new Date(b.d))
     const latest = sorted[sorted.length - 1]
-    return { value: latest.mvrv, date: latest.d, source: 'live' }
+    // A 200 carrying a null, a string or a zero is not a working MVRV. Saying
+    // otherwise would cache a blank card for 24 hours and skip the fallback
+    // entirely — the exact outcome this route now exists to avoid — so the live
+    // path is held to the same guard as the stored one.
+    if (!usableMvrvValue(latest?.mvrv)) return null
+    return { value: latest.mvrv, date: usableMvrvDate(latest.d), source: 'live' }
   } catch (e) {
     console.error('[chain-data] MVRV fetch error:', e.message)
     return null
@@ -78,10 +86,15 @@ async function fetchLiveMvrv() {
 // public, so this route needs no privilege the client bundle does not already
 // carry. The unprefixed names are read first so the function can be given its
 // own vars; the VITE_ ones are the same project's and are already set.
+//
+// `||` rather than `??`: a variable declared and left empty — the shape
+// .env.example itself ships, and what Vercel stores for a cleared field — is
+// not nullish, so `??` would accept the empty string and the documented
+// fallback would never fire.
 async function fetchSnapshotMvrv() {
   const query = snapshotQuery({
-    url: process.env.SUPABASE_URL      ?? process.env.VITE_SUPABASE_URL,
-    key: process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY,
+    url: process.env.SUPABASE_URL      || process.env.VITE_SUPABASE_URL,
+    key: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY,
   })
   if (!query) return null
 
