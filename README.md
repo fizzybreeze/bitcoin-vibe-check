@@ -300,6 +300,8 @@ Dependabot opens one grouped npm PR weekly and a monthly Actions PR; React and V
 
 Auto-merge is deliberately disabled on this repository. CI proves a change is correct; it cannot tell you whether it looks right. Every PR waits for a human to open the preview and press merge.
 
+The one exception is dependency chores. A Dependabot PR bumping a **patch or minor** version merges itself once the required checks are green — there is no preview worth looking at, and the daily production smoke check catches anything that slips through within a day. **Majors always wait for a human**, since that is where breaking changes live. This is done by `dependabot-auto-merge.yml` waiting for the checks and then merging, rather than by GitHub's auto-merge feature, so that feature stays switched off for every other PR in the repo.
+
 ---
 
 ## Deployment

@@ -1,0 +1,138 @@
+name: Dependabot auto-merge
+
+# Dependency chores are low-judgement work, and every one of them already
+# passes lint, the unit suite, a build, and the e2e suite at desktop and mobile
+# plus the `visual` pixel comparison, before it is allowed to merge. For a patch
+# or a minor bump that gate *is* the review — and the visual project is the part
+# that earns it, since a bump which shifts the mobile rendering is the one
+# breakage text assertions would wave straight through. #16's daily production
+# smoke check catches whatever still slips, within a day. Majors stay manual —
+# see MERGEABLE_UPDATE_TYPES in scripts/lib/autoMerge.js for why.
+#
+# ---------------------------------------------------------------------------
+# This does NOT use GitHub's auto-merge feature, and must not be rewritten to.
+# ---------------------------------------------------------------------------
+#
+# `gh pr merge --auto` needs the repository-level "Allow auto-merge" setting,
+# which is off here by deliberate choice: on a visual product, CI proves a
+# change is *correct*, not that it *looks right*, so every human PR waits for
+# someone to open the Vercel preview. Turning that setting on to serve
+# Dependabot would quietly re-arm auto-merge for every PR in the repo, which is
+# a much larger change than this one is meant to be. Instead this job waits for
+# the required checks itself and then merges. Branch protection is still the
+# real enforcer — if the checks are not green, the merge call is rejected
+# regardless of what this workflow believes.
+#
+# `pull_request_target`, not `pull_request`: workflows triggered by Dependabot
+# on `pull_request` get a read-only GITHUB_TOKEN and so cannot merge anything.
+# The tradeoff is that this runs in the *base* branch's context, which is why
+# the checkout below is pinned to the base SHA — no code from the PR is ever
+# executed here, only the scripts already on main.
+on: pull_request_target
+
+# Naming any permission sets every unnamed one to `none`, so this list has to
+# be complete. `statuses: read` is the easy one to miss: `gh pr checks` reads
+# the whole rollup, and Vercel reports its preview as a legacy commit *status*
+# rather than a check run — without it the query can fail outright, which this
+# job would read as "still pending" right up to the timeout.
+permissions:
+  contents: write       # perform the merge
+  pull-requests: write  # read Dependabot metadata, merge the PR
+  checks: read          # the two required check runs
+  statuses: read        # the rest of the rollup, e.g. Vercel
+
+# A Dependabot rebase pushes a new head and fires this again; the in-flight run
+# is then waiting on checks for a commit that no longer exists.
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Auto-merge patch and minor updates
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    # Generous, because it is spent idle: the job's whole middle is waiting for
+    # CI and E2E, which take a handful of minutes between them.
+    timeout-minutes: 30
+    steps:
+      # The base SHA, explicitly. `pull_request_target` already defaults to the
+      # base branch, but this is the one line in the file where getting it
+      # wrong would run attacker-controlled code with a write token, so it is
+      # worth being unambiguous rather than relying on the default.
+      - name: Check out the base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Two independent gates on authorship: the job-level `if` above checks
+      # who opened the PR, and fetch-metadata verifies that the head commit is
+      # actually signed by Dependabot before it will report any metadata at
+      # all. Either one failing stops this here.
+      - name: Decide whether this update may merge unattended
+        id: gate
+        run: |
+          if node scripts/dependabot-auto-merge.js update-type "$UPDATE_TYPE"; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+
+      - name: Wait for the required checks
+        id: wait
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          deadline=$(( $(date +%s) + 25 * 60 ))
+          while :; do
+            # `gh pr checks` exits non-zero while checks are pending or failing,
+            # which would end the step under `set -e`; the state we want is on
+            # stdout, so the exit code is deliberately discarded here and the
+            # verdict comes from evaluateRequiredChecks instead.
+            raw=$(gh pr checks "$PR_URL" --json name,state 2>/dev/null || true)
+            state=$(printf '%s' "$raw" | node scripts/dependabot-auto-merge.js checks)
+
+            case "$state" in
+              passed)
+                echo "ready=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              failed)
+                # Not an error in this workflow — CI is already red on the PR
+                # and says why. Going red here too would put two failing checks
+                # on one PR for one cause, which is worse to read on a phone.
+                echo "::notice::A required check failed. Leaving this PR for a human."
+                echo "ready=false" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for the required checks to report."
+              exit 1
+            fi
+            sleep 30
+          done
+
+      # Squash, matching how these have been merged by hand: #6 and #7 both
+      # landed as single `chore(deps-dev): … (#n)` commits.
+      - name: Merge
+        if: steps.wait.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge "$PR_URL" --squash --delete-branch
