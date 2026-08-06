@@ -50,12 +50,13 @@ most valuable thing on this list.
 **`metric_snapshots` is accruing data nothing reads.** The daily Actions job
 upserts a full metrics row per UTC day since it moved off the home Proxmox box,
 the table has public `SELECT`, and not one line of `src/` touches it. Be honest
-about the scale, though: on 2026-08-06 the table held **2 rows** and the
-scheduled job had fired exactly once (the rest were manual dispatches). Nothing
-is broken — it is simply young. That makes this the cheapest leverage in the
-repo *prospectively*, and it also means there is no history against which to
-calibrate anything, including the Vibe Score weights. Check the job is still
-firing daily before building on it.
+about the scale, though: on 2026-08-06 the table held **3 rows** (4–6 Aug), of
+which the cron produced two — every field populated on all three, and no failed
+run yet. Nothing is broken; it is simply young. That makes this the cheapest
+leverage in the repo *prospectively*, and it also means there is no history
+against which to calibrate anything, including the Vibe Score weights. It stores
+the Vibe Score's inputs rather than the score, which is the right choice — but
+not yet *all* of them; see §3.2a.
 
 **Sharing works, and as of v1.6.0 so does being shared.** `ShareCanvas` renders
 eight genuinely good cards, and `html2canvas` is lazy-loaded so it costs nothing
@@ -102,15 +103,56 @@ function with no Supabase read. When this item lands: **show the sparkline from
 7 data points, hide it below that**, and label it honestly (`since 4 Aug` until
 30 days exist, then `30d`). Never render a 2-point line — it reads as broken
 rather than as young — and never pad or backfill, because a fabricated history
-under a credibility-sensitive number is the worst trade available. Note the
-table held 2 rows on 2026-08-06 and the scheduled job had fired once; this item
-is gated on that cadence holding, not on anything in the app.
+under a credibility-sensitive number is the worst trade available.
 
-**Bonus, nearly free.** Serve MVRV from `metric_snapshots` when the BGeometrics
-budget (15 requests/day) is exhausted. The snapshot job already stores
-`mvrv_value` and `mvrv_date` daily. Yesterday's MVRV is a far better answer than
-a blank card, and it removes the only hard rate limit in the stack from the
-critical path.
+#### Readiness, checked 2026-08-06
+
+The cadence question this item was gated on is now answered — **the job is
+healthy**. Three rows (4, 5, 6 Aug), all 28 metric fields non-null on every one,
+five runs green: three manual dispatches and **two scheduled**, so the cron has
+now fired on consecutive days rather than once. One observation worth recording:
+`snapshot.yml` asks for 06:17 UTC and the two scheduled runs actually started at
+09:10 and 09:11 UTC. That is ordinary GitHub queueing for scheduled workflows,
+not a fault, and ~15 hours of headroom before the delay could push a row onto
+the wrong `captured_on` — but it is the reason to read the cron as "some time
+that morning" rather than as a clock.
+
+So the answer to *is it too soon* is that **§3.2 is three sub-items with three
+different readiness dates**, and only one of them is waiting on anything.
+
+**3.2a — make a snapshot row sufficient to recompute the score. Do this first,
+and do it soon.** The snapshot job predates v1.5.0, so it stores neither the Vibe
+Score nor the one input that cannot be recovered later: **30-day price change**.
+Every other dimension can be recomputed from a stored row today —
+`fear_greed_value`, `mayer_multiple`, `mvrv_value`, `fee_fastest_sv`,
+`mempool_tx_count`, `hashrate_trend_30d` are all there. Momentum is not, and its
+absence does not fail loudly: dropping it leaves 4 dimensions and 0.75 coverage,
+both above the `MIN_DIMENSIONS`/`MIN_COVERAGE` floors, so `computeVibeScore`
+returns a perfectly plausible number computed on **different weights than the
+live card uses**. A sparkline that silently disagrees with the number it sits
+under is worse than no sparkline. `scripts/snapshot.js` already fetches the full
+Kraken 200-day series for `ma_200d_usd`, so `price_change_30d_pct` is a few lines
+off candles already in memory. **This is the only genuinely time-sensitive thing
+on this list** — every day it is not stored is a day of history that is
+permanently momentum-less. From ~31 rows (early September) momentum becomes
+derivable from the `price_usd` column itself, so the field closes a one-month
+window; the rows already captured stay incomplete either way.
+
+**3.2b — MVRV fallback. Not gated on data age at all; shippable now.** Serve
+MVRV from `metric_snapshots` when the BGeometrics budget (15 requests/day) is
+exhausted. The snapshot job already stores `mvrv_value` and `mvrv_date` daily —
+today's row carries MVRV dated the previous day, which is exactly the shape this
+needs. Yesterday's MVRV is a far better answer than a blank card, and it removes
+the only hard rate limit in the stack from the critical path. Three rows is
+already full value here, because this reads the *latest* row rather than a
+series.
+
+**3.2c — the sparkline itself.** Wants 7 rows by the rule above, which arrives
+around **10 Aug**. Building it before then is reasonable — the "not enough
+history yet" branch is the one that will actually render on the day it merges,
+which is a good reason to have written it deliberately rather than as an
+afterthought — but do 3.2a first, or the history it eventually draws will
+disagree with the live number for its first month.
 
 ### 3.4 Alerts worth keeping
 
@@ -129,6 +171,37 @@ fires only if the browser tab survived until 2am. Fixing that properly is Web
 Push, which is §4.1 — but it is worth being clear that until then, alerts are a
 convenience for open tabs rather than a background service, and the copy should
 not overpromise.
+
+#### 3.4a — generalise the rule, and extract the predicate
+
+`usePriceAlerts` currently hard-codes both the shape of a rule
+(`{targetPrice, currency, direction}`) and the crossing test, which is inline in
+the price-tick effect. Widen the shape to name a metric, and **lift the crossing
+test out into a pure function in `src/lib/`**, next to `calculations.js`, taking
+a rule and a metrics object.
+
+That extraction is the whole reason §3.4 and §4.1 are separable rather than one
+change: §4.1's server-side evaluator imports the same function, so the browser
+and the job cannot disagree about when an alert fires — and the decision stays
+unit-testable without a service worker in the loop.
+
+Alerts already saved to `localStorage` under `btc-vibe-price-alerts` have no
+metric field. **Migrate them on read** — reading a stored price alert as an
+unrecognised rule and dropping it silently deletes something a visitor set
+deliberately.
+
+#### 3.4b — the new metrics in the panel
+
+Fees, Fear & Greed extremes, Mayer crossings, plus the copy fix above.
+`PriceAlertsPanel.jsx` is already 153 lines and this is the change that grows
+it, which is why it is worth its own diff: 3.4a's review question is "is the
+rule model right", 3.4b's is "does this work on a phone". Both are worth asking;
+neither is served by asking them in one PR.
+
+> **These three metrics are all keyless** — mempool.space, alternative.me, and
+> Kraken OHLC plus a price for the Mayer Multiple. Nothing in §3.4 touches the
+> BGeometrics quota or needs §3.2. MVRV is the one metric that would, which is
+> the argument for leaving it out of the first cut.
 
 ---
 
@@ -156,6 +229,46 @@ and the security advisors must come back clean. Also: an evaluation job on a
 short cadence is a different cost profile from one daily snapshot; check the
 Actions minutes before committing to a frequency, and consider a Supabase edge
 function instead.
+
+**The service worker is not ready for this, and that is the hidden cost.**
+`vite.config.js` configures `VitePWA` with a `workbox: {...}` block — the
+generateSW strategy, where there is no service-worker source file to hang a
+`push` or `notificationclick` listener on. Adding one means either
+`injectManifest` with a new `src/sw.js`, or `workbox.importScripts`. Under
+`injectManifest` the exported `runtimeCaching` array moves into the SW source,
+so `pwaRuntimeCaching.test.js` gets reworked alongside it. Budget for this
+explicitly; it is not a line of config.
+
+#### 4.1a — subscription plumbing, no sender
+
+SW strategy switch, the `push_subscriptions` migration and its RLS, the
+subscribe/unsubscribe UI, and a `push` handler that renders a notification.
+Nothing evaluates anything yet — verify by pushing to your own endpoint by hand.
+Worth isolating because this is the diff the security review is *about*: can an
+anonymous client reach a row that is not its own, and does the PWA still install.
+
+#### 4.1b — the evaluator
+
+The scheduled job, importing 3.4a's predicate. Its "read the current metrics"
+half is a job `scripts/snapshot.js` already does — reuse that fetch layer rather
+than inventing a second one, and note it is the *fetch* layer that is reusable,
+not `metric_snapshots`: a daily row is far too stale to fire a fee alert against.
+
+#### Sequencing
+
+**§3.4 → §4.1, one way, and they are not one PR.** §3.4 is pure client — no
+migration, no keys, no cron, no serverless, no service worker — and is verifiable
+by `npm test` plus the e2e suite. §4.1 is almost entirely infrastructure, and
+barely touches `src/`. The dependency is that §4.1's evaluator needs a *rule
+format*, and §3.4a is the change that invents one; building §4.1 first means
+inventing a provisional format and then rewriting it.
+
+The overlap that tempts you to merge them is the crossing predicate, and 3.4a's
+extraction is the answer to it. Four PRs, in order: **3.4a → 3.4b → 4.1a →
+4.1b**. 3.4a and 3.4b merge cleanly into one if you want it shorter; 4.1a and
+4.1b merge less cleanly. Nothing should merge across the §3/§4 boundary — the
+review questions on either side have almost nothing in common, and the whole
+point of the phone workflow is that a diff can be judged on its own terms.
 
 ### 4.2 Public data API and an embeddable badge
 
