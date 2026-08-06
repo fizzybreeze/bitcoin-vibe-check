@@ -60,19 +60,32 @@ export function isMergeableUpdate(updateType) {
  * @returns {{state: 'passed'|'pending'|'failed', reason: string}}
  */
 export function evaluateRequiredChecks(checks) {
+  // A name can appear more than once if a job was re-run, and the response is
+  // not documented as ordered, so "the last one wins" would decide a merge on
+  // whichever way GitHub happened to sort the array that minute. Every entry
+  // for a required check is kept and all of them have to agree, which resolves
+  // the ambiguity in the only direction that is safe: a name carrying both a
+  // failure and a success reads as failed, waits out the timeout, and asks for
+  // a human rather than guessing which one is current.
   const seen = new Map()
   for (const check of checks ?? []) {
-    // Re-runs report the same name more than once; the last entry wins, which
-    // matches what the PR page shows.
-    if (check?.name) seen.set(check.name, String(check.state ?? '').toUpperCase())
+    if (!check?.name) continue
+    const states = seen.get(check.name) ?? []
+    states.push(String(check.state ?? '').toUpperCase())
+    seen.set(check.name, states)
   }
 
-  const failed = REQUIRED_CHECKS.filter(name => FAILING_STATES.includes(seen.get(name)))
+  const failed = REQUIRED_CHECKS.filter(name =>
+    (seen.get(name) ?? []).some(state => FAILING_STATES.includes(state))
+  )
   if (failed.length > 0) {
     return { state: 'failed', reason: `required checks failed: ${failed.join(', ')}` }
   }
 
-  const waiting = REQUIRED_CHECKS.filter(name => !SUCCESS_STATES.includes(seen.get(name)))
+  const waiting = REQUIRED_CHECKS.filter(name => {
+    const states = seen.get(name) ?? []
+    return states.length === 0 || !states.every(state => SUCCESS_STATES.includes(state))
+  })
   if (waiting.length > 0) {
     return { state: 'pending', reason: `waiting on: ${waiting.join(', ')}` }
   }

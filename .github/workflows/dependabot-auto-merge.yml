@@ -28,10 +28,16 @@ name: Dependabot auto-merge
 # executed here, only the scripts already on main.
 on: pull_request_target
 
+# Naming any permission sets every unnamed one to `none`, so this list has to
+# be complete. `statuses: read` is the easy one to miss: `gh pr checks` reads
+# the whole rollup, and Vercel reports its preview as a legacy commit *status*
+# rather than a check run — without it the query can fail outright, which this
+# job would read as "still pending" right up to the timeout.
 permissions:
   contents: write       # perform the merge
   pull-requests: write  # read Dependabot metadata, merge the PR
-  checks: read          # read the required check results
+  checks: read          # the two required check runs
+  statuses: read        # the rest of the rollup, e.g. Vercel
 
 # A Dependabot rebase pushes a new head and fires this again; the in-flight run
 # is then waiting on checks for a commit that no longer exists.

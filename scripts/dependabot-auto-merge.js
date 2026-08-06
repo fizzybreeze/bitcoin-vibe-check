@@ -14,6 +14,13 @@
 
 import { isMergeableUpdate, evaluateRequiredChecks } from './lib/autoMerge.js'
 
+// `process.exitCode` and a natural exit throughout, never `process.exit()`.
+// Node's writes to a pipe are asynchronous, and the workflow reads this
+// process's stdout through a command substitution — so exiting the instant
+// after `console.log` can truncate the very word the caller is switching on.
+// An empty read would fall through the bash `case` as neither passed nor
+// failed, i.e. silently pending, which is the kind of intermittent fault that
+// would be near-impossible to diagnose in a workflow nothing can rehearse.
 const [command, ...rest] = process.argv.slice(2)
 
 if (command === 'update-type') {
@@ -24,12 +31,17 @@ if (command === 'update-type') {
       ? `${updateType} may merge unattended`
       : `${updateType || '(no metadata)'} needs a human — leaving this PR alone`
   )
-  process.exit(ok ? 0 : 1)
+  process.exitCode = ok ? 0 : 1
+} else if (command === 'checks') {
+  console.log(await readChecksVerdict())
+} else {
+  console.error(`unknown command: ${command ?? '(none)'}`)
+  process.exitCode = 2
 }
 
-if (command === 'checks') {
+async function readChecksVerdict() {
   const raw = await readStdin()
-  let checks = []
+  let checks
   try {
     checks = JSON.parse(raw || '[]')
   } catch {
@@ -37,17 +49,12 @@ if (command === 'checks') {
     // checks have been reported on the head commit yet. That is the normal
     // state for the first few seconds after a PR opens, not a failure.
     console.error('could not parse check output as JSON — treating as pending')
-    console.log('pending')
-    process.exit(0)
+    return 'pending'
   }
   const { state, reason } = evaluateRequiredChecks(checks)
   console.error(reason)
-  console.log(state)
-  process.exit(0)
+  return state
 }
-
-console.error(`unknown command: ${command ?? '(none)'}`)
-process.exit(2)
 
 async function readStdin() {
   let data = ''

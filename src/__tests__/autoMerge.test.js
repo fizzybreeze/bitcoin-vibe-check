@@ -123,14 +123,23 @@ describe('evaluateRequiredChecks', () => {
     expect(evaluateRequiredChecks(failingVercel).state).toBe('passed')
   })
 
-  it('takes the latest result when a check is reported more than once', () => {
-    // Re-running a failed job leaves both entries in the response.
-    const rerun = [
+  it('refuses a check reported both failing and passing, in either order', () => {
+    // Re-running a failed job can leave both entries in the response, and the
+    // order is not documented — so "last one wins" would decide a merge on
+    // however GitHub sorted the array. Both orderings must reach the same
+    // answer, and the safe answer is not to merge.
+    const both = [
       { name: REQUIRED_CHECKS[0], state: 'FAILURE' },
       { name: REQUIRED_CHECKS[0], state: 'SUCCESS' },
       ...passing.slice(1),
     ]
-    expect(evaluateRequiredChecks(rerun).state).toBe('passed')
+    expect(evaluateRequiredChecks(both).state).toBe('failed')
+    expect(evaluateRequiredChecks([...both].reverse()).state).toBe('failed')
+  })
+
+  it('still passes when a check is reported twice and both agree', () => {
+    const twice = [...passing, { name: REQUIRED_CHECKS[0], state: 'SUCCESS' }]
+    expect(evaluateRequiredChecks(twice).state).toBe('passed')
   })
 
   it('reads states case-insensitively', () => {
