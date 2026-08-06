@@ -16,6 +16,7 @@ import {
   computeAthDistance,
   computeHashRateTrend,
   computePriceChange30d,
+  computeVibeDimensions,
 } from '../../src/lib/calculations.js'
 import { calcPowerLawFairValue } from '../../src/utils/cycleCalculations.js'
 import { extractKrakenOhlc, calc200DMA, calcMayerMultiple } from './ohlc.js'
@@ -135,5 +136,35 @@ export function vibeInputsFromMetrics(metrics = {}) {
     hashRateTrendPct:    metrics.hashrate_trend_30d,
     fastestFeeSatsPerVb: metrics.fee_fastest_sv,
     mempoolTxCount:      metrics.mempool_tx_count,
+  }
+}
+
+/**
+ * How much of the Vibe Score this row can still reproduce.
+ *
+ * The point of storing all seven inputs is undone quietly if one of them goes
+ * missing on the day: the row still *looks* complete — 29 fields, a plausible
+ * number — and nothing about it says the score it replays into was computed on
+ * renormalised weights. So the job reports it at capture time, when the Actions
+ * log is the only place anyone will look.
+ *
+ * Counted by `computeVibeDimensions` rather than by testing the inputs here,
+ * because the rules for what counts as present are its own — a fastest-fee of
+ * 0 sat/vB is a finite number and still not a usable input — and a second copy
+ * of those rules is a second thing to keep in step.
+ */
+export function vibeSufficiency(metrics = {}) {
+  const entries = Object.entries(computeVibeDimensions(vibeInputsFromMetrics(metrics)))
+  const used  = entries.reduce((sum, [, d]) => sum + d.used, 0)
+  const total = entries.reduce((sum, [, d]) => sum + d.inputs, 0)
+
+  return {
+    used,
+    total,
+    sufficient: used === total,
+    // Dimensions standing on fewer inputs than they have. Names the shortfall
+    // in the terms the score is composed in; the job's null-field warning
+    // already names the raw columns.
+    degraded: entries.filter(([, d]) => d.used < d.inputs).map(([key]) => key),
   }
 }

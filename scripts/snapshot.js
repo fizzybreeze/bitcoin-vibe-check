@@ -6,6 +6,11 @@
  * Supabase `metric_snapshots` table. Runs on GitHub Actions
  * (.github/workflows/snapshot.yml), daily plus on-demand via workflow_dispatch.
  *
+ * This file is the I/O half only — fetching, reporting and writing. The row
+ * itself is assembled by `lib/metrics.js`, which is pure and unit-tested, so
+ * the shape of a permanent historical record does not depend on waiting for
+ * tomorrow's cron to find out.
+ *
  * Required env vars:
  *   SUPABASE_URL              — project URL
  *   SUPABASE_SERVICE_ROLE_KEY — service role key. Writes bypass RLS; the table
@@ -20,7 +25,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { KRAKEN_OHLC_URL } from './lib/ohlc.js'
-import { buildMetrics } from './lib/metrics.js'
+import { buildMetrics, vibeSufficiency } from './lib/metrics.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -98,6 +103,23 @@ async function main() {
   const nullFields = Object.entries(metrics).filter(([, v]) => v === null).map(([k]) => k)
   if (nullFields.length > 0) {
     console.warn(`[snapshot] Null fields (API may have failed): ${nullFields.join(', ')}`)
+  }
+
+  // Whether this row can still be replayed into the score the card showed. It
+  // is written even when it cannot — losing 28 good fields because one input is
+  // missing would be the wrong trade — but it is said out loud, because nothing
+  // about the stored row reveals it later: every column is present, and the
+  // score it replays into is simply computed on renormalised weights.
+  const vibe = vibeSufficiency(metrics)
+  const coverage = `${vibe.used}/${vibe.total} Vibe Score inputs`
+  if (vibe.sufficient) {
+    console.log(`[snapshot] Row is fully replayable — ${coverage}`)
+  } else {
+    console.warn(
+      `[snapshot] Row is NOT fully replayable — ${coverage}. ` +
+      `Degraded: ${vibe.degraded.join(', ')}. This day will score differently ` +
+      `from how the dashboard read it.`
+    )
   }
 
   // Refuse to store a worthless row. Price is the one field every other market

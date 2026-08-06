@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildMetrics, vibeInputsFromMetrics } from '../../scripts/lib/metrics.js'
-import { computeVibeScore } from '../lib/calculations.js'
+import { buildMetrics, vibeInputsFromMetrics, vibeSufficiency } from '../../scripts/lib/metrics.js'
+import { computeVibeScore, computeVibeDimensions } from '../lib/calculations.js'
 
 // Kraken candle: [time, open, high, low, close, vwap, volume, count].
 function candle(close) {
@@ -118,6 +118,55 @@ describe('a stored row is sufficient to recompute the Vibe Score', () => {
     expect(degraded).not.toBeNull()
     expect(degraded.coverage).toBeCloseTo(0.75)
     expect(degraded.score).not.toBe(computeVibeScore(vibeInputsFromMetrics(withMomentum)).score)
+  })
+})
+
+describe('vibeSufficiency — what the job says about the row it just built', () => {
+  it('reports a complete row as fully replayable', () => {
+    expect(vibeSufficiency(buildMetrics(fullSources()))).toEqual({
+      used: 7, total: 7, sufficient: true, degraded: [],
+    })
+  })
+
+  it('names momentum when the 30-day change is the input that went missing', () => {
+    const row = { ...buildMetrics(fullSources()), price_change_30d_pct: null }
+    expect(vibeSufficiency(row)).toEqual({
+      used: 6, total: 7, sufficient: false, degraded: ['momentum'],
+    })
+  })
+
+  it('names valuation when MVRV is rate-limited — the everyday case', () => {
+    // BGeometrics is 15 requests/day, so this is the shortfall the log will
+    // actually show. It is expected, and distinguishable from a real fault.
+    const row = buildMetrics(fullSources({ mvrvRaw: null }))
+    expect(vibeSufficiency(row)).toEqual({
+      used: 6, total: 7, sufficient: false, degraded: ['valuation'],
+    })
+  })
+
+  it('counts a zero fastest-fee as absent, because the score does', () => {
+    // A finite number that is still not a usable input: heat() takes log10 of
+    // it. This is the case a locally reimplemented "is it null" check would get
+    // wrong, which is why the count comes from computeVibeDimensions.
+    const row = buildMetrics(fullSources({
+      feesRaw: { fastestFee: 0, halfHourFee: 0, hourFee: 0, economyFee: 0 },
+    }))
+    expect(row.fee_fastest_sv).toBe(0)
+    expect(vibeSufficiency(row)).toEqual({
+      used: 6, total: 7, sufficient: false, degraded: ['congestion'],
+    })
+  })
+
+  it('takes its total from the score rather than from a number written here', () => {
+    // Compared against computeVibeDimensions live, not against the literal 7:
+    // a literal would still pass on the day a dimension is added, which is the
+    // one day this needs to move. It is `used === total` on a full row that
+    // then goes red, above — this pins where `total` comes from.
+    const expected = Object.values(computeVibeDimensions({}))
+      .reduce((sum, d) => sum + d.inputs, 0)
+
+    expect(vibeSufficiency(buildMetrics({})).total).toBe(expected)
+    expect(vibeSufficiency(buildMetrics({})).used).toBe(0)
   })
 })
 
