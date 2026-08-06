@@ -67,9 +67,11 @@ export function evaluateRequiredChecks(checks) {
   // the ambiguity in the only direction that is safe: a name carrying both a
   // failure and a success reads as failed, waits out the timeout, and asks for
   // a human rather than guessing which one is current.
-  // Anything that is not an array — null, an error object gh decided to emit —
-  // reads as no checks reported, i.e. pending. Iterating it directly would
-  // throw, and an uncaught throw here exits before printing a verdict.
+  //
+  // The Array.isArray guard is separate: anything that is not an array — null,
+  // an error object gh decided to emit — reads as no checks reported, i.e.
+  // pending. Iterating it directly would throw, and an uncaught throw here
+  // exits before printing a verdict at all.
   const seen = new Map()
   for (const check of Array.isArray(checks) ? checks : []) {
     if (!check?.name) continue
