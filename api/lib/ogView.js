@@ -134,6 +134,9 @@ export function h(type, props = {}, children) {
   }
 }
 
+// These take a style, not props. Satori renders once and reconciles nothing, so
+// there are no keys to give — anything that looks like one here would be a CSS
+// property named `key`, silently ignored.
 const row = (style, children) => h('div', { style: { display: 'flex', ...style } }, children)
 const col = (style, children) => h('div', { style: { display: 'flex', flexDirection: 'column', ...style } }, children)
 const text = (style, value) => h('div', { style: { display: 'flex', ...style } }, value)
@@ -159,36 +162,34 @@ export function ogElement(model) {
     fontFamily: 'Geist',
     color: WHITE,
   }, [
-    h('div', { key: 'bar', style: { display: 'flex', height: 10, background: ORANGE } }),
+    h('div', { style: { display: 'flex', height: 10, background: ORANGE } }),
 
     col({ flex: 1, padding: '40px 56px 36px', justifyContent: 'space-between' }, [
 
-      row({ key: 'head', alignItems: 'center', justifyContent: 'space-between' }, [
-        col({ key: 'brand' }, [
-          text({ key: 't', fontSize: 30, letterSpacing: '0.14em', color: WHITE }, OG_TITLE),
-          text({ key: 's', fontSize: 22, color: MUTED, marginTop: 6 }, OG_TAGLINE),
+      row({ alignItems: 'center', justifyContent: 'space-between' }, [
+        col({}, [
+          text({ fontSize: 30, letterSpacing: '0.14em', color: WHITE }, OG_TITLE),
+          text({ fontSize: 22, color: MUTED, marginTop: 6 }, OG_TAGLINE),
         ]),
-        text({ key: 'domain', fontSize: 22, color: DIM }, OG_DOMAIN),
+        text({ fontSize: 22, color: DIM }, OG_DOMAIN),
       ]),
 
-      row({ key: 'body', alignItems: 'center', justifyContent: 'space-between', gap: 40 }, [
-        // Price side
-        col({ key: 'price', flex: 1 }, [
-          text({ key: 'l', ...LABEL }, 'BTC / USD'),
+      row({ alignItems: 'center', justifyContent: 'space-between', gap: 40 }, [
+        // Price side. Seven figures need the smaller size to clear the panel.
+        col({ flex: 1 }, [
+          text({ ...LABEL }, 'BTC / USD'),
           text({
-            key: 'v',
             fontSize: model.price && model.price.length > 9 ? 96 : 112,
             color: WHITE,
             marginTop: 8,
             lineHeight: 1.1,
           }, model.price ?? '—'),
-          model.change && text({ key: 'c', fontSize: 34, color: model.change.color, marginTop: 14 }, model.change.text),
-          model.ath && text({ key: 'a', fontSize: 26, color: model.ath.color, marginTop: 10 }, model.ath.text),
+          model.change && text({ fontSize: 34, color: model.change.color, marginTop: 14 }, model.change.text),
+          model.ath && text({ fontSize: 26, color: model.ath.color, marginTop: 10 }, model.ath.text),
         ].filter(Boolean)),
 
         // Vibe side
         model.vibe && col({
-          key: 'vibe',
           width: 380,
           background: PANEL,
           border: `1px solid ${HAIRLINE}`,
@@ -196,16 +197,15 @@ export function ogElement(model) {
           padding: '22px 28px 26px',
           alignItems: 'center',
         }, [
-          text({ key: 'l', ...LABEL, fontSize: 20 }, 'VIBE SCORE'),
-          text({ key: 'v', fontSize: 132, color: model.vibe.color, lineHeight: 1.05, marginTop: 4 }, model.vibe.score),
-          text({ key: 'n', fontSize: 34, color: model.vibe.color }, model.vibe.label),
+          text({ ...LABEL, fontSize: 20 }, 'VIBE SCORE'),
+          text({ fontSize: 132, color: model.vibe.color, lineHeight: 1.05, marginTop: 4 }, model.vibe.score),
+          text({ fontSize: 34, color: model.vibe.color }, model.vibe.label),
         ]),
       ].filter(Boolean)),
 
-      col({ key: 'foot' }, [
-        model.summary && text({ key: 'sum', fontSize: 28, color: DIM, lineHeight: 1.4 }, model.summary),
+      col({}, [
+        model.summary && text({ fontSize: 28, color: DIM, lineHeight: 1.4 }, model.summary),
         row({
-          key: 'meta',
           marginTop: 16,
           paddingTop: 16,
           borderTop: `1px solid ${HAIRLINE}`,
@@ -215,9 +215,9 @@ export function ogElement(model) {
           // A spacer rather than a second copy of the domain: it already sits in
           // the header, and repeating it reads as a template with a hole in it.
           model.fng
-            ? text({ key: 'f', fontSize: 24, color: model.fng.color }, model.fng.text)
-            : h('div', { key: 'f', style: { display: 'flex' } }),
-          text({ key: 'ts', fontSize: 22, color: MUTED }, model.timestamp),
+            ? text({ fontSize: 24, color: model.fng.color }, model.fng.text)
+            : h('div', { style: { display: 'flex' } }),
+          text({ fontSize: 22, color: MUTED }, model.timestamp),
         ]),
       ].filter(Boolean)),
     ]),

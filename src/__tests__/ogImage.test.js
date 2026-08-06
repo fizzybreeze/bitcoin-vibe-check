@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import {
   buildOgModel, ogElement, ogModelIsRenderable, fmtOgTimestamp, OG_WIDTH, OG_HEIGHT,
 } from '../../api/lib/ogView.js'
+import { collectOgData } from '../../api/og.js'
 
 const NOW = new Date('2026-08-06T14:05:00Z')
 
@@ -200,6 +201,111 @@ describe('og:image wiring', () => {
 
   it('keeps the static fallback the function redirects to', () => {
     expect(existsSync(new URL('../../public/og-image.png', import.meta.url))).toBe(true)
+  })
+})
+
+// ─── Reading the upstream sources ────────────────────────────────────────────
+//
+// The shaping between "what the APIs return" and "what the image draws" is
+// where a silent failure lives: rename a field upstream and every field it
+// feeds simply stops appearing, with a valid PNG rendered around the hole and
+// nothing anywhere that reports it.
+
+// Kraken candle: [time, open, high, low, close, vwap, volume, count].
+const CANDLES = Array.from({ length: 231 }, (_, i) => [
+  1_700_000_000 + i * 86_400, '100', '110', '90', String(100_000 + i * 10), '100', '1.5', 42,
+])
+
+const FIXTURES = {
+  'api.coinpaprika.com': {
+    quotes: { USD: { price: 118_432.51, percent_change_24h: 2.41, ath_price: 126_000 } },
+  },
+  'api.alternative.me': { data: [{ value: '72', value_classification: 'Greed' }] },
+  'api.kraken.com': { error: [], result: { XXBTZUSD: CANDLES, last: 1 } },
+  'fees/recommended': { fastestFee: 12, halfHourFee: 8, hourFee: 5, economyFee: 2 },
+  'api/mempool': { count: 45_000, vsize: 12_000_000 },
+  'mining/hashrate': { hashrates: [{ avgHashrate: 8.0e20 }, { avgHashrate: 8.6e20 }] },
+}
+
+function stubSources({ omit = [] } = {}) {
+  const seen = []
+  vi.stubGlobal('fetch', vi.fn(async url => {
+    seen.push(url)
+    const key = Object.keys(FIXTURES).find(k => url.includes(k))
+    if (!key || omit.includes(key)) return { ok: false, status: 503, json: async () => ({}) }
+    return { ok: true, status: 200, json: async () => FIXTURES[key] }
+  }))
+  return seen
+}
+
+describe('collectOgData', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('builds a full card from the six keyless sources', async () => {
+    stubSources()
+    const model = await collectOgData(NOW)
+
+    expect(model.price).toBe('$118,433')
+    expect(model.change.text).toBe('▲ +2.41% 24h')
+    expect(model.ath.text).toBe('-6.0% from ATH')
+    expect(model.fng.text).toBe('Fear & Greed 72 · Greed')
+    expect(model.timestamp).toBe('As of 14:05 UTC · 6 August 2026')
+    expect(model.vibe.score).toMatch(/^\d{1,3}$/)
+    expect(model.summary).toMatch(/\.$/)
+    expect(ogModelIsRenderable(model)).toBe(true)
+  })
+
+  // The quota decision, pinned. `/api/chain-data` allows 15 requests a day and
+  // the live dashboard spends them; an unfurl-driven endpoint calling it would
+  // blank the MVRV card to decorate a chat message.
+  it('never spends the MVRV quota', async () => {
+    const seen = stubSources()
+    await collectOgData(NOW)
+    expect(seen.join(' ')).not.toMatch(/bgeometrics|chain-data/)
+  })
+
+  it('asks only for sources that are keyless and serve the US', async () => {
+    // Binance answers US jurisdictions with 451, and this runs from Vercel's
+    // US regions — the mistake that cost this project two releases.
+    const seen = stubSources()
+    await collectOgData(NOW)
+    const hosts = [...new Set(seen.map(u => new URL(u).host))].sort()
+    expect(hosts).toEqual([
+      'api.alternative.me', 'api.coinpaprika.com', 'api.kraken.com', 'mempool.space',
+    ])
+  })
+
+  it('still draws a card when the price source is the one that failed', async () => {
+    stubSources({ omit: ['api.coinpaprika.com'] })
+    const model = await collectOgData(NOW)
+
+    expect(model.price).toBeNull()
+    // Sentiment, momentum, congestion and network survive — enough dimensions
+    // for a score, so the card is still worth rendering.
+    expect(model.vibe).not.toBeNull()
+    expect(ogModelIsRenderable(model)).toBe(true)
+  })
+
+  it('falls back to the static image when every source fails', async () => {
+    stubSources({ omit: Object.keys(FIXTURES) })
+    expect(ogModelIsRenderable(await collectOgData(NOW))).toBe(false)
+  })
+
+  it('reads numbers that arrive as strings', async () => {
+    // CoinPaprika sends `price` as a string in some responses and a number in
+    // others. An unconverted string is not finite, and a non-finite input is
+    // dropped silently — the line just disappears from the image.
+    vi.stubGlobal('fetch', vi.fn(async url => ({
+      ok: true,
+      status: 200,
+      json: async () => url.includes('coinpaprika')
+        ? { quotes: { USD: { price: '118432.51', percent_change_24h: '2.41', ath_price: '126000' } } }
+        : {},
+    })))
+    const model = await collectOgData(NOW)
+    expect(model.price).toBe('$118,433')
+    expect(model.change.text).toBe('▲ +2.41% 24h')
+    expect(model.ath.text).toBe('-6.0% from ATH')
   })
 })
 

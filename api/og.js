@@ -53,6 +53,16 @@ async function safeFetch(url) {
   }
 }
 
+// Upstream JSON is not a contract. CoinPaprika sends `price` as a string and
+// the percentage fields as numbers today, and nothing stops that flipping —
+// `buildOgModel` drops any field that is not a finite number, so an unconverted
+// string would quietly remove a whole line from the image with no error
+// anywhere. Coerce once, here, where the shapes are known.
+const num = v => {
+  const n = typeof v === 'string' ? parseFloat(v) : v
+  return Number.isFinite(n) ? n : null
+}
+
 // Kraken reports its errors inside a 200 response, so the shared helper throws.
 // Here that is just one more missing input.
 function krakenCandles(raw) {
@@ -80,9 +90,9 @@ export async function collectOgData(now = new Date()) {
   ])
 
   const quote    = paprika?.quotes?.USD ?? {}
-  const priceUsd = parseFloat(quote.price) || null
+  const priceUsd = num(quote.price)
   const fngEntry = fngRaw?.data?.[0] ?? {}
-  const fngScore = fngEntry.value != null ? parseInt(fngEntry.value, 10) : null
+  const fngScore = num(fngEntry.value)
 
   const candles = krakenCandles(ohlcRaw)
   const ma200   = calc200DMA(candles)
@@ -93,14 +103,14 @@ export async function collectOgData(now = new Date()) {
     mvrv:                null, // see the header — the quota belongs to the live card
     priceChange30dPct:   computePriceChange30d(candles),
     hashRateTrendPct:    computeHashRateTrend(hashrateRaw?.hashrates),
-    fastestFeeSatsPerVb: feesRaw?.fastestFee ?? null,
-    mempoolTxCount:      mempoolRaw?.count ?? null,
+    fastestFeeSatsPerVb: num(feesRaw?.fastestFee),
+    mempoolTxCount:      num(mempoolRaw?.count),
   })
 
   return buildOgModel({
     priceUsd,
-    priceChange24h: quote.percent_change_24h ?? null,
-    athUsd:         parseFloat(quote.ath_price) || null,
+    priceChange24h: num(quote.percent_change_24h),
+    athUsd:         num(quote.ath_price),
     fngScore,
     fngLabel:       fngEntry.value_classification ?? null,
     vibe,
