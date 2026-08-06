@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Version | Changes |
 |---|---|
+| v1.6.0 | **A live link preview** (roadmap §3.3). `/og-live.png` rewrites to `api/og.js`, which renders a 1200×630 PNG at request time — current price, 24h change, ATH distance, Vibe Score with its temperature label, the summary sentence and Fear & Greed — via `@vercel/og` (Satori). `og:image` and `twitter:image` in `index.html` repoint at it. Three decisions worth keeping: **MVRV is deliberately not fetched**, because unfurler traffic would spend the 15-request/day BGeometrics quota the live card depends on (valuation falls back to the Mayer Multiple alone, which `computeVibeScore` already handles); **every failure path redirects to the old static `/og-image.png`**, including `@vercel/og` failing to load, which is why it is a dynamic import — unfurlers do not retry, so a 500 is a blank preview; and **the ₿ character never reaches the image**, because Satori's bundled Geist has no U+20BF glyph and would draw a tofu box in every chat, so the card spells the name out and `ogImage.test.js` pins the whole allowed character set. Layout lives in `api/lib/ogView.js` as a pure model + element tree, so it is testable without rasterising; the Vibe label palette moved to `src/lib/vibePalette.js`, now shared with `ShareCanvas` |
 | v1.5.0 | **The Vibe Score** (roadmap §3.1). One composite 0–100 reading of how hot the market is running, composed in `computeVibeScore` from data already fetched — no new source, no new request. Lives in the lower half of the BTC Price card, which was empty on desktop because the chart beside it sets the row height. Weights: sentiment 30%, valuation 30%, momentum 25%, congestion 10%, network 5%; anchors and formula published in the card tooltip and below. Two design decisions worth keeping: the score is **single-polarity** (every dimension scaled so higher = hotter) because a contrarian valuation dimension cancels the pro-cyclical ones and flattens the range to ~38–72, and momentum reads **30-day price change** rather than price-vs-200d-MA, which is the Mayer Multiple already counted under valuation. Missing inputs drop their dimension and the remaining weights renormalise, subject to a floor of 3 dimensions and 0.6 weight. `computeVibeLabel` retired — the header sentence is now derived from the same dimension values as the number, so the two cannot disagree. `BtcPriceCard` and `Skeleton` extracted from `App.jsx`; the 30-day hash-rate fetch lifted out of `NetworkPulseCard` to App. `/preview` slash command added |
 | v1.4.5 | Documentation, plus the dead config that documenting it exposed. `README.md` brought up to date: corrected the Node prerequisite (24.x, not 18+) and the chart cache description (keyed by range — the chart is USD-only); added `BGEOMETRICS_API_KEY` to the env table; added project-structure, development-workflow, deployment, data/scheduled-jobs and docs-index sections. `docs/DEV_WORKFLOW_AUDIT.md` marked as a historical record with a status table; `scripts/SNAPSHOT_SETUP.md` gained a section on why the 200-day series reads Kraken. **Service-worker caching fixed**: it carried a rule for `api.coingecko.com` — replaced two versions earlier — while CoinPaprika, Kraken and `/api/chain-data` had no rule at all, so the PWA cached a host it never called and dropped the price and chart data it did. `runtimeCaching` now covers exactly the five live sources and is pinned by `pwaRuntimeCaching.test.js`. Stale `VITE_COINGECKO_API_KEY` dropped from `ci.yml`; `package.json` version resynced |
 | v1.4.4 | **US fix (#10).** The browser chart still called Binance, which answers US jurisdictions with HTTP 451 — so US visitors saw no price chart, no 200-day MA and no Mayer Multiple. Confirmed by VPN test. `fetchChart` and the 200-day series now use Kraken OHLC. Kraken primitives consolidated into `src/lib/ohlc.js`, with `scripts/lib/ohlc.js` (from #9) reduced to a thin wrapper so both callers share one implementation. Vestigial CoinGecko and TxLookup e2e fixtures removed |
@@ -87,6 +88,7 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/lib/calculations.js` | Pure calculation functions (Vibe Score and its summary sentence, ATH distance, sats per fiat, supply issued, hash rate trend, mempool pressure) |
 | `src/lib/ohlc.js` | Kraken OHLC primitives — URL building, envelope unwrapping, candle parsing. Shared by the chart and, via `scripts/lib/ohlc.js`, the snapshot job |
 | `src/lib/supabase.js` | Supabase client (donor name submissions) — returns `null` when env vars are absent |
+| `src/lib/vibePalette.js` | Vibe Score label → hex. Shared by `ShareCanvas` and `api/lib/ogView.js`, both of which render outside the stylesheet |
 | `src/index.css` | Tailwind v4 import and dark-mode variant |
 | `src/hooks/usePersistedState.js` | `useState` mirrored to localStorage |
 | `src/hooks/usePriceAlerts.js` | Price alert thresholds and firing logic |
@@ -100,6 +102,8 @@ This is a single-page React 19 + Vite 8 app. Logic is split between **`src/App.j
 | `src/components/PriceAlertsButton.jsx` · `PriceAlertsPanel.jsx` | Price alert UI |
 | `src/components/BeehiivEmbed.jsx` · `BeehiivForm.jsx` | Newsletter embed |
 | `api/chain-data.js` | Vercel serverless function proxying BGeometrics MVRV (24h CDN cache); CORS restricted to own origins |
+| `api/og.js` | Vercel serverless function rendering the live link-preview image. Fetches the keyless sources, composes the Vibe Score, rasterises via `@vercel/og`; redirects to the static `/og-image.png` on any failure |
+| `api/lib/ogView.js` | The preview image as data and as a Satori element tree — pure, no network, no rasterising, so the layout is unit-testable |
 | `scripts/snapshot.js` | Daily metrics capture → Supabase `metric_snapshots`. Runs on GitHub Actions, not a local machine — see `scripts/SNAPSHOT_SETUP.md` |
 | `vercel.json` | Deploy config and security/caching headers — kept in the repo so it is reviewable |
 | `supabase/migrations/` | Schema as code — every DB change belongs here |
@@ -251,6 +255,13 @@ All keyless except BGeometrics, which is proxied server-side.
 | `mempool.space` | Fee tiers, block height, difficulty, mempool, recent blocks, hash rate, Lightning stats |
 | `api.alternative.me/fng` | Fear & Greed index — single `?limit=30` call used for both current value and 30-day sparkline |
 | `/api/chain-data` | Own serverless route → BGeometrics MVRV, cached 24h at the CDN edge |
+
+> `/api/og` (reached as `/og-live.png`) calls the same keyless sources
+> server-side to draw the link preview. It is **not** in the table above because
+> nothing in the browser requests it — it exists for link unfurlers, so it needs
+> no `runtimeCaching` rule and `pwaRuntimeCaching.test.js` is unaffected. It
+> deliberately skips `/api/chain-data`: MVRV's free tier is 15 requests/day and
+> that quota belongs to the live card, not to chat previews.
 
 > ⚠️ **Do not reintroduce Binance anywhere.** It answers US jurisdictions with
 > HTTP 451. This bit the project twice:

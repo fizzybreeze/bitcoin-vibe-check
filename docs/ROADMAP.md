@@ -57,12 +57,16 @@ repo *prospectively*, and it also means there is no history against which to
 calibrate anything, including the Vibe Score weights. Check the job is still
 firing daily before building on it.
 
-**Sharing works; being shared does not.** `ShareCanvas` renders eight genuinely
-good cards, and `html2canvas` is lazy-loaded so it costs nothing until used. But
-when someone pastes `bitcoinvibecheck.com` into a group chat, the preview is
-`/og-image.png` — a static file that says the same thing whether BTC is at 40k or
-at an all-time high. The manual share path is polished and the automatic one,
-which fires far more often, is inert.
+**Sharing works, and as of v1.6.0 so does being shared.** `ShareCanvas` renders
+eight genuinely good cards, and `html2canvas` is lazy-loaded so it costs nothing
+until used — but that is the path someone has to choose. The automatic one, which
+fires far more often, used to be a static `/og-image.png` that said the same
+thing whether BTC was at 40k or at an all-time high; §3.3 replaced it with a
+rendered card. What is still unmeasured is whether unfurlers actually re-fetch
+it: X and Facebook cache preview images for days, so the live number may reach
+fewer people than the endpoint's five-minute cache implies. Nobody has checked,
+and the honest next step is to look at a real paste in each of the three or four
+places this link actually gets pasted before building anything else on top.
 
 ---
 
@@ -107,29 +111,6 @@ budget (15 requests/day) is exhausted. The snapshot job already stores
 `mvrv_value` and `mvrv_date` daily. Yesterday's MVRV is a far better answer than
 a blank card, and it removes the only hard rate limit in the stack from the
 critical path.
-
-### 3.3 A live link preview
-
-**What.** Replace the static `/og-image.png` with a generated image: current
-price, Vibe Score, Fear & Greed, timestamp. The Vibe Score now exists
-(`computeVibeScore`), and `BtcPriceShareCard` already renders it — that layout
-is the one to reuse here.
-
-**Why.** This is the highest growth-per-hour item on the list. Every paste of the
-URL into a Signal group, a Slack channel, a Discord, or a post becomes a live
-advertisement rendered by someone else's servers. It runs whether or not the
-sharer thought about sharing, which is precisely why it beats the manual share
-flow on volume.
-
-**How.** A second Vercel serverless function alongside `api/chain-data.js`, using
-Satori/`@vercel/og`, with the visual language already established in
-`ShareCanvas`. Cache at the edge for a few minutes — link unfurlers hammer the
-endpoint and the number does not need to be second-accurate to make the point.
-Update the `og:image` and `twitter:image` tags in `index.html` to point at it.
-
-**Watch out.** Some unfurlers cache aggressively and some ignore query strings;
-a cache-busting path segment is usually needed, and the image must render
-correctly at small sizes in a chat list, not just at 1200×630 in a preview tool.
 
 ### 3.4 Alerts worth keeping
 
@@ -280,9 +261,11 @@ all go blank together. `Promise.allSettled` means the page survives, but the
 cards do not. A documented fallback per source — Kraken REST already seeds
 prices and could cover more — plus a test that asserts graceful degradation.
 
-**Rate-limit and abuse posture.** Required before §4.2, and worth having before
-§3.3, since a generated OG image is an unauthenticated compute endpoint that
-anyone can hammer.
+**Rate-limit and abuse posture.** Required before §4.2. §3.3 shipped the first
+unauthenticated compute endpoint anyone can hammer, and its only defence is the
+edge cache: `s-maxage=300` collapses a burst into one render per five minutes per
+region, which is adequate for one endpoint and is not a rate-limiting story. A
+second such endpoint, or any of §4.2, needs the real thing.
 
 ---
 

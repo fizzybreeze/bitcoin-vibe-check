@@ -83,6 +83,12 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Eight shareable cards: BTC Price, Market Sentiment, 24h Volume, Network Health, Next Halving, Recent Blocks, Network Fees, and Cycle Indicators
 - `html2canvas` is lazy-loaded on first use, so the ~199 kB dependency stays out of the main bundle
 
+### Live Link Preview
+- Pasting the URL anywhere that unfurls links renders a **live** card, not a static image: current price, 24h change, distance from ATH, the Vibe Score with its temperature label, the summary sentence, and Fear & Greed
+- `og:image` and `twitter:image` point at `/og-live.png`, which rewrites to the `api/og` serverless function and rasterises with [`@vercel/og`](https://vercel.com/docs/og-image-generation) (Satori)
+- Cached at the edge for five minutes and served stale for a day, so a burst of unfurls costs one render
+- Any failure — a dead upstream, or the renderer itself failing to load — redirects to the static `/og-image.png`, so a preview is never blank
+
 ### Header & Navigation
 - **Live indicator** showing whether the WebSocket price feed is connected, with fallback to last-updated timestamp
 - **Currency selector** — always visible
@@ -128,7 +134,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app) + [Workbox](https://developer.chrome.com/docs/workbox) |
 | Unit tests | [Vitest](https://vitest.dev) + [Testing Library](https://testing-library.com) |
 | E2E tests | [Playwright](https://playwright.dev) |
-| Hosting | [Vercel](https://vercel.com) — static site plus one serverless function |
+| Hosting | [Vercel](https://vercel.com) — static site plus two serverless functions |
 | Database | [Supabase](https://supabase.com) Postgres (donor names, daily metric snapshots) |
 | CI / cron | [GitHub Actions](https://docs.github.com/actions) |
 | Newsletter | [Beehiiv](https://beehiiv.com) (embedded signup form) |
@@ -147,6 +153,8 @@ Every source is keyless except BGeometrics, which is proxied server-side so the 
 | [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
 | [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed index — one `?limit=30` call serves both the current value and the 30-day sparkline |
 | `/api/chain-data` → [BGeometrics](https://bgeometrics.com) | MVRV Ratio, via this project's own serverless route (24h CDN cache; free tier is 15 requests/day) |
+
+`api/og.js` calls the same keyless sources server-side to draw the link preview. It is not listed above because nothing in the browser requests it — link unfurlers do — so it needs no service-worker caching rule.
 
 > ⚠️ **Binance must not be reintroduced anywhere.** It answers US jurisdictions with HTTP 451, which broke the snapshot job and then the browser chart — US visitors saw no chart, no 200-day MA and no Mayer Multiple. Kraken is the replacement, and `src/lib/ohlc.js` is the single shared implementation.
 
@@ -171,6 +179,8 @@ src/
   components/                BtcPriceCard, CycleIndicatorsCard, share flow, price alerts, tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
+api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
+api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
 supabase/migrations/         schema as code — every DB change belongs here
 e2e/                         Playwright smoke tests (fully mocked, no network)
@@ -296,7 +306,10 @@ Vercel builds and deploys the app. `vercel.json` is committed so the configurati
 
 Every branch gets a preview URL. Merging to `main` deploys production to [bitcoinvibecheck.com](https://bitcoinvibecheck.com).
 
-The single serverless function, `api/chain-data.js`, proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier.
+There are two serverless functions:
+
+- **`api/chain-data.js`** proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier.
+- **`api/og.js`** renders the link-preview image, reached as `/og-live.png` via a rewrite in `vercel.json`. It is an unauthenticated compute endpoint, so the edge cache is the defence: `s-maxage=300` with a day of `stale-while-revalidate` collapses a burst of unfurls into one render. It never calls `/api/chain-data` — that quota belongs to the live dashboard.
 
 ---
 
