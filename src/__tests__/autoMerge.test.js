@@ -78,6 +78,15 @@ describe('evaluateRequiredChecks', () => {
     expect(evaluateRequiredChecks(undefined).state).toBe('pending')
   })
 
+  it('treats a non-array as pending rather than throwing', () => {
+    // An uncaught throw here would exit the CLI before it printed a verdict,
+    // which the workflow reads as an empty string — pending by accident rather
+    // than by decision, and only in the case where something is already wrong.
+    for (const input of [null, {}, 'nope', 42]) {
+      expect(evaluateRequiredChecks(input).state).toBe('pending')
+    }
+  })
+
   it('stays pending while a required check is still running', () => {
     for (const state of ['QUEUED', 'IN_PROGRESS', 'PENDING', 'WAITING', 'REQUESTED']) {
       const checks = [{ name: REQUIRED_CHECKS[0], state }, ...passing.slice(1)]
