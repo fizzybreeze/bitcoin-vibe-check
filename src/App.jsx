@@ -19,15 +19,17 @@ import {
 } from './utils.js'
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
-  computeVibeLabel, computeHashRateTrend, calcFiatFee,
+  computeHashRateTrend, calcFiatFee, computeVibeScore, computePriceChange30d,
 } from './lib/calculations.js'
-import { calc200DMA } from './utils/cycleCalculations.js'
+import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
 import {
   KRAKEN_INTERVAL, krakenParamsForDays, krakenOhlcUrl,
   extractKrakenOhlc, parseKrakenOhlc,
 } from './lib/ohlc.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import CardTooltip from './components/CardTooltip.jsx'
+import BtcPriceCard from './components/BtcPriceCard.jsx'
+import Skeleton from './components/Skeleton.jsx'
 
 const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
@@ -196,10 +198,6 @@ function computeVol7dAvg(history) {
 }
 
 
-function Skeleton({ className = '' }) {
-  return <div className={`animate-pulse rounded-xl bg-gray-800 ${className}`} />
-}
-
 function DifficultyBar({ change }) {
   const capped = change != null ? Math.max(-10, Math.min(10, change)) : 0
   const pct    = Math.abs(capped) / 10 * 50
@@ -266,7 +264,7 @@ const FNG_TOOLTIP        = 'A composite sentiment score from 0 (extreme fear) to
 const HASH_RATE_TOOLTIP  = 'Total computational power securing the Bitcoin network, measured in exahashes per second. Rising hash rate signals miner confidence; a sharp drop can signal miner stress or capitulation.'
 const DIFFICULTY_TOOLTIP = 'Adjusts every ~2,016 blocks (~2 weeks) to keep average block times near 10 minutes. A positive adjustment means blocks were found faster than target — network is growing. Negative means slower — miners left or difficulty was too high.'
 
-function NetworkPulseCard({ difficulty, loading }) {
+function NetworkPulseCard({ difficulty, loading, hashRateTrend }) {
   const diffChange      = difficulty?.difficultyChange ?? null
   const remainingBlocks = difficulty?.remainingBlocks ?? null
   const diffDays        = remainingBlocks != null
@@ -282,17 +280,6 @@ function NetworkPulseCard({ difficulty, loading }) {
         if (json?.currentHashrate != null) {
           setHashRate((json.currentHashrate / 1e18).toFixed(1))
         }
-      })
-      .catch(() => {})
-  }, [])
-
-  const [hashRateTrend, setHashRateTrend] = useState(null)
-  useEffect(() => {
-    fetch('https://mempool.space/api/v1/mining/hashrate/1m')
-      .then(r => r.json())
-      .then(json => {
-        const trend = computeHashRateTrend(json?.hashrates)
-        if (trend != null) setHashRateTrend(trend)
       })
       .catch(() => {})
   }, [])
@@ -392,51 +379,6 @@ function MarketSentimentCard({ fng, fngHistory, loading }) {
   )
 }
 
-const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
-
-export function BtcPriceCard({ value, change, sub, athPct }) {
-  const changePositive = change != null && change >= 0
-  const isAtATH = athPct != null && athPct >= -0.1
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
-      {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
-      <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
-        <div>
-          {value == null
-            ? <Skeleton className="h-9 w-32" />
-            : <p className="text-2xl font-bold text-orange-400 md:text-3xl">{value}</p>
-          }
-          {/* ATH distance — left column, all breakpoints */}
-          {athPct != null && value != null && (
-            isAtATH
-              ? <p className="mt-1 text-xs font-medium text-green-400 md:mt-1.5 md:text-sm">AT ATH</p>
-              : <p className="mt-1 text-xs text-gray-500 md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
-          )}
-          {/* Desktop-only stacked change */}
-          {change != null && value != null && (
-            <p className={`hidden md:block mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
-              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
-            </p>
-          )}
-          {/* Desktop-only stacked sub */}
-          {sub && value != null && (
-            <p className="hidden md:block mt-1.5 text-sm text-gray-400">{sub}</p>
-          )}
-        </div>
-        {/* Mobile-only: change + sub on right */}
-        {change != null && value != null && (
-          <div className="md:hidden text-right shrink-0 ml-3">
-            <p className={`text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
-              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
-            </p>
-            {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
@@ -1152,6 +1094,21 @@ export default function App() {
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
+  // 30-day hash-rate trend. Lifted out of NetworkPulseCard because the Vibe
+  // Score needs it too. Deliberately a one-shot fetch rather than part of
+  // loadData's 60-second cycle — it is a 30-day metric, so refetching it every
+  // minute would add request volume for a number that cannot have moved.
+  const [hashRateTrend, setHashRateTrend]     = useState(null)
+  useEffect(() => {
+    fetch('https://mempool.space/api/v1/mining/hashrate/1m')
+      .then(r => r.json())
+      .then(json => {
+        const trend = computeHashRateTrend(json?.hashrates)
+        if (trend != null) setHashRateTrend(trend)
+      })
+      .catch(() => {})
+  }, [])
+
   const [chainData, setChainData]             = useState(null)
   const [chainDataLoading, setChainDataLoading] = useState(true)
   const [chainDataError, setChainDataError]   = useState(false)
@@ -1538,8 +1495,22 @@ export default function App() {
   const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 
   const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
-  const diffChange = difficulty?.difficultyChange ?? null
-  const vibeLabel = computeVibeLabel(priceChange24h, fngScore, diffChange)
+
+  // Vibe Score. Mayer must be computed in USD — ma200 comes from Kraken's
+  // XBTUSD candles, so pairing it with a converted price would be nonsense.
+  const vibe = computeVibeScore({
+    fngScore,
+    mayerMultiple:       calcMayerMultiple(priceUsd, ma200),
+    mvrv:                chainData?.mvrv?.value ?? null,
+    priceChange30dPct:   computePriceChange30d(ohlcData200),
+    hashRateTrendPct:    hashRateTrend,
+    fastestFeeSatsPerVb: fees?.fastestFee ?? null,
+    mempoolTxCount:      mempool?.count ?? null,
+  })
+  // The header sentence is derived from the same dimension values as the score
+  // below it, so the words and the number cannot contradict each other.
+  const vibeSummary = vibe?.summary ?? null
+  const vibeLoading = loading || ohlcLoading || chainDataLoading
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
@@ -1549,7 +1520,7 @@ export default function App() {
       <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
-          <p className="mt-0.5 text-xs text-gray-500">{vibeLabel ?? 'Read the room.'}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{vibeSummary ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4 self-end md:self-auto">
           <button
@@ -1609,6 +1580,8 @@ export default function App() {
             change={priceChange24h}
             sub={priceChange24h != null ? '24h change' : null}
             athPct={athPct}
+            vibe={vibe}
+            vibeLoading={vibeLoading}
           />
         </div>
         <div className="md:col-span-2 h-full">
@@ -1798,7 +1771,7 @@ export default function App() {
 
       {/* Row 5: Network Health + Recent Blocks + Network Fees */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <NetworkPulseCard difficulty={difficulty} loading={loading} />
+        <NetworkPulseCard difficulty={difficulty} loading={loading} hashRateTrend={hashRateTrend} />
         <div className="flex flex-col gap-4">
           {/* Mobile-only: NetworkHeartbeatCard (desktop merges this data into RecentBlocksCard) */}
           <div className="lg:hidden">
@@ -1973,8 +1946,8 @@ export default function App() {
       <ShareModal
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
-        cardData={{ ...(data ?? {}), chainData, ma200 }}
-        sentimentSummary={vibeLabel}
+        cardData={{ ...(data ?? {}), chainData, ma200, vibe }}
+        sentimentSummary={vibeSummary}
         currency={currency}
       />
 

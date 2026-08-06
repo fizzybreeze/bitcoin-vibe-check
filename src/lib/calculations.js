@@ -27,20 +27,200 @@ export function computeIssuedSupply(blockHeight) {
   return total
 }
 
-export function computeVibeLabel(priceChange24h, fngScore, diffChange) {
-  if (priceChange24h == null || fngScore == null || diffChange == null) return null
-  const priceStr = Math.abs(priceChange24h) <= 0.2 ? 'price is flat'
-    : priceChange24h > 0 ? 'price is up' : 'price is down'
-  const sentStr = fngScore <= 24 ? 'market is in extreme fear'
-    : fngScore <= 44 ? 'market is fearful'
-    : fngScore <= 55 ? 'market is neutral'
-    : fngScore <= 74 ? 'market is greedy'
-    : 'market is in extreme greed'
-  const minerStr = diffChange < -3 ? 'miners are slowing'
-    : diffChange > 3 ? 'miners are speeding up'
-    : 'miners are steady'
-  const sentence = `${sentStr}, ${priceStr}, ${minerStr}.`
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+// ─── Vibe Score ──────────────────────────────────────────────────────────────
+//
+// One 0–100 reading of how hot the market is running, composed from data already
+// fetched for the dashboard. No network call, no new source.
+//
+// The score is deliberately **single-polarity**: every dimension is scaled so
+// that a higher number means hotter — greedier, more extended, more congested.
+// Mixing a contrarian valuation dimension into a pro-cyclical composite makes
+// the halves cancel at exactly the moments the number should be most extreme,
+// which flattens the range to roughly 38–72 and makes a cycle bottom read as
+// "slightly below neutral". A single polarity also keeps this descriptive: a
+// score where "cheap" pushes the number *up* is a buy signal by another name,
+// and signals are explicitly out of scope for this project.
+//
+// The cycle cards keep their contrarian reading — "Deeply Undervalued" still
+// means what it has always meant. This number answers a different question.
+
+const clamp01 = x => Math.max(0, Math.min(1, x))
+
+// Scale a raw reading onto 0–100 "heat", clamped at both ends so an outlier
+// cannot drag the composite past the range its weight allows.
+function heat(value, cold, hot) {
+  return clamp01((value - cold) / (hot - cold)) * 100
+}
+
+// Published in the card tooltip and in CLAUDE.md. A composite that hides its
+// arithmetic earns the "made-up number" criticism; one that shows it invites
+// people to argue with the weights, which is the point.
+export const VIBE_WEIGHTS = Object.freeze({
+  sentiment:  0.30,
+  valuation:  0.30,
+  momentum:   0.25,
+  congestion: 0.10,
+  network:    0.05,
+})
+
+// Anchor points for each input. Mayer and MVRV reuse the thresholds already
+// shown on CycleIndicatorsCard, so the score cannot disagree with the card
+// sitting below it.
+export const VIBE_ANCHORS = Object.freeze({
+  mayer:     { cold: 0.8, hot: 2.4 },
+  mvrv:      { cold: 1.0, hot: 3.7 },
+  momentum:  { cold: -25, hot: 25 },
+  hashTrend: { cold: -10, hot: 15 },
+  // log10 sat/vB: 1 sat/vB is empty, 100 is a fee market in earnest.
+  feeLog10:  { cold: 0,   hot: 2  },
+})
+
+// A score is only shown when enough of it is real. Both conditions matter:
+// the count stops a two-input score being presented like a five-input one, and
+// the weight floor stops the three *cheapest* inputs (momentum + congestion +
+// network = 0.40) standing in for the whole composite.
+const MIN_DIMENSIONS = 3
+const MIN_COVERAGE   = 0.6
+
+const isNum = v => v != null && Number.isFinite(v)
+
+function vibeSentiment(fngScore) {
+  if (!isNum(fngScore)) return null
+  return clamp01(fngScore / 100) * 100
+}
+
+function vibeValuation(mayerMultiple, mvrv) {
+  const parts = []
+  if (isNum(mayerMultiple)) parts.push(heat(mayerMultiple, VIBE_ANCHORS.mayer.cold, VIBE_ANCHORS.mayer.hot))
+  if (isNum(mvrv))          parts.push(heat(mvrv,          VIBE_ANCHORS.mvrv.cold,  VIBE_ANCHORS.mvrv.hot))
+  if (parts.length === 0) return null
+  return parts.reduce((sum, v) => sum + v, 0) / parts.length
+}
+
+function vibeMomentum(priceChange30dPct) {
+  if (!isNum(priceChange30dPct)) return null
+  return heat(priceChange30dPct, VIBE_ANCHORS.momentum.cold, VIBE_ANCHORS.momentum.hot)
+}
+
+// Fee tier alone is a step function with no resolution at the quiet end — it
+// sits at 1 sat/vB for days while the mempool visibly fills — so the two
+// congestion readings are averaged rather than picking one.
+function vibeCongestion(fastestFeeSatsPerVb, mempoolTxCount) {
+  const parts = []
+  if (isNum(fastestFeeSatsPerVb) && fastestFeeSatsPerVb > 0) {
+    parts.push(heat(Math.log10(fastestFeeSatsPerVb), VIBE_ANCHORS.feeLog10.cold, VIBE_ANCHORS.feeLog10.hot))
+  }
+  if (isNum(mempoolTxCount)) {
+    const pressure = computeMempoolPressurePct(mempoolTxCount)
+    if (pressure != null) parts.push(pressure)
+  }
+  if (parts.length === 0) return null
+  return parts.reduce((sum, v) => sum + v, 0) / parts.length
+}
+
+function vibeNetwork(hashRateTrendPct) {
+  if (!isNum(hashRateTrendPct)) return null
+  return heat(hashRateTrendPct, VIBE_ANCHORS.hashTrend.cold, VIBE_ANCHORS.hashTrend.hot)
+}
+
+export function vibeLabelForScore(score) {
+  if (!isNum(score)) return null
+  if (score < 20) return 'Ice Cold'
+  if (score < 35) return 'Cold'
+  if (score < 50) return 'Cool'
+  if (score < 65) return 'Warm'
+  if (score < 80) return 'Hot'
+  return 'Overheated'
+}
+
+const VIBE_PHRASES = {
+  sentiment:  v => v < 25 ? 'market in extreme fear' : v < 45 ? 'market fearful'
+                 : v <= 55 ? 'sentiment neutral'     : v < 75 ? 'market greedy'
+                 : 'market in extreme greed',
+  valuation:  v => v < 20 ? 'historically cheap'     : v < 40 ? 'below fair value'
+                 : v <= 60 ? 'fairly valued'         : v < 80 ? 'richly valued'
+                 : 'valuations stretched',
+  momentum:   v => v < 20 ? 'price falling hard'     : v < 40 ? 'price drifting down'
+                 : v <= 60 ? 'price flat'            : v < 80 ? 'price climbing'
+                 : 'price surging',
+  congestion: v => v < 25 ? 'mempool empty'          : v < 50 ? 'blocks clearing easily'
+                 : v <= 75 ? 'blocks filling'        : 'mempool congested',
+  network:    v => v < 30 ? 'hash rate falling'      : v <= 70 ? 'hash rate steady'
+                 : 'hash rate climbing',
+}
+
+const SUMMARY_ORDER = ['sentiment', 'valuation', 'momentum', 'congestion', 'network']
+const SUMMARY_PARTS = 3
+
+// The sentence is derived from the same dimension values as the number, so the
+// words and the score can never contradict each other. It names the dimensions
+// furthest from neutral, because those are the ones actually moving the score.
+export function computeVibeSummary(dimensions) {
+  if (!dimensions) return null
+  const present = SUMMARY_ORDER.filter(k => isNum(dimensions[k]))
+  if (present.length === 0) return null
+  const ranked = [...present].sort(
+    (a, b) => Math.abs(dimensions[b] - 50) - Math.abs(dimensions[a] - 50)
+  )
+  const chosen = new Set(ranked.slice(0, SUMMARY_PARTS))
+  const sentence = present.filter(k => chosen.has(k))
+    .map(k => VIBE_PHRASES[k](dimensions[k]))
+    .join(', ')
+  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`
+}
+
+// 30-day price change, read off the 200-day Kraken candle series already
+// fetched for the moving average. Independent of the Mayer Multiple — reusing
+// price-vs-200d-MA here would have made one ratio drive 35% of the score.
+export function computePriceChange30d(ohlcData) {
+  if (!Array.isArray(ohlcData) || ohlcData.length < 31) return null
+  const closes = ohlcData.map(d => parseFloat(d?.[4])).filter(Number.isFinite)
+  if (closes.length < 31) return null
+  const last  = closes[closes.length - 1]
+  const prior = closes[closes.length - 31]
+  if (!prior) return null
+  return ((last - prior) / prior) * 100
+}
+
+/**
+ * Compose the Vibe Score. Every argument is optional — missing inputs drop
+ * their dimension and the remaining weights are renormalised, so one flaky
+ * source (MVRV rides a 15-request/day free tier) degrades the number instead
+ * of deleting it. Returns null when too little is available to be honest about.
+ */
+export function computeVibeScore({
+  fngScore            = null,
+  mayerMultiple       = null,
+  mvrv                = null,
+  priceChange30dPct   = null,
+  hashRateTrendPct    = null,
+  fastestFeeSatsPerVb = null,
+  mempoolTxCount      = null,
+} = {}) {
+  const dimensions = {
+    sentiment:  vibeSentiment(fngScore),
+    valuation:  vibeValuation(mayerMultiple, mvrv),
+    momentum:   vibeMomentum(priceChange30dPct),
+    congestion: vibeCongestion(fastestFeeSatsPerVb, mempoolTxCount),
+    network:    vibeNetwork(hashRateTrendPct),
+  }
+
+  const present  = Object.keys(VIBE_WEIGHTS).filter(k => isNum(dimensions[k]))
+  const coverage = present.reduce((sum, k) => sum + VIBE_WEIGHTS[k], 0)
+  if (present.length < MIN_DIMENSIONS || coverage < MIN_COVERAGE) return null
+
+  const weighted = present.reduce((sum, k) => sum + dimensions[k] * VIBE_WEIGHTS[k], 0)
+  const score    = Math.round(weighted / coverage)
+
+  return {
+    score,
+    label:     vibeLabelForScore(score),
+    summary:   computeVibeSummary(dimensions),
+    dimensions,
+    available: present.length,
+    total:     Object.keys(VIBE_WEIGHTS).length,
+    coverage,
+  }
 }
 
 export function computeHashRateTrend(hashrates) {

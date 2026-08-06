@@ -20,8 +20,15 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Sats per fiat** — live satoshis-per-unit-of-selected-currency, updating with every price tick
 - **Live Bitcoin supply issued** — total BTC issued to date derived from block height, with no extra API call
 
+### The Vibe Score
+- **One composite 0–100 reading** of how hot the market is running, in the BTC Price card. Not a new data source — a synthesis of what the dashboard already fetches, so it costs no extra request
+- **Never a black box** — the five components are listed beneath the score with their individual 0–100 values, and the full formula and weights are in the card tooltip
+- **Weights**: sentiment 30% (Fear & Greed), valuation 30% (Mayer Multiple and MVRV), momentum 25% (30-day price change), congestion 10% (fee tier and mempool), network 5% (30-day hash-rate trend)
+- **Single-polarity by design** — every input is scaled so that higher means hotter (greedier, more extended, more congested). 100 is euphoric, 0 is frozen. It is a summary of public metrics, not advice, and deliberately not a buy or sell signal
+- **Degrades rather than disappears** — a missing input drops its dimension and the remaining weights renormalise, with the card stating how many of the five it scored on. Below three dimensions, or 60% of the weight, no score is shown at all
+
 ### Sentiment & Network Health
-- **Live sentiment summary line** in the header — a human-readable sentence combining price direction, Fear & Greed, and mining difficulty
+- **Live sentiment summary line** in the header — a human-readable sentence derived from the same dimension values as the Vibe Score, so the words and the number can never contradict each other
 - **Market Sentiment card** — Fear & Greed index (0–100) from Alternative.me, with colour-coded classification label and 30-day sparkline
 - **Network Pulse card** — Hash Rate and Difficulty side by side, with a full-width difficulty adjustment bar below
 - **Hash rate** — current network hash rate in EH/s with a **30-day trend indicator** (▲/▼ percentage)
@@ -156,12 +163,12 @@ src/
   App.jsx                    most components, plus all data fetching and state orchestration
   utils.js                   pure helpers — formatting, halving math, dominance labels
   lib/
-    calculations.js          ATH distance, sats per fiat, supply issued, sentiment, hash trend
+    calculations.js          Vibe Score, ATH distance, sats per fiat, supply issued, hash trend
     ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing
     supabase.js              Supabase client; returns null when env vars are absent
   utils/cycleCalculations.js Power Law fair value, Mayer Multiple
   hooks/                     usePersistedState, usePriceAlerts, useShareImage
-  components/                CycleIndicatorsCard, share flow, price alerts, tooltip, newsletter
+  components/                BtcPriceCard, CycleIndicatorsCard, share flow, price alerts, tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
