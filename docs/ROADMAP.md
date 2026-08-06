@@ -55,8 +55,8 @@ which the cron produced two — every field populated on all three, and no faile
 run yet. Nothing is broken; it is simply young. That makes this the cheapest
 leverage in the repo *prospectively*, and it also means there is no history
 against which to calibrate anything, including the Vibe Score weights. It stores
-the Vibe Score's inputs rather than the score, which is the right choice — but
-not yet *all* of them; see §3.2a.
+the Vibe Score's inputs rather than the score, which is the right choice, and as
+of v1.6.4 it stores all seven of them.
 
 **Sharing works, and as of v1.6.0 so does being shared.** `ShareCanvas` renders
 eight genuinely good cards, and `html2canvas` is lazy-loaded so it costs nothing
@@ -120,23 +120,10 @@ that morning" rather than as a clock.
 So the answer to *is it too soon* is that **§3.2 is three sub-items with three
 different readiness dates**, and only one of them is waiting on anything.
 
-**3.2a — make a snapshot row sufficient to recompute the score. Do this first,
-and do it soon.** The snapshot job predates v1.5.0, so it stores neither the Vibe
-Score nor the one input that cannot be recovered later: **30-day price change**.
-Every other dimension can be recomputed from a stored row today —
-`fear_greed_value`, `mayer_multiple`, `mvrv_value`, `fee_fastest_sv`,
-`mempool_tx_count`, `hashrate_trend_30d` are all there. Momentum is not, and its
-absence does not fail loudly: dropping it leaves 4 dimensions and 0.75 coverage,
-both above the `MIN_DIMENSIONS`/`MIN_COVERAGE` floors, so `computeVibeScore`
-returns a perfectly plausible number computed on **different weights than the
-live card uses**. A sparkline that silently disagrees with the number it sits
-under is worse than no sparkline. `scripts/snapshot.js` already fetches the full
-Kraken 200-day series for `ma_200d_usd`, so `price_change_30d_pct` is a few lines
-off candles already in memory. **This is the only genuinely time-sensitive thing
-on this list** — every day it is not stored is a day of history that is
-permanently momentum-less. From ~31 rows (early September) momentum becomes
-derivable from the `price_usd` column itself, so the field closes a one-month
-window; the rows already captured stay incomplete either way.
+**3.2a — snapshot sufficiency. Shipped in v1.6.4; see the version-history row.**
+The row now carries `price_change_30d_pct`, so a stored day replays into the
+same Vibe Score the card showed. The rows captured before it — 4 to 6 Aug — stay
+momentum-less permanently, which is the whole reason it went first.
 
 **3.2b — MVRV fallback. Not gated on data age at all; shippable now.** Serve
 MVRV from `metric_snapshots` when the BGeometrics budget (15 requests/day) is
@@ -151,8 +138,12 @@ series.
 around **10 Aug**. Building it before then is reasonable — the "not enough
 history yet" branch is the one that will actually render on the day it merges,
 which is a good reason to have written it deliberately rather than as an
-afterthought — but do 3.2a first, or the history it eventually draws will
-disagree with the live number for its first month.
+afterthought. With 3.2a shipped this is no longer blocked on anything but the
+row count. Recompute the score from a row's inputs via `vibeInputsFromMetrics`
+in `scripts/lib/metrics.js` rather than reimplementing the mapping — and expect
+the first three rows to score slightly differently from how the card read on
+those days, because they have no momentum. Label that, or start the series on
+7 Aug.
 
 ### 3.4 Alerts worth keeping
 

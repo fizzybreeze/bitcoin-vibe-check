@@ -19,9 +19,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import {
-  KRAKEN_OHLC_URL, extractKrakenOhlc, calc200DMA, calcMayerMultiple,
-} from './lib/ohlc.js'
+import { KRAKEN_OHLC_URL } from './lib/ohlc.js'
+import { buildMetrics } from './lib/metrics.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -37,29 +36,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     'Set both as GitHub Actions repository secrets.'
   )
   process.exit(1)
-}
-
-// ─── Calculations (mirrored from src/lib/calculations.js) ────────────────────
-
-const GENESIS = new Date('2009-01-03T00:00:00.000Z')
-
-function calcPowerLawFairValue() {
-  const days = Math.floor((Date.now() - GENESIS.getTime()) / 86_400_000)
-  if (days <= 0) return null
-  return Math.pow(10, -17.01593313 + 5.84509376 * Math.log10(days))
-}
-
-function calcAthDistance(price, ath) {
-  if (price == null || ath == null) return null
-  return ((price - ath) / ath) * 100
-}
-
-function calcHashRateTrend(hashrates) {
-  if (!Array.isArray(hashrates) || hashrates.length < 2) return null
-  const first = hashrates[0].avgHashrate
-  const last  = hashrates[hashrates.length - 1].avgHashrate
-  if (!first) return null
-  return ((last - first) / first) * 100
 }
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
@@ -112,84 +88,11 @@ async function main() {
       : {}),
   ])
 
-  // Parse CoinPaprika
-  const paprika       = paprikaTickerRaw?.quotes?.USD ?? {}
-  const priceUsd      = parseFloat(paprika.price)           || null
-  const volumeUsd     = paprika.volume_24h                  ?? null
-  const marketCapUsd  = paprika.market_cap                  ?? null
-  const change24h     = paprika.percent_change_24h           ?? null
-  const athUsd        = parseFloat(paprika.ath_price)        || null
-  const dominance     = paprikaGlobalRaw?.bitcoin_dominance_percentage ?? null
-
-  // Parse Kraken 200d
-  const ma200         = calc200DMA(extractKrakenOhlc(krakenOhlcRaw))
-  const mayerMultiple = calcMayerMultiple(priceUsd, ma200)
-  const powerLawFv    = calcPowerLawFairValue()
-
-  // Parse MVRV
-  let mvrvValue = null, mvrvDate = null
-  if (Array.isArray(mvrvRaw) && mvrvRaw.length > 0) {
-    const sorted = [...mvrvRaw].sort((a, b) => new Date(a.d) - new Date(b.d))
-    const latest = sorted[sorted.length - 1]
-    mvrvValue = latest.mvrv
-    mvrvDate  = latest.d
-  }
-
-  // Parse mempool
-  const fees = feesRaw ?? {}
-  const diff = diffRaw ?? {}
-  const fngEntry = fngRaw?.data?.[0] ?? {}
-  const lightning = lightningRaw?.latest ?? {}
-  const hashrateEhs = hashrate3dRaw?.currentHashrate != null
-    ? hashrate3dRaw.currentHashrate / 1e18
-    : null
-  const hashrateTrend30d = calcHashRateTrend(hashrate1mRaw?.hashrates)
-
-  const metrics = {
-    // Price & market
-    price_usd:             priceUsd,
-    volume_24h_usd:        volumeUsd,
-    market_cap_usd:        marketCapUsd,
-    change_24h_pct:        change24h,
-    ath_usd:               athUsd,
-    ath_distance_pct:      calcAthDistance(priceUsd, athUsd),
-    btc_dominance_pct:     dominance,
-
-    // Cycle indicators
-    ma_200d_usd:           ma200   != null ? parseFloat(ma200.toFixed(2))   : null,
-    mayer_multiple:        mayerMultiple != null ? parseFloat(mayerMultiple.toFixed(4)) : null,
-    power_law_fair_value:  powerLawFv != null ? parseFloat(powerLawFv.toFixed(2)) : null,
-    mvrv_value:            mvrvValue,
-    mvrv_date:             mvrvDate,
-
-    // Fees (sats/vbyte)
-    fee_fastest_sv:        fees.fastestFee   ?? null,
-    fee_30m_sv:            fees.halfHourFee  ?? null,
-    fee_1h_sv:             fees.hourFee      ?? null,
-    fee_economy_sv:        fees.economyFee   ?? null,
-
-    // Network
-    block_height:          typeof blockHeightRaw === 'number' ? blockHeightRaw : null,
-    difficulty_change_pct: diff.difficultyChange   ?? null,
-    remaining_blocks:      diff.remainingBlocks    ?? null,
-    hashrate_eh:           hashrateEhs != null ? parseFloat(hashrateEhs.toFixed(1)) : null,
-    hashrate_trend_30d:    hashrateTrend30d != null ? parseFloat(hashrateTrend30d.toFixed(2)) : null,
-
-    // Mempool
-    mempool_tx_count:      mempoolRaw?.count  ?? null,
-    mempool_vsize_mb:      mempoolRaw?.vsize  != null ? parseFloat((mempoolRaw.vsize / 1e6).toFixed(2)) : null,
-
-    // Lightning
-    lightning_capacity_btc: lightning?.total_capacity != null
-      ? parseFloat((lightning.total_capacity / 1e8).toFixed(2))
-      : null,
-    lightning_channels:    lightning?.channel_count ?? null,
-    lightning_nodes:       lightning?.node_count    ?? null,
-
-    // Fear & Greed
-    fear_greed_value:      fngEntry.value != null ? parseInt(fngEntry.value, 10) : null,
-    fear_greed_label:      fngEntry.value_classification ?? null,
-  }
+  const metrics = buildMetrics({
+    paprikaTickerRaw, paprikaGlobalRaw, feesRaw, blockHeightRaw, diffRaw,
+    mempoolRaw, lightningRaw, fngRaw, hashrate3dRaw, hashrate1mRaw,
+    krakenOhlcRaw, mvrvRaw,
+  })
 
   // Warn on any nulls — useful for debugging missing data
   const nullFields = Object.entries(metrics).filter(([, v]) => v === null).map(([k]) => k)
@@ -226,7 +129,12 @@ async function main() {
   }
 
   console.log(`[snapshot] Done — upserted snapshot for ${capturedAt.slice(0, 10)}`)
-  if (priceUsd) console.log(`[snapshot] BTC/USD: $${priceUsd.toLocaleString()} | F&G: ${metrics.fear_greed_value} (${metrics.fear_greed_label}) | MVRV: ${metrics.mvrv_value}`)
+  console.log(
+    `[snapshot] BTC/USD: $${metrics.price_usd.toLocaleString()} | ` +
+    `30d: ${metrics.price_change_30d_pct}% | ` +
+    `F&G: ${metrics.fear_greed_value} (${metrics.fear_greed_label}) | ` +
+    `MVRV: ${metrics.mvrv_value}`
+  )
 }
 
 main().catch(err => {
