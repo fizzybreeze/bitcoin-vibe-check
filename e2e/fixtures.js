@@ -19,16 +19,24 @@ export const difficultyFixture = {
   timeAvg: 600000,  // 10 minutes in ms → "10.0 min"
 }
 
-export const blocksFixture = [
-  {
-    id: '000000000000000000029cf58b7a4badc83aa720ecdfa0c15c8e07dc5b7c3f3b',
-    height: blockHeightFixture,
-    tx_count: 2341,
-    size: 1_500_000,
-    timestamp: Math.floor(now / 1000) - 5 * 60,  // 5 minutes ago
-    extras: { totalFees: 12_345_678, avgFeeRate: 8 },
-  },
-]
+// Parameterised on "now" so the visual-regression spec can pin it to the same
+// instant it freezes the browser clock at. Left to the real clock by default:
+// the behavioural specs only assert that a "time ago" line is present, and
+// hard-coding a date there would make them lie about what the app computed.
+export function makeBlocksFixture(nowMs = Date.now()) {
+  return [
+    {
+      id: '000000000000000000029cf58b7a4badc83aa720ecdfa0c15c8e07dc5b7c3f3b',
+      height: blockHeightFixture,
+      tx_count: 2341,
+      size: 1_500_000,
+      timestamp: Math.floor(nowMs / 1000) - 5 * 60,  // 5 minutes ago
+      extras: { totalFees: 12_345_678, avgFeeRate: 8 },
+    },
+  ]
+}
+
+export const blocksFixture = makeBlocksFixture(now)
 
 export const lightningFixture = {
   latest: {

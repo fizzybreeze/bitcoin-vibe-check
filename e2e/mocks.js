@@ -9,10 +9,17 @@ import {
   difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   hashrate3dFixture, hashrate1mFixture, chainDataFixture,
   ohlc200dFixture, makeKrakenCandles, KRAKEN_INTERVAL_SECONDS, krakenOhlcResponse,
-  paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
+  paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture, makeBlocksFixture,
 } from './fixtures.js'
 
-export async function mockApis(page) {
+/**
+ * @param page          Playwright page
+ * @param options.nowMs When set, block timestamps are derived from this instant
+ *                      instead of the wall clock. The visual spec passes the
+ *                      same value it freezes the page clock at, so "5 min ago"
+ *                      renders identically on every run.
+ */
+export async function mockApis(page, { nowMs } = {}) {
   await page.route('https://mempool.space/api/v1/fees/recommended', route =>
     route.fulfill({ json: feesFixture })
   )
@@ -26,7 +33,7 @@ export async function mockApis(page) {
     route.fulfill({ json: mempoolFixture })
   )
   await page.route('https://mempool.space/api/v1/blocks', route =>
-    route.fulfill({ json: blocksFixture })
+    route.fulfill({ json: nowMs == null ? blocksFixture : makeBlocksFixture(nowMs) })
   )
   await page.route('https://mempool.space/api/v1/lightning/statistics/latest', route =>
     route.fulfill({ json: lightningFixture })

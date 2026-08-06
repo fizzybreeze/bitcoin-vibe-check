@@ -286,7 +286,7 @@ function NetworkPulseCard({ difficulty, loading, hashRateTrend }) {
   }, [])
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full">
+    <div data-testid="card-network-pulse" className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Health</p>
 
       {/* Row 1: Hash Rate | Difficulty */}
@@ -431,7 +431,7 @@ function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs, loading }) {
     : null
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full">
+    <div data-testid="card-recent-blocks" className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}

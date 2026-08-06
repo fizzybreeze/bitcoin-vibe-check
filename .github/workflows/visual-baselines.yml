@@ -1,0 +1,121 @@
+name: Visual baselines
+
+# Regenerates the visual-regression baselines and commits them back to the PR
+# branch.
+#
+# This exists because the baselines are pixel comparisons, so they are only
+# valid for the rendering environment that produced them. Generated on a laptop
+# or in a dev container they fail in CI on font antialiasing alone — a false
+# red that teaches everyone to ignore the check. So there is exactly one machine
+# allowed to produce them: this runner.
+#
+# It is also the answer to the maintenance cost of snapshot tests. Every
+# intentional design change invalidates a baseline; rather than that being a
+# chore requiring a local browser, add the `update-visual-baselines` label to
+# the PR and the new baselines are committed for you. The label is removed
+# afterwards, so re-labelling re-runs it.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: visual-baselines-${{ github.ref }}
+  # Deliberately not cancel-in-progress: this job commits and pushes, and
+  # killing it mid-sequence risks leaving the branch half-updated. Two runs
+  # queueing is cheaper than one run torn open.
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Regenerate baselines
+    # On a labelled PR, only react to our own label — every other label event
+    # would otherwise start a run that does nothing.
+    #
+    # Same-repo only. `actions/checkout` resolves `ref` against the base
+    # repository, so on a fork PR this would check out whatever branch of *this*
+    # repo happens to share the head branch's name — and the push could not
+    # reach the fork regardless. Better to not run than to commit baselines to
+    # the wrong branch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'update-visual-baselines' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      # Labels on a pull request are managed through the issues API, so removing
+      # the trigger label needs `issues: write` — `pull-requests: write` alone
+      # is not reliably sufficient.
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `pull_request` checks out a detached merge ref, which cannot be
+          # pushed. Take the actual head branch so the commit has somewhere to
+          # land.
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache browsers
+        uses: actions/cache@v6
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # --update-snapshots overrides the config's `updateSnapshots: 'none'`,
+      # which is what makes a missing baseline a hard failure everywhere else.
+      - name: Regenerate baselines
+        run: npx playwright test --project=visual --update-snapshots
+
+      - name: Commit baselines
+        # The branch name goes through the environment rather than being
+        # interpolated into the script text. Git permits `;`, `|`, `"`, `$` and
+        # backticks in a ref name, so a `${{ }}` expression pasted straight into
+        # `run:` is a shell-injection sink that a crafted branch name can reach.
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add e2e/__screenshots__
+          if git diff --cached --quiet; then
+            echo "Baselines already match this runner — nothing to commit."
+            exit 0
+          fi
+          git commit -m "test(visual): regenerate baselines in CI"
+          git push origin "HEAD:refs/heads/$BRANCH"
+
+      # Removing it means adding the label again re-runs this, rather than the
+      # label being a one-shot that has to be toggled off by hand.
+      - name: Remove the label
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --method DELETE \
+            "repos/$REPO/issues/$PR/labels/update-visual-baselines"

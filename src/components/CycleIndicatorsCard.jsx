@@ -55,7 +55,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
   const isOhlcReady = !ohlcLoading && !ohlcError && ma200 != null
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 h-full">
+    <div data-testid="card-cycle-indicators" className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 h-full">
       <p className={LABEL}>Cycle Indicators</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 md:divide-x divide-gray-800">
