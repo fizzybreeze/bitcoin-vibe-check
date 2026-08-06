@@ -53,6 +53,14 @@ Rules that hold regardless:
   `git diff --stat origin/main HEAD`: a file showing **pure deletions you did not
   intend** means you are about to revert merged work. PR #12 nearly reverted six
   PRs this way, with auto-merge already enabled.
+- **Never enable auto-merge.** It is off for this repo by deliberate choice, at
+  both layers: the "Allow auto-merge" repository setting is disabled, and `/ship`
+  is written not to turn it on. A PR that merges the moment CI goes green races
+  the human to production and makes the Vercel preview URL pointless — CI proves
+  the code is *correct*, not that the change *looks right*, and on a visual
+  product those are different questions. Open the PR, say what to look at, and
+  let a person press merge. Do not re-enable it as a convenience, and do not
+  suggest it; if the user wants something merged unattended, they will say so.
 - **Every behaviour change needs a test.** The fast unit suite is what makes it
   safe to review on a phone without reading the whole diff.
 - **Never silence a gate to go green.** Deleting an assertion or adding a blanket

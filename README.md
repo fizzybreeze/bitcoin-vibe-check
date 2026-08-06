@@ -284,7 +284,9 @@ Dependabot opens one grouped npm PR weekly and a monthly Actions PR; React and V
 
 ### Repo tooling for mobile sessions
 
-`.claude/` holds the setup that makes phone-driven development practical: a SessionStart hook that installs dependencies and resolves a chromium, a permission allowlist so routine commands do not re-prompt, and two slash commands — `/ship` (branch, implement, verify, push, open a PR with auto-merge) and `/verify` (run all four gates and report only failures).
+`.claude/` holds the setup that makes phone-driven development practical: a SessionStart hook that installs dependencies and resolves a chromium, a permission allowlist so routine commands do not re-prompt, and three slash commands — `/ship` (branch, implement, verify, push, open a PR for review), `/verify` (run all four gates and report only failures) and `/preview` (find the PR's Vercel preview URL and check it was built from the latest commit).
+
+Auto-merge is deliberately disabled on this repository. CI proves a change is correct; it cannot tell you whether it looks right. Every PR waits for a human to open the preview and press merge.
 
 ---
 
