@@ -45,4 +45,29 @@ describe('CycleIndicatorsCard', () => {
     )
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
   })
+
+  // `/api/chain-data` serves the last stored MVRV when the BGeometrics budget is
+  // exhausted (roadmap §3.2b). The value is a day or more old, so the card has
+  // to say where it came from — a fallback that presents itself as live is the
+  // one way this feature could be worse than the blank card it replaces.
+  it('marks an MVRV served from the daily snapshot', () => {
+    render(
+      <CycleIndicatorsCard
+        currentPrice={65000} ma200={50000} ohlcLoading={false}
+        mvrv={2.15} dataDate="2026-08-05" mvrvSource="snapshot"
+      />
+    )
+    expect(screen.getByText(/2026-08-05.*daily snapshot/i)).toBeTruthy()
+  })
+
+  it('says nothing extra about a live MVRV', () => {
+    render(
+      <CycleIndicatorsCard
+        currentPrice={65000} ma200={50000} ohlcLoading={false}
+        mvrv={2.15} dataDate="2026-08-05" mvrvSource="live"
+      />
+    )
+    expect(screen.getByText('2026-08-05')).toBeTruthy()
+    expect(screen.queryByText(/snapshot/i)).toBeNull()
+  })
 })

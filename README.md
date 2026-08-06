@@ -152,7 +152,7 @@ Every source is keyless except BGeometrics, which is proxied server-side so the 
 | [Kraken WebSocket v2](https://docs.kraken.com/websockets-v2/) | Real-time BTC ticker in USD, GBP, EUR, CAD, and CHF |
 | [mempool.space API](https://mempool.space/docs/api) | Recommended fee tiers, current block height, difficulty adjustment, mempool stats, recent blocks, Lightning Network statistics, hash rate |
 | [Alternative.me Fear & Greed API](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed index — one `?limit=30` call serves both the current value and the 30-day sparkline |
-| `/api/chain-data` → [BGeometrics](https://bgeometrics.com) | MVRV Ratio, via this project's own serverless route (24h CDN cache; free tier is 15 requests/day) |
+| `/api/chain-data` → [BGeometrics](https://bgeometrics.com) | MVRV Ratio, via this project's own serverless route (24h CDN cache; free tier is 15 requests/day). Falls back to the last stored MVRV in `metric_snapshots` when the budget is exhausted |
 
 `api/og.js` calls the same keyless sources server-side to draw the link preview. It is not listed above because nothing in the browser requests it — link unfurlers do — so it needs no service-worker caching rule.
 
@@ -179,6 +179,7 @@ src/
   components/                BtcPriceCard, CycleIndicatorsCard, share flow, price alerts, tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
+api/lib/mvrvFallback.js      which stored snapshot row the MVRV fallback serves, and when it refuses
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
@@ -248,6 +249,7 @@ Copy `.env.example` to `.env` and fill in what you need. `.env` is gitignored; t
 | `VITE_SUPABASE_URL` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
 | `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
 | `BGEOMETRICS_API_KEY` | `api/chain-data.js` | MVRV in Cycle Indicators | **Server-side only** — set it in Vercel, never with a `VITE_` prefix |
+| `SUPABASE_URL` · `SUPABASE_ANON_KEY` | `api/chain-data.js` | The MVRV fallback (optional) | Falls back to the `VITE_` pair, which is the same project. Anon, never service-role |
 
 > `VITE_`-prefixed variables are compiled into the client bundle by design and are readable by anyone who opens devtools on the deployed site. Only publishable/anon keys belong there — never a service-role key.
 
@@ -312,7 +314,7 @@ Every branch gets a preview URL. Merging to `main` deploys production to [bitcoi
 
 There are two serverless functions:
 
-- **`api/chain-data.js`** proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier.
+- **`api/chain-data.js`** proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier. When BGeometrics does not answer it serves the most recent MVRV stored in `metric_snapshots`, labelled as such on the card, capped at 7 days old and cached for an hour rather than a day so it cannot outlive the outage that produced it.
 - **`api/og.js`** renders the link-preview image, reached as `/og-live.png` via a rewrite in `vercel.json`. It is an unauthenticated compute endpoint, so the edge cache is the defence: `s-maxage=300` with a day of `stale-while-revalidate` collapses a burst of unfurls into one render. It never calls `/api/chain-data` — that quota belongs to the live dashboard.
 
 ---
@@ -326,7 +328,7 @@ Schema lives in `supabase/migrations/`. Both tables have RLS enabled.
 | `donors` | Names submitted via the donation card | `SELECT` where `approved = true`; `INSERT` only with `approved = false`. No update or delete. |
 | `metric_snapshots` | One row per UTC day of dashboard metrics (`jsonb`) | `SELECT` only. Writes use the service role. |
 
-`scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. Nothing in the app reads the table yet; it exists so historical charting becomes possible. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
+`scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. `api/chain-data.js` reads the table for its MVRV fallback; nothing in the browser does yet. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
 
 Donor notifications come from the `new_donor_notification` trigger on `donors`, which POSTs to a Make.com webhook. That URL is a capability URL and is deliberately not committed — the baseline migration documents it with a placeholder.
 

@@ -45,7 +45,7 @@ function MetricRow({ label, value, context, contextCls = 'text-gray-400', toolti
   )
 }
 
-export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, ohlcError, currency = 'usd', fxRate = 1, mvrv = null, dataDate = null, mvrvLoading = false, mvrvError = null }) {
+export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, ohlcError, currency = 'usd', fxRate = 1, mvrv = null, dataDate = null, mvrvSource = null, mvrvLoading = false, mvrvError = null }) {
   const fairValue   = calcPowerLawFairValue()
   const mayer       = calcMayerMultiple(currentPrice, ma200)
   const mayerInterp = mayerInterpretation(mayer)
@@ -75,7 +75,16 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
                 contextCls={mvrvInterp?.cls ?? 'text-gray-400'}
                 tooltip={MVRV_TOOLTIP}
               />
-              {dataDate && <p className="text-xs text-gray-600">{dataDate}</p>}
+              {/* `/api/chain-data` serves the last stored MVRV when the
+                  BGeometrics budget is exhausted. Say so: a value read off a
+                  daily snapshot is a day or more old, and a number that quietly
+                  presents itself as live is the failure this fallback would
+                  otherwise introduce. */}
+              {dataDate && (
+                <p className="text-xs text-gray-600">
+                  {dataDate}{mvrvSource === 'snapshot' && ' · from daily snapshot'}
+                </p>
+              )}
             </>
           )}
         </div>

@@ -47,9 +47,11 @@ What it does not yet have is context — a 68 means nothing without knowing
 whether last week was 40 or 80, which is §3.2 and is why that item is now the
 most valuable thing on this list.
 
-**`metric_snapshots` is accruing data nothing reads.** The daily Actions job
-upserts a full metrics row per UTC day since it moved off the home Proxmox box,
-the table has public `SELECT`, and not one line of `src/` touches it. Be honest
+**`metric_snapshots` is barely read.** The daily Actions job upserts a full
+metrics row per UTC day since it moved off the home Proxmox box, and the table
+has public `SELECT`. As of v1.6.5 exactly one consumer exists — `api/chain-data.js`
+reads the latest row's MVRV when BGeometrics is unavailable (§3.2b) — and not one
+line of `src/` touches it. Be honest
 about the scale, though: on 2026-08-06 the table held **3 rows** (4–6 Aug), of
 which the cron produced two — every field populated on all three, and no failed
 run yet. Nothing is broken; it is simply young. That makes this the cheapest
@@ -125,14 +127,10 @@ The row now carries `price_change_30d_pct`, so a stored day replays into the
 same Vibe Score the card showed. The rows captured before it — 4 to 6 Aug — stay
 momentum-less permanently, which is the whole reason it went first.
 
-**3.2b — MVRV fallback. Not gated on data age at all; shippable now.** Serve
-MVRV from `metric_snapshots` when the BGeometrics budget (15 requests/day) is
-exhausted. The snapshot job already stores `mvrv_value` and `mvrv_date` daily —
-today's row carries MVRV dated the previous day, which is exactly the shape this
-needs. Yesterday's MVRV is a far better answer than a blank card, and it removes
-the only hard rate limit in the stack from the critical path. Three rows is
-already full value here, because this reads the *latest* row rather than a
-series.
+**3.2b — MVRV fallback. Shipped in v1.6.5; see the version-history row.**
+`/api/chain-data` serves the last stored `mvrv_value` when BGeometrics does not
+answer, capped at 7 days old and labelled on the card. It is the first thing in
+the repo to read `metric_snapshots`.
 
 **3.2c — the sparkline itself.** Wants 7 rows by the rule above, which arrives
 around **10 Aug**. Building it before then is reasonable — the "not enough
