@@ -21,9 +21,18 @@
     <!-- Open Graph -->
     <meta property="og:title" content="Bitcoin Vibe Check — Real-Time Bitcoin Dashboard" />
     <meta property="og:description" content="Bitcoin Vibe Check is a real-time Bitcoin dashboard showing live price, Fear &amp; Greed index, mempool fees, network health, and the halving countdown. Read the room." />
-    <meta property="og:image" content="https://bitcoinvibecheck.com/og-image.png" />
+    <!--
+      /og-live.png rewrites to the api/og function, which renders the current
+      price, Vibe Score and Fear & Greed at request time. The path is stable and
+      ends in .png on purpose: some unfurlers key their cache on the URL and some
+      only trust an image-looking one. If the function fails it redirects to
+      /og-image.png, the static card that used to be here.
+    -->
+    <meta property="og:image" content="https://bitcoinvibecheck.com/og-live.png" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Bitcoin Vibe Check — live BTC price, Vibe Score and Fear &amp; Greed index" />
     <meta property="og:url" content="https://bitcoinvibecheck.com" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Bitcoin Vibe Check" />
@@ -32,7 +41,8 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Bitcoin Vibe Check — Real-Time Bitcoin Dashboard" />
     <meta name="twitter:description" content="Bitcoin Vibe Check is a real-time Bitcoin dashboard showing live price, Fear &amp; Greed index, mempool fees, network health, and the halving countdown. Read the room." />
-    <meta name="twitter:image" content="https://bitcoinvibecheck.com/og-image.png" />
+    <meta name="twitter:image" content="https://bitcoinvibecheck.com/og-live.png" />
+    <meta name="twitter:image:alt" content="Bitcoin Vibe Check — live BTC price, Vibe Score and Fear &amp; Greed index" />
     <meta name="twitter:site" content="@BitcoinVibeCheck" />
 
     <title>Bitcoin Vibe Check</title>

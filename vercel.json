@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/og-live.png", "destination": "/api/og" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

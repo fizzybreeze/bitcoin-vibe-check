@@ -4,6 +4,9 @@ import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply, calcFiatFee,
 } from '../lib/calculations.js'
 import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculations.js'
+// Shared with api/og.js — the exported card and the link preview show the same
+// two labelled scales, so they cannot be allowed to colour them differently.
+import { vibeLabelHex, fngLabelHex } from '../lib/vibePalette.js'
 
 const ORANGE = '#fb923c'
 const CARD_BG = '#111827'
@@ -51,14 +54,7 @@ function congestionInfo(vsize) {
 }
 
 function fngColorHex(classification) {
-  const map = {
-    'Extreme Fear': RED,
-    'Fear':         '#fbbf24',
-    'Neutral':      '#facc15',
-    'Greed':        '#a3e635',
-    'Extreme Greed': GREEN,
-  }
-  return map[classification] ?? ORANGE
+  return fngLabelHex(classification) ?? ORANGE
 }
 
 function CardWrapper({ children, style }) {
@@ -85,16 +81,6 @@ const VIBE_SHARE_DIMENSIONS = [
   ['congestion', 'Mempool'],
   ['network',    'Network'],
 ]
-
-// Temperature scale for the Vibe Score label — cold blues through to a hot red.
-const VIBE_LABEL_HEX = {
-  'Ice Cold':   '#38bdf8',
-  'Cold':       '#22d3ee',
-  'Cool':       '#2dd4bf',
-  'Warm':       '#fbbf24',
-  'Hot':        ORANGE,
-  'Overheated': RED,
-}
 
 function BtcPriceShareCard({ cardData, currency }) {
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf, priceChange24h, athUsd, vibe } = cardData
@@ -126,7 +112,7 @@ function BtcPriceShareCard({ cardData, currency }) {
           <p style={LABEL_STYLE}>Vibe Score</p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
             <span style={{ fontSize: 26, fontWeight: 700, color: ORANGE, lineHeight: 1.1 }}>{vibe.score}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: VIBE_LABEL_HEX[vibe.label] ?? MUTED }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: vibeLabelHex(vibe.label) }}>
               {vibe.label}
             </span>
           </div>
