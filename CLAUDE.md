@@ -59,23 +59,28 @@ Rules that hold regardless:
   `git diff --stat origin/main HEAD`: a file showing **pure deletions you did not
   intend** means you are about to revert merged work. PR #12 nearly reverted six
   PRs this way, with auto-merge already enabled.
-- **Never enable auto-merge.** It is off for this repo by deliberate choice, at
-  both layers: the "Allow auto-merge" repository setting is disabled, and `/ship`
-  is written not to turn it on. A PR that merges the moment CI goes green races
-  the human to production and makes the Vercel preview URL pointless — CI proves
-  the code is *correct*, not that the change *looks right*, and on a visual
-  product those are different questions. Open the PR, say what to look at, and
-  let a person press merge. Do not re-enable it as a convenience, and do not
-  suggest it; if the user wants something merged unattended, they will say so.
+- **The "Allow auto-merge" repository setting stays off. Permanently. This is
+  settled — do not raise it.** Not as a simplification, not as a question, not
+  as a "worth considering". A PR that merges the moment CI goes green races the
+  human to production and makes the Vercel preview URL pointless: CI proves the
+  code is *correct*, not that the change *looks right*, and on a visual product
+  those are different questions. The setting is repo-wide, so enabling it for
+  one purpose arms it for every PR in the repo — which is why the answer is no
+  even when the immediate use looks narrow.
 
-  They have said so **once**, in #21, and the exception is narrow: a Dependabot
-  PR whose update type is `semver-patch` or `semver-minor` merges itself via
-  `dependabot-auto-merge.yml`. Majors and every human or `claude/*` PR still
-  wait for a person. Note that this exception is implemented *without* the
-  repository setting — that workflow waits for the required checks and then
-  merges, precisely so the auto-merge feature stays unavailable to every other
-  PR in the repo. Turning the setting on to simplify it would widen a
-  deliberately narrow hole; don't.
+  **Unattended merging is a separate question, and it is already answered.**
+  Dependabot PRs of type `semver-patch` or `semver-minor` merge themselves via
+  `dependabot-auto-merge.yml`; majors and every human or `claude/*` PR wait for
+  a person. That exception was asked for in #21 and is implemented *without*
+  the repository setting — the workflow polls the two required checks and then
+  merges, so branch protection stays the enforcer and the feature stays
+  unavailable to everything else.
+
+  **If some future change needs a PR to merge unattended, copy that pattern**
+  — poll the required checks, then merge, scoped by an `if:` to exactly the
+  PRs that qualify. That is the whole reason the pattern exists, and it means
+  there is never a case where the repository setting is the answer. So there is
+  nothing left to ask about here.
 - **Every behaviour change needs a test.** The fast unit suite is what makes it
   safe to review on a phone without reading the whole diff.
 - **Never silence a gate to go green.** Deleting an assertion or adding a blanket

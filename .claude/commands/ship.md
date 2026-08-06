@@ -63,10 +63,12 @@ for their attention, not yours.
 10. **Open a PR into `main`.** The body should state what changed, why, and how
     it was verified — with the real numbers from step 5.
 
-11. **Do not enable auto-merge.** It is off in this repo by deliberate choice —
-    see the rule in `CLAUDE.md`. The PR waits for a human to merge it. Never
-    turn it on, and never ask to; if the user wants something merged unattended
-    they will say so themselves.
+11. **Do not enable auto-merge.** The PR you just opened waits for a human to
+    merge it. The "Allow auto-merge" repository setting is off permanently and
+    that decision is closed — do not turn it on, do not ask about it, and do not
+    mention it as an option in your report. See the rule in `CLAUDE.md`, which
+    also covers the one thing that *does* merge unattended (Dependabot patch and
+    minor bumps) and how that is done without the setting.
 
 12. **Report back in three lines**: what you changed, the gate results, and the
     PR link. If anything is genuinely uncertain or you made a judgement call the
