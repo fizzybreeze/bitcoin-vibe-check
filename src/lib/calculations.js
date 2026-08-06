@@ -165,9 +165,22 @@ export function vibeLabelForScore(score) {
   return 'Overheated'
 }
 
+// Sentiment is the odd one out: its dimension value is the Fear & Greed score
+// unchanged, so alternative.me has already named the band this number falls in
+// and these thresholds mirror theirs (0–25 extreme fear, 26–46 fear, 47–54
+// neutral, 55–75 greed, 76+ extreme greed). They previously did not: a 25 came
+// back from the source labelled "Extreme Fear" while this table called it
+// "market fearful", and the link-preview card printed both at once. The other
+// four dimensions are scaled from raw readings nobody else has classified, so
+// their bands are ours to choose.
+//
+// If the source ever moves its bands these drift again — the card's Fear &
+// Greed colour is immune because it reads the label itself, but a sentence
+// derived from a number cannot be. Worth re-checking if the two ever disagree
+// on screen again.
 const VIBE_PHRASES = {
-  sentiment:  v => v < 25 ? 'market in extreme fear' : v < 45 ? 'market fearful'
-                 : v <= 55 ? 'sentiment neutral'     : v < 75 ? 'market greedy'
+  sentiment:  v => v <= 25 ? 'market in extreme fear' : v <= 46 ? 'market fearful'
+                 : v <= 54 ? 'sentiment neutral'      : v <= 75 ? 'market greedy'
                  : 'market in extreme greed',
   valuation:  v => v < 20 ? 'historically cheap'     : v < 40 ? 'below fair value'
                  : v <= 60 ? 'fairly valued'         : v < 80 ? 'richly valued'

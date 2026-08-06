@@ -334,6 +334,25 @@ describe('computeVibeSummary', () => {
     expect(summary).not.toContain('fairly valued')  // |50-50| = 0, not chosen
   })
 
+  // The sentiment phrase and alternative.me's own classification are read side
+  // by side — on the dashboard header, and on the link-preview card, where the
+  // sentence and the labelled Fear & Greed value sit two lines apart. A 25 came
+  // back from the source as "Extreme Fear" while this table said "market
+  // fearful"; these bands now mirror the source's.
+  it('matches the source classification at every band edge', () => {
+    const phrase = sentiment => computeVibeSummary({ sentiment })
+    expect(phrase(0)).toContain('extreme fear')
+    expect(phrase(25)).toContain('extreme fear')   // the case that was wrong
+    expect(phrase(26)).toContain('fearful')
+    expect(phrase(46)).toContain('fearful')
+    expect(phrase(47)).toContain('neutral')
+    expect(phrase(54)).toContain('neutral')
+    expect(phrase(55)).toContain('greedy')
+    expect(phrase(75)).toContain('greedy')
+    expect(phrase(76)).toContain('extreme greed')
+    expect(phrase(100)).toContain('extreme greed')
+  })
+
   it('keeps a stable reading order regardless of which are chosen', () => {
     // Sentiment precedes momentum in the sentence even though momentum ranks
     // higher by deviation.
