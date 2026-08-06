@@ -63,3 +63,16 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+
+      # Uploaded separately from the report so that reviewing a *green* run is
+      # one tap. The same image is attached inside playwright-report, but
+      # finding it there means downloading and unpacking the whole bundle —
+      # which is exactly the friction this is meant to remove.
+      - name: Upload mobile screenshot
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-screenshot
+          path: mobile-screenshots/
+          retention-days: 14
+          if-no-files-found: error
