@@ -1,11 +1,13 @@
 name: Dependabot auto-merge
 
 # Dependency chores are low-judgement work, and every one of them already
-# passes lint, the unit suite, a build and the e2e suite at two viewports
-# before it is allowed to merge. For a patch or a minor bump that gate *is* the
-# review, and #16's daily production smoke check catches anything that slips
-# through within a day. Majors stay manual — see MERGEABLE_UPDATE_TYPES in
-# scripts/lib/autoMerge.js for why.
+# passes lint, the unit suite, a build, and the e2e suite at desktop and mobile
+# plus the `visual` pixel comparison, before it is allowed to merge. For a patch
+# or a minor bump that gate *is* the review — and the visual project is the part
+# that earns it, since a bump which shifts the mobile rendering is the one
+# breakage text assertions would wave straight through. #16's daily production
+# smoke check catches whatever still slips, within a day. Majors stay manual —
+# see MERGEABLE_UPDATE_TYPES in scripts/lib/autoMerge.js for why.
 #
 # ---------------------------------------------------------------------------
 # This does NOT use GitHub's auto-merge feature, and must not be rewritten to.
