@@ -20,6 +20,7 @@ import {
 import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply,
   computeHashRateTrend, calcFiatFee, computeVibeScore, computePriceChange30d,
+  computeVibeDimensions, computeVibeSummary, vibeDimensionValues,
 } from './lib/calculations.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
 import {
@@ -1498,7 +1499,7 @@ export default function App() {
 
   // Vibe Score. Mayer must be computed in USD — ma200 comes from Kraken's
   // XBTUSD candles, so pairing it with a converted price would be nonsense.
-  const vibe = computeVibeScore({
+  const vibeInputs = {
     fngScore,
     mayerMultiple:       calcMayerMultiple(priceUsd, ma200),
     mvrv:                chainData?.mvrv?.value ?? null,
@@ -1506,10 +1507,16 @@ export default function App() {
     hashRateTrendPct:    hashRateTrend,
     fastestFeeSatsPerVb: fees?.fastestFee ?? null,
     mempoolTxCount:      mempool?.count ?? null,
-  })
+  }
+  const vibe = computeVibeScore(vibeInputs)
   // The header sentence is derived from the same dimension values as the score
-  // below it, so the words and the number cannot contradict each other.
-  const vibeSummary = vibe?.summary ?? null
+  // below it, so the words and the number cannot contradict each other. It is
+  // deliberately *not* gated on the score: if MVRV is rate-limited and the OHLC
+  // fetch fails, coverage falls below the floor and there is no number — but
+  // Fear & Greed, fees and hash rate are still live, and a sentence about them
+  // makes no numeric claim. Falling back to the static tagline there would hide
+  // data the page already has.
+  const vibeSummary = computeVibeSummary(vibeDimensionValues(computeVibeDimensions(vibeInputs)))
   const vibeLoading = loading || ohlcLoading || chainDataLoading
 
   return (

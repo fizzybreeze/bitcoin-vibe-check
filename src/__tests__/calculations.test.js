@@ -10,6 +10,8 @@ import {
   calcFiatFee,
   computeVibeScore,
   computeVibeSummary,
+  computeVibeDimensions,
+  vibeDimensionValues,
   computePriceChange30d,
   vibeLabelForScore,
   VIBE_WEIGHTS,
@@ -197,6 +199,25 @@ describe('computeVibeScore', () => {
     expect(result.available).toBe(5)
   })
 
+  // Regression: all five dimensions report, so a dimension count alone would
+  // have said "5 of 5" and disclosed nothing — while valuation stood on one of
+  // its two inputs. MVRV is the input that actually goes missing in production.
+  it('reports a missing MVRV as a used input even though all 5 dimensions report', () => {
+    const full    = computeVibeScore(NEUTRAL_INPUTS)
+    const noMvrv  = computeVibeScore({ ...NEUTRAL_INPUTS, mvrv: null })
+    expect(full.inputsUsed).toBe(7)
+    expect(full.inputsTotal).toBe(7)
+    expect(noMvrv.available).toBe(5)      // dimension still available…
+    expect(noMvrv.inputsUsed).toBe(6)     // …but the score is built on less
+    expect(noMvrv.inputsTotal).toBe(7)
+  })
+
+  it('counts a dropped congestion input too', () => {
+    const result = computeVibeScore({ ...NEUTRAL_INPUTS, mempoolTxCount: null })
+    expect(result.inputsUsed).toBe(6)
+    expect(result.dimensions.congestion).not.toBeNull()
+  })
+
   it('drops the valuation dimension when both Mayer and MVRV are missing', () => {
     const result = computeVibeScore({ ...NEUTRAL_INPUTS, mvrv: null, mayerMultiple: null })
     expect(result.available).toBe(4)
@@ -356,6 +377,57 @@ describe('computePriceChange30d', () => {
     expect(computePriceChange30d(null)).toBeNull()
     expect(computePriceChange30d([])).toBeNull()
     expect(computePriceChange30d('nope')).toBeNull()
+  })
+
+  // Regression: filtering non-finite closes out *before* indexing slid the
+  // window. With 200 candles and one bad close inside the last 31, the function
+  // silently returned a 31-day change labelled as 30-day.
+  it('keeps an exact 30-candle window when a candle inside it is malformed', () => {
+    const closes = Array.from({ length: 200 }, (_, i) => 100 + i)
+    const series = candles(closes)
+    const withGap = series.map((c, i) => (i === 185 ? [i, '0', '0', '0', '', '0', 0] : c))
+    // prior = closes[169] = 269, last = closes[199] = 299 → 11.1524%
+    expect(computePriceChange30d(series)).toBeCloseTo(11.1524, 3)
+    expect(computePriceChange30d(withGap)).toBeCloseTo(11.1524, 3)
+  })
+
+  it('returns null when either endpoint of the window is unusable', () => {
+    const closes = Array.from({ length: 40 }, (_, i) => 100 + i)
+    const series = candles(closes)
+    const badLast  = series.map((c, i) => (i === 39 ? [i, '0', '0', '0', '', '0', 0] : c))
+    const badPrior = series.map((c, i) => (i === 9  ? [i, '0', '0', '0', '', '0', 0] : c))
+    const zeroPrior = series.map((c, i) => (i === 9 ? [i, '0', '0', '0', '0', '0', 0] : c))
+    expect(computePriceChange30d(badLast)).toBeNull()
+    expect(computePriceChange30d(badPrior)).toBeNull()
+    expect(computePriceChange30d(zeroPrior)).toBeNull()
+  })
+})
+
+// The header sentence must survive a coverage shortfall that kills the score:
+// it names live readings and makes no numeric claim.
+describe('computeVibeDimensions / summary without a score', () => {
+  it('produces a summary when the score is null for lack of coverage', () => {
+    // MVRV rate-limited and the OHLC fetch failed: no Mayer, no MVRV, no
+    // momentum. Coverage is 0.15 — far below the floor.
+    const inputs = { fngScore: 27, fastestFeeSatsPerVb: 2, mempoolTxCount: 30_000, hashRateTrendPct: 3 }
+    expect(computeVibeScore(inputs)).toBeNull()
+
+    const summary = computeVibeSummary(vibeDimensionValues(computeVibeDimensions(inputs)))
+    expect(summary).toBeTruthy()
+    expect(summary).toMatch(/fearful|mempool|hash rate/)
+  })
+
+  it('returns a null summary only when genuinely nothing is available', () => {
+    expect(computeVibeSummary(vibeDimensionValues(computeVibeDimensions({})))).toBeNull()
+  })
+
+  it('flattens detailed dimensions to plain values', () => {
+    const values = vibeDimensionValues(computeVibeDimensions(NEUTRAL_INPUTS))
+    expect(values.sentiment).toBeCloseTo(50, 5)
+    expect(values.valuation).toBeCloseTo(50, 5)
+    expect(Object.keys(values).sort()).toEqual(
+      ['congestion', 'momentum', 'network', 'sentiment', 'valuation']
+    )
   })
 })
 

@@ -84,43 +84,75 @@ const MIN_COVERAGE   = 0.6
 
 const isNum = v => v != null && Number.isFinite(v)
 
-function vibeSentiment(fngScore) {
-  if (!isNum(fngScore)) return null
-  return clamp01(fngScore / 100) * 100
-}
-
-function vibeValuation(mayerMultiple, mvrv) {
-  const parts = []
-  if (isNum(mayerMultiple)) parts.push(heat(mayerMultiple, VIBE_ANCHORS.mayer.cold, VIBE_ANCHORS.mayer.hot))
-  if (isNum(mvrv))          parts.push(heat(mvrv,          VIBE_ANCHORS.mvrv.cold,  VIBE_ANCHORS.mvrv.hot))
-  if (parts.length === 0) return null
-  return parts.reduce((sum, v) => sum + v, 0) / parts.length
-}
-
-function vibeMomentum(priceChange30dPct) {
-  if (!isNum(priceChange30dPct)) return null
-  return heat(priceChange30dPct, VIBE_ANCHORS.momentum.cold, VIBE_ANCHORS.momentum.hot)
-}
-
-// Fee tier alone is a step function with no resolution at the quiet end — it
-// sits at 1 sat/vB for days while the mempool visibly fills — so the two
-// congestion readings are averaged rather than picking one.
-function vibeCongestion(fastestFeeSatsPerVb, mempoolTxCount) {
-  const parts = []
-  if (isNum(fastestFeeSatsPerVb) && fastestFeeSatsPerVb > 0) {
-    parts.push(heat(Math.log10(fastestFeeSatsPerVb), VIBE_ANCHORS.feeLog10.cold, VIBE_ANCHORS.feeLog10.hot))
+// A dimension is the mean of however many of its inputs arrived. It reports the
+// count as well as the value, because a dimension standing on one of its two
+// inputs is a degraded reading even though the dimension itself is "available"
+// — and that distinction is exactly the one the card has to disclose.
+function dimension(parts, inputs) {
+  const present = parts.filter(isNum)
+  return {
+    value: present.length ? present.reduce((sum, v) => sum + v, 0) / present.length : null,
+    used:  present.length,
+    inputs,
   }
-  if (isNum(mempoolTxCount)) {
-    const pressure = computeMempoolPressurePct(mempoolTxCount)
-    if (pressure != null) parts.push(pressure)
-  }
-  if (parts.length === 0) return null
-  return parts.reduce((sum, v) => sum + v, 0) / parts.length
 }
 
-function vibeNetwork(hashRateTrendPct) {
-  if (!isNum(hashRateTrendPct)) return null
-  return heat(hashRateTrendPct, VIBE_ANCHORS.hashTrend.cold, VIBE_ANCHORS.hashTrend.hot)
+/**
+ * Normalise every input to 0–100 heat. Exported because the header sentence is
+ * built from these values and must survive when the *score* cannot: a sentence
+ * naming live Fear & Greed makes no numeric claim, so it has no reason to
+ * inherit the score's coverage floor.
+ */
+export function computeVibeDimensions({
+  fngScore            = null,
+  mayerMultiple       = null,
+  mvrv                = null,
+  priceChange30dPct   = null,
+  hashRateTrendPct    = null,
+  fastestFeeSatsPerVb = null,
+  mempoolTxCount      = null,
+} = {}) {
+  return {
+    sentiment: dimension([isNum(fngScore) ? clamp01(fngScore / 100) * 100 : null], 1),
+
+    // Two estimators of one idea. Either alone still estimates it, so the
+    // dimension keeps its full weight on one input — but `used` drops to 1 and
+    // the card says so. MVRV is the one that goes missing (15 requests/day).
+    valuation: dimension([
+      isNum(mayerMultiple) ? heat(mayerMultiple, VIBE_ANCHORS.mayer.cold, VIBE_ANCHORS.mayer.hot) : null,
+      isNum(mvrv)          ? heat(mvrv,          VIBE_ANCHORS.mvrv.cold,  VIBE_ANCHORS.mvrv.hot)  : null,
+    ], 2),
+
+    momentum: dimension([
+      isNum(priceChange30dPct)
+        ? heat(priceChange30dPct, VIBE_ANCHORS.momentum.cold, VIBE_ANCHORS.momentum.hot)
+        : null,
+    ], 1),
+
+    // Fee tier alone is a step function with no resolution at the quiet end — it
+    // sits at 1 sat/vB for days while the mempool visibly fills — so the two
+    // congestion readings are averaged rather than picking one.
+    congestion: dimension([
+      isNum(fastestFeeSatsPerVb) && fastestFeeSatsPerVb > 0
+        ? heat(Math.log10(fastestFeeSatsPerVb), VIBE_ANCHORS.feeLog10.cold, VIBE_ANCHORS.feeLog10.hot)
+        : null,
+      isNum(mempoolTxCount) ? computeMempoolPressurePct(mempoolTxCount) : null,
+    ], 2),
+
+    network: dimension([
+      isNum(hashRateTrendPct)
+        ? heat(hashRateTrendPct, VIBE_ANCHORS.hashTrend.cold, VIBE_ANCHORS.hashTrend.hot)
+        : null,
+    ], 1),
+  }
+}
+
+// Flatten the detailed dimensions to plain key → 0–100 values, which is what the
+// summary and the card breakdown consume.
+export function vibeDimensionValues(detailed) {
+  return Object.fromEntries(
+    Object.entries(detailed ?? {}).map(([key, d]) => [key, d?.value ?? null])
+  )
 }
 
 export function vibeLabelForScore(score) {
@@ -174,11 +206,13 @@ export function computeVibeSummary(dimensions) {
 // price-vs-200d-MA here would have made one ratio drive 35% of the score.
 export function computePriceChange30d(ohlcData) {
   if (!Array.isArray(ohlcData) || ohlcData.length < 31) return null
-  const closes = ohlcData.map(d => parseFloat(d?.[4])).filter(Number.isFinite)
-  if (closes.length < 31) return null
-  const last  = closes[closes.length - 1]
-  const prior = closes[closes.length - 31]
-  if (!prior) return null
+  // Index positionally and validate the two endpoints. Filtering non-finite
+  // closes out *before* indexing would silently slide the window: one malformed
+  // candle anywhere in the last 31 makes this a 31-day change reported as 30.
+  const closes = ohlcData.map(d => parseFloat(d?.[4]))
+  const last   = closes[closes.length - 1]
+  const prior  = closes[closes.length - 31]
+  if (!isNum(last) || !isNum(prior) || prior === 0) return null
   return ((last - prior) / prior) * 100
 }
 
@@ -188,22 +222,9 @@ export function computePriceChange30d(ohlcData) {
  * source (MVRV rides a 15-request/day free tier) degrades the number instead
  * of deleting it. Returns null when too little is available to be honest about.
  */
-export function computeVibeScore({
-  fngScore            = null,
-  mayerMultiple       = null,
-  mvrv                = null,
-  priceChange30dPct   = null,
-  hashRateTrendPct    = null,
-  fastestFeeSatsPerVb = null,
-  mempoolTxCount      = null,
-} = {}) {
-  const dimensions = {
-    sentiment:  vibeSentiment(fngScore),
-    valuation:  vibeValuation(mayerMultiple, mvrv),
-    momentum:   vibeMomentum(priceChange30dPct),
-    congestion: vibeCongestion(fastestFeeSatsPerVb, mempoolTxCount),
-    network:    vibeNetwork(hashRateTrendPct),
-  }
+export function computeVibeScore(inputs = {}) {
+  const detailed   = computeVibeDimensions(inputs)
+  const dimensions = vibeDimensionValues(detailed)
 
   const present  = Object.keys(VIBE_WEIGHTS).filter(k => isNum(dimensions[k]))
   const coverage = present.reduce((sum, k) => sum + VIBE_WEIGHTS[k], 0)
@@ -212,6 +233,7 @@ export function computeVibeScore({
   const weighted = present.reduce((sum, k) => sum + dimensions[k] * VIBE_WEIGHTS[k], 0)
   const score    = Math.round(weighted / coverage)
 
+  const all = Object.values(detailed)
   return {
     score,
     label:     vibeLabelForScore(score),
@@ -219,6 +241,11 @@ export function computeVibeScore({
     dimensions,
     available: present.length,
     total:     Object.keys(VIBE_WEIGHTS).length,
+    // Raw inputs, not dimensions. A score built on 6 of 7 inputs is degraded
+    // even when all 5 dimensions report, which is precisely what happens when
+    // MVRV is rate-limited — the case the card most needs to disclose.
+    inputsUsed:  all.reduce((sum, d) => sum + d.used, 0),
+    inputsTotal: all.reduce((sum, d) => sum + d.inputs, 0),
     coverage,
   }
 }

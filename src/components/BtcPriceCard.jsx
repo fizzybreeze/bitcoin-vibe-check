@@ -77,9 +77,12 @@ function VibeScoreSection({ vibe, loading }) {
             </p>
           </div>
           <VibeBreakdown dimensions={vibe.dimensions} />
-          {vibe.available < vibe.total && (
+          {/* Counts raw inputs, not dimensions — valuation reporting a number
+              off Mayer alone is still a degraded reading, and MVRV is the input
+              that actually goes missing. */}
+          {vibe.inputsUsed < vibe.inputsTotal && (
             <p className="mt-2 text-[10px] text-gray-600">
-              Scored on {vibe.available} of {vibe.total} inputs
+              Scored on {vibe.inputsUsed} of {vibe.inputsTotal} inputs
             </p>
           )}
         </>
