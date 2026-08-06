@@ -183,7 +183,8 @@ api/og.js                    Vercel serverless function — live link-preview im
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
 supabase/migrations/         schema as code — every DB change belongs here
-e2e/                         Playwright smoke tests (fully mocked, no network)
+e2e/                         Playwright dashboard tests (fully mocked, no network)
+smoke/                       Playwright tests against the deployed site (real upstreams)
 .github/workflows/           ci · e2e · snapshot · claude
 vercel.json                  deploy config plus security and caching headers
 ```
@@ -286,6 +287,7 @@ Rules that hold regardless:
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
 | `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots` |
+| `smoke.yml` | daily at 07:43 UTC, plus manual dispatch | Playwright against the live site with real upstreams, from a US-hosted runner |
 | `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
 
 `claude.yml` runs only for commenters with **write access** — the action checks repository permissions itself, which is what makes an `@claude` trigger safe on a public repo.
