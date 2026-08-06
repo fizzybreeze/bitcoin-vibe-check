@@ -1,0 +1,82 @@
+// Every upstream the dashboard touches, stubbed from `fixtures.js`.
+//
+// Lives in its own module rather than inside `dashboard.spec.js` because more
+// than one spec needs it — the mobile screenshot spec renders the same fully
+// loaded page. Not named `*.spec.js`, so Playwright's default `testMatch` does
+// not pick it up as a test file.
+import {
+  feesFixture, blockHeightFixture, fngFixture,
+  difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
+  hashrate3dFixture, hashrate1mFixture, chainDataFixture,
+  ohlc200dFixture, makeKrakenCandles, KRAKEN_INTERVAL_SECONDS, krakenOhlcResponse,
+  paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture,
+} from './fixtures.js'
+
+export async function mockApis(page) {
+  await page.route('https://mempool.space/api/v1/fees/recommended', route =>
+    route.fulfill({ json: feesFixture })
+  )
+  await page.route('https://mempool.space/api/blocks/tip/height', route =>
+    route.fulfill({ json: blockHeightFixture })
+  )
+  await page.route('https://mempool.space/api/v1/difficulty-adjustment', route =>
+    route.fulfill({ json: difficultyFixture })
+  )
+  await page.route('https://mempool.space/api/mempool', route =>
+    route.fulfill({ json: mempoolFixture })
+  )
+  await page.route('https://mempool.space/api/v1/blocks', route =>
+    route.fulfill({ json: blocksFixture })
+  )
+  await page.route('https://mempool.space/api/v1/lightning/statistics/latest', route =>
+    route.fulfill({ json: lightningFixture })
+  )
+  await page.route('https://api.alternative.me/fng/**', route =>
+    route.fulfill({ json: fngFixture })
+  )
+  await page.route('https://mempool.space/api/v1/mining/hashrate/3d', route =>
+    route.fulfill({ json: hashrate3dFixture })
+  )
+  await page.route('https://mempool.space/api/v1/mining/hashrate/1m', route =>
+    route.fulfill({ json: hashrate1mFixture })
+  )
+  // CoinPaprika — primary price source (USD, volume, ATH, dominance)
+  await page.route('https://api.coinpaprika.com/v1/tickers/btc-bitcoin', route =>
+    route.fulfill({ json: paprikaTickerFixture })
+  )
+  await page.route('https://api.coinpaprika.com/v1/global', route =>
+    route.fulfill({ json: paprikaGlobalFixture })
+  )
+  // Kraken REST — initial GBP/EUR/CAD/CHF prices
+  await page.route('https://api.kraken.com/0/public/Ticker*', route =>
+    route.fulfill({ json: krakenTickerFixture })
+  )
+  // Block the Kraken WebSocket so fixture price values are not overwritten by live data
+  await page.routeWebSocket('wss://ws.kraken.com/**', ws => ws.close())
+  // BGeometrics proxy (Vercel serverless function)
+  await page.route('/api/chain-data', route =>
+    route.fulfill({ json: chainDataFixture })
+  )
+  // Kraken OHLC — chart ranges and the 200-day series. Kraken has no limit
+  // parameter, so the app slices client-side; the daily request therefore serves
+  // both the 1M/1Y toggles and the 200DMA. Return the 200 fixed-close candles
+  // for the daily interval so the cycle-indicator assertions stay deterministic.
+  await page.route('https://api.kraken.com/0/public/OHLC*', route => {
+    const url      = new URL(route.request().url())
+    const interval = parseInt(url.searchParams.get('interval')) || 1440
+    const candles  = interval === 1440
+      ? ohlc200dFixture
+      : makeKrakenCandles(200, KRAKEN_INTERVAL_SECONDS[interval] ?? 86_400)
+    route.fulfill({ json: krakenOhlcResponse(candles) })
+  })
+
+  // Third-party scripts. These are not part of the dashboard under test and are
+  // unreachable on a restricted network, so stub them out rather than let the
+  // suite depend on the public internet.
+  await page.route('https://subscribe-forms.beehiiv.com/**', route =>
+    route.fulfill({ contentType: 'application/javascript', body: '' })
+  )
+  await page.route('https://va.vercel-scripts.com/**', route =>
+    route.fulfill({ contentType: 'application/javascript', body: '' })
+  )
+}
