@@ -71,6 +71,39 @@ test.describe('bitcoinvibecheck.com', () => {
     )
   })
 
+  // #20. The dashboard renders identically whether Supabase is configured or
+  // not, so a mistyped variable in Vercel kills donations with nothing on
+  // screen to show for it. The supporter ticker is no signal either — an empty
+  // list is a legitimate state. The request itself is the signal: the app only
+  // issues it when both variables reached the bundle, and only gets a 200 back
+  // when the anon key is valid and `donors` is still readable by that role.
+  //
+  // What this does NOT catch, deliberately: the RLS *policy* being dropped.
+  // PostgREST answers that with 200 and zero rows, which is indistinguishable
+  // from a quiet week — the same reason the ticker's contents are not asserted.
+  test('donations are wired: the deployed bundle reads Supabase and is allowed to', async ({ page }) => {
+    // GET only. supabase-js sends an `apikey` header, so the browser preflights
+    // this cross-origin read, and the OPTIONS response carries the same URL —
+    // matching it would compare a 204 against the 200 asserted below and go red
+    // on a healthy site.
+    const donorRead = page.waitForResponse(
+      (res) => res.request().method() === 'GET' && /\/rest\/v1\/donors\b/.test(res.url())
+    )
+
+    // Registered before navigating, because the read fires on mount and would
+    // otherwise be over before a listener attached. beforeEach has already
+    // loaded the page once; this is a second, observed load.
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    // A timeout here means no request was made at all: VITE_SUPABASE_URL or
+    // VITE_SUPABASE_ANON_KEY is missing from the production build. The browser
+    // console carries the warning naming which one.
+    const res = await donorRead
+    // A non-200 means the request went out and was refused: a rotated or
+    // mistyped anon key (401), or the table grant withdrawn (403).
+    expect(res.status()).toBe(200)
+  })
+
   test('the header reads the room rather than falling back to the tagline', async ({ page }) => {
     // "Read the room." is the fallback shown when not one dimension is
     // available — on the live site that means every upstream failed at once.
