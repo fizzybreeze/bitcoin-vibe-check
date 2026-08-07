@@ -183,6 +183,7 @@ api/lib/mvrvFallback.js      which stored snapshot row the MVRV fallback serves,
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
+scripts/lib/rollbackTarget.js which production deployment to roll back to, as a pure function
 supabase/migrations/         schema as code — every DB change belongs here
 e2e/                         Playwright dashboard tests (fully mocked, no network)
 smoke/                       Playwright tests against the deployed site (real upstreams)
@@ -298,7 +299,7 @@ Dependabot opens one grouped npm PR weekly and a monthly Actions PR; React and V
 
 ### Repo tooling for mobile sessions
 
-`.claude/` holds the setup that makes phone-driven development practical: a SessionStart hook that installs dependencies and resolves a chromium, a permission allowlist so routine commands do not re-prompt, and three slash commands — `/ship` (branch, implement, verify, push, open a PR for review), `/verify` (run all four gates and report only failures) and `/preview` (find the PR's Vercel preview URL and check it was built from the latest commit).
+`.claude/` holds the setup that makes phone-driven development practical: a SessionStart hook that installs dependencies and resolves a chromium, a permission allowlist so routine commands do not re-prompt, and four slash commands — `/ship` (branch, implement, verify, push, open a PR for review), `/verify` (run all four gates and report only failures), `/preview` (find the PR's Vercel preview URL and check it was built from the latest commit) and `/rollback` (find the last known-good production deployment and report the direct link — see [If production breaks](#if-production-breaks)).
 
 Auto-merge is deliberately disabled on this repository. CI proves a change is correct; it cannot tell you whether it looks right. Every PR waits for a human to open the preview and press merge.
 
@@ -316,6 +317,26 @@ There are two serverless functions:
 
 - **`api/chain-data.js`** proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier. When BGeometrics does not answer it serves the most recent MVRV stored in `metric_snapshots`, labelled as such on the card, capped at 7 days old and cached for an hour rather than a day so it cannot outlive the outage that produced it.
 - **`api/og.js`** renders the link-preview image, reached as `/og-live.png` via a rewrite in `vercel.json`. It is an unauthenticated compute endpoint, so the edge cache is the defence: `s-maxage=300` with a day of `stale-while-revalidate` collapses a burst of unfurls into one render. It never calls `/api/chain-data` — that quota belongs to the live dashboard.
+
+### If production breaks
+
+**Promote the previous build first. Fix forward afterwards.** `git revert` and push is the *slower* path — it waits for CI and a fresh build, several minutes at best. The previous production deployment already exists on Vercel's edge, so pointing traffic back at it takes effect in seconds and rebuilds nothing.
+
+The path, from a phone:
+
+1. [vercel.com](https://vercel.com) → the **bitcoin-vibe-check** project → the **Deployments** tab.
+2. Find the production deployment *below* the current one — the list is newest-first, so the top entry is the build that is broken.
+3. Its **⋯** menu carries **Instant Rollback**. Confirm. The production alias moves within seconds; no build runs.
+4. Load [bitcoinvibecheck.com](https://bitcoinvibecheck.com) and hard-refresh to confirm.
+
+`/rollback` does steps 1–2 for you and reports the direct link, which is the part that is genuinely hard on a phone. The selection itself lives in `scripts/lib/rollbackTarget.js` with tests, because the intuitive reading of a deployment list — "take the newest production one" — names the broken build.
+
+Two limits worth knowing before you need them:
+
+- **One-tap rollback only reaches one deployment back.** Vercel flags exactly the two newest production deployments as rollback candidates. Anything older is still reachable, but by **Promote to Production** on that deployment rather than by Instant Rollback — a different control, in the same menu.
+- **It reverts the deployed build and nothing else.** Rows already written to Supabase stay written, and a service worker already installed on a visitor's device keeps serving its cached shell until it updates.
+
+Then fix forward properly: revert or repair on a branch, through a normal PR, so the next merge to `main` does not redeploy the same bug on top of the rollback.
 
 ---
 
