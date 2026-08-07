@@ -96,10 +96,20 @@ export function selectRollbackTarget(payload, { now = Date.now(), headSha } = {}
   // to something that already is. It cannot be settled from the deployment
   // list alone, so it is reported rather than resolved: a mismatch means check
   // the project's current production alias before touching anything.
+  //
+  // The fallback below is `||`, not `??`, and the empty case is checked
+  // separately. A deployment made outside the Git integration — `vercel deploy`
+  // from a laptop, which is one of the ways production ends up somewhere
+  // surprising in the first place — carries `githubCommitSha: ''` rather than
+  // no key at all. That is not nullish, and `headSha.startsWith('')` is `true`,
+  // so `??` reported a deployment with no commit at all as matching the tip of
+  // `main` and swallowed the warning. Wrong in the one direction that matters:
+  // the case where nobody can tell what is live is precisely the case where
+  // the warning has to fire.
+  const liveSha = String(live.meta?.githubCommitSha || '')
   const liveMatchesHead =
     typeof headSha === 'string' && headSha.length > 0
-      ? String(live.meta?.githubCommitSha ?? '').startsWith(headSha) ||
-        headSha.startsWith(String(live.meta?.githubCommitSha ?? '_'))
+      ? liveSha.length > 0 && (liveSha.startsWith(headSha) || headSha.startsWith(liveSha))
       : null
 
   if (!target) {

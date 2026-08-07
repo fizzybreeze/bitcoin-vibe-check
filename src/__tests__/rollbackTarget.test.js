@@ -147,6 +147,18 @@ describe('selectRollbackTarget', () => {
     expect(selectRollbackTarget(LISTING, { now: NOW, headSha: full }).liveMatchesHead).toBe(true)
   })
 
+  it('does not read a deployment with no commit SHA as matching the tip of main', () => {
+    // A deployment made outside the Git integration carries an *empty* SHA, not
+    // a missing one, and `headSha.startsWith('')` is true — so the obvious `??`
+    // fallback suppresses the warning on a deployment nobody can identify,
+    // which is the one direction this must not fail in.
+    const anonymous = { ...LIVE, meta: { githubCommitSha: '', githubCommitMessage: 'deployed from a laptop' } }
+    expect(selectRollbackTarget([anonymous, PREVIOUS], { now: NOW, headSha: 'ea45f1a' }).liveMatchesHead).toBe(false)
+
+    const noMeta = { ...LIVE, meta: undefined }
+    expect(selectRollbackTarget([noMeta, PREVIOUS], { now: NOW, headSha: 'ea45f1a' }).liveMatchesHead).toBe(false)
+  })
+
   it('reports null, not false, when no head SHA was supplied', () => {
     // A missing comparison is not a failed one — printing the warning here
     // would cry wolf on every ordinary run.
