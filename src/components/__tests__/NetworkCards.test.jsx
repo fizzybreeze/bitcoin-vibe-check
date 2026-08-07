@@ -56,6 +56,23 @@ describe('NetworkPulseCard', () => {
     render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={null} />)
     expect(screen.getByText('Unavailable')).toBeTruthy()
   })
+
+  // The 30-day trend line is gated behind the hash rate having arrived, so a
+  // stubbed-empty fetch never reaches it. This is the card's only conditional
+  // colour, which makes it the part most worth pinning.
+  it('renders the hash rate and its 30d trend once the fetch lands', async () => {
+    stubFetch({ currentHashrate: 812e18 })
+    render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={4.25} />)
+    expect(await screen.findByText('812.0')).toBeTruthy()
+    expect(screen.getByText(/▲.*\+4\.3% \(30d\)/)).toBeTruthy()
+  })
+
+  it('marks a falling hash-rate trend red rather than green', async () => {
+    stubFetch({ currentHashrate: 812e18 })
+    render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={-4.25} />)
+    const trend = await screen.findByText(/▼.*-4\.3% \(30d\)/)
+    expect(trend.className).toContain('text-red-400')
+  })
 })
 
 describe('NetworkHeartbeatCard', () => {
@@ -72,14 +89,34 @@ describe('NetworkHeartbeatCard', () => {
 })
 
 describe('RecentBlocksCard', () => {
+  // The card renders the chain tip twice: once in the desktop heartbeat header
+  // it merges in, and once per fetched block. jsdom applies no Tailwind, so
+  // `hidden lg:block` hides nothing here and both are queryable. The fixture
+  // height is therefore deliberately different from the `blockHeight` prop —
+  // with them equal, awaiting the height resolves against the header before the
+  // fetch has landed, and the test passes with a fetch that never resolves.
   it('renders a fetched block with its height, tx count and fees', async () => {
-    stubFetch([{ id: 'abc', height: 912345, tx_count: 3210, timestamp: Math.floor(Date.now() / 1000) - 120, extras: { totalFees: 12_500_000, avgFeeRate: 7 } }])
+    stubFetch([{ id: 'abc', height: 912344, tx_count: 3210, timestamp: Math.floor(Date.now() / 1000) - 120, extras: { totalFees: 12_500_000, avgFeeRate: 7 } }])
     render(<RecentBlocksCard blockHeight={912345} difficulty={{ timeAvg: 600000 }} lastBlockTs={null} loading={false} />)
-    expect(await screen.findByText('912,345')).toBeTruthy()
-    expect(screen.getByText('3,210 txs')).toBeTruthy()
+    // Awaited on the tx count, which exists only once the fetch has resolved.
+    expect(await screen.findByText('3,210 txs')).toBeTruthy()
+    expect(screen.getByText('912,344')).toBeTruthy()
     expect(screen.getByText('0.125 BTC in fees')).toBeTruthy()
     expect(screen.getByText('avg 7 sat/vB')).toBeTruthy()
     expect(screen.getByText('2 min ago')).toBeTruthy()
+  })
+
+  it('links each block to its mempool.space page', async () => {
+    stubFetch([{ id: 'deadbeef', height: 912344, tx_count: 1, timestamp: Math.floor(Date.now() / 1000), extras: null }])
+    render(<RecentBlocksCard blockHeight={912345} difficulty={null} lastBlockTs={null} loading={false} />)
+    const link = await screen.findByRole('link', { name: '912,344' })
+    expect(link.getAttribute('href')).toBe('https://mempool.space/block/deadbeef')
+  })
+
+  it('renders the merged heartbeat header from its own props, not the block list', () => {
+    render(<RecentBlocksCard blockHeight={912345} difficulty={{ timeAvg: 720000 }} lastBlockTs={null} loading={false} />)
+    expect(screen.getByText('912,345')).toBeTruthy()
+    expect(screen.getByText('12.0 min')).toBeTruthy()
   })
 })
 
