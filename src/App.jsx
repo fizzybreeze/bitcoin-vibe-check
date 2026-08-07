@@ -23,8 +23,8 @@ import {
 } from './lib/calculations.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
 import {
-  KRAKEN_INTERVAL, krakenParamsForDays, krakenOhlcUrl,
-  extractKrakenOhlc, parseKrakenOhlc,
+  KRAKEN_INTERVAL, krakenParamsForDays,
+  fetchKrakenCandles, parseKrakenOhlc,
 } from './lib/ohlc.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import CardTooltip from './components/CardTooltip.jsx'
@@ -138,12 +138,12 @@ async function loadData() {
 
 async function fetchChart(days) {
   const { interval, count } = krakenParamsForDays(days)
-  const res = await fetch(krakenOhlcUrl(interval))
-  if (!res.ok) throw Object.assign(new Error('chart fetch failed'), { status: res.status })
-  // Kraken reports its own errors inside a 200 response, so extractKrakenOhlc
-  // throws where res.ok would have sailed past. The caller already retries.
-  const candles = extractKrakenOhlc(await res.json())
-  if (!candles) throw new Error('chart fetch failed: no candles in response')
+  // fetchKrakenCandles throws on a transport failure, on a Kraken error (which
+  // arrives inside a 200, so res.ok sails past it) and on a body with no
+  // candles. The caller already retries. It also shares a request in flight for
+  // the same URL, which is what stops 1M and 1Y — identical URLs since Kraken
+  // dropped `limit` — being fetched twice in the same prefetch burst (#24).
+  const candles = await fetchKrakenCandles(interval)
   return parseKrakenOhlc(candles, days, count)
 }
 
@@ -798,10 +798,10 @@ export default function App() {
       setOhlcLoading(true)
       setOhlcError(null)
       try {
-        const res = await fetch(krakenOhlcUrl(KRAKEN_INTERVAL.DAY))
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const candles = extractKrakenOhlc(await res.json())
-        if (!candles) throw new Error('no candles in response')
+        // Same URL as the 1M and 1Y chart ranges, so this shares their request
+        // whenever the two overlap (#24). `slice` copies, which it must — the
+        // resolved array is shared with those callers.
+        const candles = await fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
         if (active) setOhlcData200(candles.slice(-200))
       } catch (err) {
         if (active) setOhlcError(err.message)
