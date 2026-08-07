@@ -6,7 +6,7 @@ import ShareButton from './components/ShareButton.jsx'
 import ShareModal from './components/ShareModal.jsx'
 import PriceAlertsButton from './components/PriceAlertsButton.jsx'
 import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
-import { usePriceAlerts } from './hooks/usePriceAlerts.js'
+import { useMetricAlerts } from './hooks/useMetricAlerts.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import {
@@ -627,7 +627,7 @@ export default function App() {
     clearTriggered,
     notificationPermission,
     requestPermission,
-  } = usePriceAlerts(price, currency)
+  } = useMetricAlerts({ currency, price })
 
   const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 

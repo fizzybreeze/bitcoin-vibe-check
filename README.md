@@ -177,7 +177,7 @@ src/
     colors.js                the brand accent as hex, for the places that cannot use a class
     supabase.js              Supabase client; returns null when env vars are absent
   utils/cycleCalculations.js Power Law fair value, Mayer Multiple
-  hooks/                     usePersistedState, usePriceAlerts, useShareImage
+  hooks/                     usePersistedState, useMetricAlerts, useShareImage
   components/                every card, plus the share flow, price alerts and tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted

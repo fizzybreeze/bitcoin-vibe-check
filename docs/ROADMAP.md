@@ -153,9 +153,10 @@ Two problems, one theme: alerts exist but do not yet do the job.
 **Fee-window alerts.** "Tell me when fees drop below 5 sat/vB" is plausibly the
 most practically useful alert this dashboard could offer. Price alerts are a
 commodity; a nudge that saves someone real money when they move coins is a
-reason to keep the PWA installed. `usePriceAlerts` generalises to
-threshold-on-any-metric with modest surgery — extend it to fees, Fear & Greed
-extremes, and Mayer crossings.
+reason to keep the PWA installed. That surgery is done as of v1.7.1 —
+`useMetricAlerts` takes a metrics object and every decision lives in
+`src/lib/alertRules.js` — so what remains is fees, Fear & Greed extremes and
+Mayer crossings in the registry and in the panel.
 
 **They only fire when the tab is open.** `fireNotification` calls
 `new Notification(...)` from inside the running page, so an alert set at 2am
@@ -164,29 +165,18 @@ Push, which is §4.1 — but it is worth being clear that until then, alerts are
 convenience for open tabs rather than a background service, and the copy should
 not overpromise.
 
-#### 3.4a — generalise the rule, and extract the predicate
-
-`usePriceAlerts` currently hard-codes both the shape of a rule
-(`{targetPrice, currency, direction}`) and the crossing test, which is inline in
-the price-tick effect. Widen the shape to name a metric, and **lift the crossing
-test out into a pure function in `src/lib/`**, next to `calculations.js`, taking
-a rule and a metrics object.
-
-That extraction is the whole reason §3.4 and §4.1 are separable rather than one
-change: §4.1's server-side evaluator imports the same function, so the browser
-and the job cannot disagree about when an alert fires — and the decision stays
-unit-testable without a service worker in the loop.
-
-Alerts already saved to `localStorage` under `btc-vibe-price-alerts` have no
-metric field. **Migrate them on read** — reading a stored price alert as an
-unrecognised rule and dropping it silently deletes something a visitor set
-deliberately.
+**3.4a — the rule model. Shipped in v1.7.1; see the version-history row.**
+`src/lib/alertRules.js` holds the metric registry and the crossing predicate as
+pure functions, and `useMetricAlerts` migrates rules stored under the old
+price-only shape on read. Nothing new is in the panel yet — that is 3.4b.
 
 #### 3.4b — the new metrics in the panel
 
 Fees, Fear & Greed extremes, Mayer crossings, plus the copy fix above.
+Adding each is a row in `ALERT_METRICS` plus the field it reads on the metrics
+object; the panel is the part that has to be designed.
 `PriceAlertsPanel.jsx` is already 153 lines and this is the change that grows
-it, which is why it is worth its own diff: 3.4a's review question is "is the
+it, which is why it is worth its own diff: 3.4a's review question was "is the
 rule model right", 3.4b's is "does this work on a phone". Both are worth asking;
 neither is served by asking them in one PR.
 
@@ -252,13 +242,13 @@ not `metric_snapshots`: a daily row is far too stale to fire a fee alert against
 migration, no keys, no cron, no serverless, no service worker — and is verifiable
 by `npm test` plus the e2e suite. §4.1 is almost entirely infrastructure, and
 barely touches `src/`. The dependency is that §4.1's evaluator needs a *rule
-format*, and §3.4a is the change that invents one; building §4.1 first means
-inventing a provisional format and then rewriting it.
+format*, and §3.4a is the change that invented one; building §4.1 first would
+have meant inventing a provisional format and then rewriting it.
 
 The overlap that tempts you to merge them is the crossing predicate, and 3.4a's
-extraction is the answer to it. Four PRs, in order: **3.4a → 3.4b → 4.1a →
-4.1b**. 3.4a and 3.4b merge cleanly into one if you want it shorter; 4.1a and
-4.1b merge less cleanly. Nothing should merge across the §3/§4 boundary — the
+extraction is the answer to it — `hasAlertCrossed` is what §4.1b imports.
+Three PRs left, in order: **3.4b → 4.1a → 4.1b**. 4.1a and
+4.1b merge less cleanly than 3.4a and 3.4b would have. Nothing should merge across the §3/§4 boundary — the
 review questions on either side have almost nothing in common, and the whole
 point of the phone workflow is that a diff can be judged on its own terms.
 
