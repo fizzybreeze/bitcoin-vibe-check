@@ -44,10 +44,8 @@ export function supabaseCredentials(env) {
 export function supabaseConfigWarning(env) {
   const missing = missingSupabaseEnv(env)
   if (missing.length === 0) return null
-  const [subject, verb, object] = missing.length === 1
-    ? [missing[0], 'is', 'it']
-    : [missing.join(' and '), 'are', 'them']
-  return `[bitcoin-vibe-check] ${subject} ${verb} missing or empty, so Supabase is disabled: ` +
+  const [verb, object] = missing.length === 1 ? ['is', 'it'] : ['are', 'them']
+  return `[bitcoin-vibe-check] ${missing.join(' and ')} ${verb} missing or empty, so Supabase is disabled: ` +
     'donations cannot be submitted and the supporter list will be empty. The rest of the ' +
     `dashboard is unaffected. Set ${object} in the Vercel project's environment variables ` +
     'and redeploy.'
