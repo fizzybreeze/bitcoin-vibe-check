@@ -31,12 +31,17 @@ describe('ALERT_METRICS', () => {
     expect(ALERT_METRIC_IDS).toContain('price')
   })
 
-  it('gives every metric the four things the predicate needs', () => {
+  // `currencyScoped` is the one that has to be asserted rather than assumed: a
+  // §3.4b row that simply forgets it is globally scoped, which means a rule
+  // fired against whatever currency happens to be on screen — and nothing else
+  // in this suite would go red. Declaring it explicitly, either way, is cheap.
+  it('gives every metric the things the predicate needs, currency scoping included', () => {
     for (const id of ALERT_METRIC_IDS) {
       const meta = ALERT_METRICS[id]
       expect(meta.id).toBe(id)
       expect(typeof meta.name).toBe('string')
-      expect(typeof meta.isValidThreshold).toBe('function')
+      expect(typeof meta.currencyScoped).toBe('boolean')
+      expect(typeof meta.isValidValue).toBe('function')
       expect(typeof meta.format).toBe('function')
     }
   })
@@ -63,6 +68,22 @@ describe('readAlertMetric', () => {
 
   it('matches currency case-insensitively', () => {
     expect(readAlertMetric({ metric: 'price', currency: 'USD' }, usd)).toBe(50000)
+  })
+
+  // Two missing currencies must not read as a match. Unreachable through the
+  // migration, reachable by §4.1b reading rules out of a table.
+  it('refuses a currency-scoped rule when either side has no currency', () => {
+    expect(readAlertMetric({ metric: 'price' }, { price: 50000 })).toBeNull()
+    expect(readAlertMetric({ metric: 'price' }, usd)).toBeNull()
+    expect(readAlertMetric({ metric: 'price', currency: 'usd' }, { price: 50000 })).toBeNull()
+  })
+
+  // The Kraken WebSocket guards `ticker.last != null` and then rounds, so a
+  // zero frame arrives here as a number rather than as a null. Treated as a
+  // reading it would fire every pending `below` rule at once.
+  it('refuses a reading the metric calls impossible', () => {
+    expect(readAlertMetric({ metric: 'price', currency: 'usd' }, { currency: 'usd', price: 0 })).toBeNull()
+    expect(readAlertMetric({ metric: 'price', currency: 'usd' }, { currency: 'usd', price: -1 })).toBeNull()
   })
 })
 
@@ -92,8 +113,13 @@ describe('hasAlertCrossed', () => {
     expect(hasAlertCrossed({ ...above, direction: 'sideways' }, { currency: 'usd', price: 90000 })).toBe(false)
   })
 
-  it('never fires a rule with a non-numeric threshold', () => {
+  it('never fires a rule whose threshold the metric calls impossible', () => {
     expect(hasAlertCrossed({ ...above, threshold: 'sixty' }, { currency: 'usd', price: 90000 })).toBe(false)
+    expect(hasAlertCrossed({ ...above, threshold: 0 }, { currency: 'usd', price: 90000 })).toBe(false)
+  })
+
+  it('never fires on a reading the metric calls impossible', () => {
+    expect(hasAlertCrossed(below, { currency: 'usd', price: 0 })).toBe(false)
   })
 
   it('never fires a rule scoped to a currency that is not being shown', () => {
@@ -171,6 +197,14 @@ describe('migrateStoredRules', () => {
 
   it('preserves the triggered flag', () => {
     expect(migrateStoredRules([{ ...legacy, triggered: true }])[0].triggered).toBe(true)
+  })
+
+  // Hard-coding `direction: 'above'` in the migration would turn every saved
+  // below-alert into an above-alert that fires on the next tick — the loudest
+  // way this change could go wrong, and silent without this assertion.
+  it('preserves the direction rather than defaulting it', () => {
+    expect(migrateStoredRules([{ ...legacy, direction: 'above' }])[0].direction).toBe('above')
+    expect(migrateStoredRules([{ ...legacy, direction: 'below' }])[0].direction).toBe('below')
   })
 
   it('regenerates a missing label rather than showing a blank row', () => {

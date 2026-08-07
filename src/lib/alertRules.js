@@ -42,8 +42,14 @@ function formatCurrency(value, currency) {
  * - `currencyScoped` — a price of 60,000 means nothing without saying in what.
  *   A fee tier in sat/vB has no such qualifier, and giving it one would invent
  *   a way for a rule to stop matching.
- * - `isValidThreshold` — "a positive number" is the right bound for a price and
- *   the wrong one for Fear & Greed, where 0 is a real reading and 140 is not.
+ * - `isValidValue` — "a positive number" is the right bound for a price and the
+ *   wrong one for Fear & Greed, where 0 is a real reading and 140 is not. It
+ *   screens the live reading as well as the threshold, deliberately: what a
+ *   metric can plausibly be is one fact, and two predicates for it would be two
+ *   places to disagree. Screening the reading is not theoretical — the Kraken
+ *   WebSocket writes `Math.round(ticker.last)` behind a `!= null` check, so a
+ *   zero frame reaches here as a number, and without this every pending `below`
+ *   rule would fire at once quoting "Now $0".
  * - `format` — the label is written once, at creation, and is what the
  *   notification quotes back. Money, an index and a ratio do not format alike.
  */
@@ -52,7 +58,7 @@ export const ALERT_METRICS = {
     id: 'price',
     name: 'BTC price',
     currencyScoped: true,
-    isValidThreshold: v => Number.isFinite(v) && v > 0,
+    isValidValue: v => Number.isFinite(v) && v > 0,
     format: (value, rule) => formatCurrency(value, rule?.currency),
   },
 }
@@ -77,12 +83,20 @@ export function readAlertMetric(rule, metrics) {
   const meta = ALERT_METRICS[rule?.metric]
   if (!meta || !metrics || typeof metrics !== 'object') return null
 
-  if (meta.currencyScoped && normaliseCurrency(rule.currency) !== normaliseCurrency(metrics.currency)) {
-    return null
+  if (meta.currencyScoped) {
+    const ruleCurrency = normaliseCurrency(rule.currency)
+    const metricsCurrency = normaliseCurrency(metrics.currency)
+    // Both absent must not read as "in scope". `migrateStoredRules` guarantees
+    // a currency on every rule it returns, so this is unreachable from the
+    // browser today — but this function is §4.1b's shared arbiter, and that
+    // evaluator will read rules out of a table rather than through the
+    // migration. A null-equals-null match there is a GBP rule fired on a USD
+    // price, which is the one mistake this check has always existed to prevent.
+    if (!ruleCurrency || !metricsCurrency || ruleCurrency !== metricsCurrency) return null
   }
 
   const value = metrics[meta.id]
-  return Number.isFinite(value) ? value : null
+  return meta.isValidValue(value) ? value : null
 }
 
 /**
@@ -99,7 +113,12 @@ export function hasAlertCrossed(rule, metrics) {
 
   const value = readAlertMetric(rule, metrics)
   if (value == null) return false
-  if (!Number.isFinite(rule.threshold)) return false
+
+  // Held to the same predicate as the reading, and for the same reason the
+  // currency check above is: `migrateStoredRules` has already screened every
+  // rule the browser passes in, but §4.1b's evaluator reads rules from a table.
+  // An `above` rule with a threshold of 0 fires on the first tick it sees.
+  if (!ALERT_METRICS[rule.metric].isValidValue(rule.threshold)) return false
 
   if (rule.direction === 'above') return value >= rule.threshold
   if (rule.direction === 'below') return value <= rule.threshold
@@ -124,7 +143,7 @@ export function createAlertRule(threshold, {
   if (!meta) return null
 
   const parsed = Number(threshold)
-  if (!meta.isValidThreshold(parsed)) return null
+  if (!meta.isValidValue(parsed)) return null
 
   const currency = meta.currencyScoped ? normaliseCurrency(metrics?.currency) : null
   if (meta.currencyScoped && !currency) return null
@@ -187,7 +206,7 @@ export function migrateStoredRules(stored) {
     if (!meta) return null
 
     const threshold = firstFinite(raw.threshold, raw.targetPrice)
-    if (threshold == null || !meta.isValidThreshold(threshold)) return null
+    if (threshold == null || !meta.isValidValue(threshold)) return null
 
     if (raw.direction !== 'above' && raw.direction !== 'below') return null
 
