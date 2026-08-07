@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import PriceAlertsPanel from '../components/PriceAlertsPanel.jsx'
+import { createAlertRule } from '../lib/alertRules.js'
 
 const baseProps = {
   alerts: [],
@@ -13,15 +14,13 @@ const baseProps = {
   onClose: vi.fn(),
 }
 
+// Built by the real rule factory rather than hand-written, so this suite is
+// actually coupled to the rule shape the hook produces. A literal fixture would
+// keep passing after a rule-shape change that broke every row in the panel —
+// which is the opposite of what an untouched display test is supposed to prove.
 function makeAlert(overrides = {}) {
   return {
-    id: 'alert-1',
-    targetPrice: 80000,
-    currency: 'usd',
-    direction: 'above',
-    label: '$80,000',
-    triggered: false,
-    createdAt: new Date().toISOString(),
+    ...createAlertRule(80000, { metrics: { currency: 'usd', price: 50000 }, id: 'alert-1' }),
     ...overrides,
   }
 }
