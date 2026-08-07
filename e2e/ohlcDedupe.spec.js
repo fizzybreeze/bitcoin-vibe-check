@@ -13,6 +13,9 @@ import { test, expect } from '@playwright/test'
 import { mockApis } from './mocks.js'
 
 const TIMEOUT = 10_000
+// Range switching costs a 400ms debounce plus a fetch, on top of whatever the
+// dev server is doing for the other specs running beside this one.
+const SLOW_TIMEOUT = 30_000
 
 // Requests observed via page.on('request'), which fires for routed requests
 // too — so this counts without displacing the fixtures in mocks.js.
@@ -74,9 +77,15 @@ test.describe('Kraken OHLC request dedupe', () => {
     await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
 
     const bars = page.locator('.recharts-bar-rectangle')
+    // Wait for the default range to have drawn before touching the toggles.
+    // Switching range clears the series and refetches behind a 400ms debounce,
+    // so clicking into a chart that has not rendered yet stacks two waits into
+    // one timeout — which is how this went red once under a loaded dev server.
+    await expect.poll(() => bars.count(), { timeout: SLOW_TIMEOUT }).toBeGreaterThan(0)
+
     const showRange = async (label, expected) => {
       await page.getByRole('button', { name: label, exact: true }).click()
-      await expect.poll(() => bars.count(), { timeout: TIMEOUT, message: `${label} bar count` })
+      await expect.poll(() => bars.count(), { timeout: SLOW_TIMEOUT, message: `${label} bar count` })
         .toBe(expected)
     }
 
