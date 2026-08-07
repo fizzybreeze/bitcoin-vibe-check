@@ -1,5 +1,7 @@
+import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
+import { hasEnoughVibeHistory, vibeHistoryLabel } from '../lib/vibeHistory.js'
 
 const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
 
@@ -45,7 +47,41 @@ function VibeBreakdown({ dimensions }) {
   )
 }
 
-function VibeScoreSection({ vibe, loading }) {
+// The score's own history, replayed from the daily snapshot rows. Rendered only
+// once there are enough points to be a line rather than a rumour — see
+// MIN_HISTORY_POINTS. No placeholder below that: an empty slot reading "not
+// enough history" under the number is more prominent than the history would be,
+// and the card already says everything it can honestly say.
+function VibeHistorySparkline({ points }) {
+  if (!hasEnoughVibeHistory(points)) return null
+
+  return (
+    <div data-testid="vibe-sparkline" className="mt-3">
+      <div className="h-10">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+            <Line
+              type="monotone"
+              dataKey="score"
+              stroke="#f97316"
+              dot={false}
+              activeDot={false}
+              strokeWidth={1.5}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Labelled by what the line actually covers, never by the window it was
+          asked for. Until 30 points exist this names the first day on it. */}
+      <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-600">
+        Vibe trend ({vibeHistoryLabel(points)})
+      </p>
+    </div>
+  )
+}
+
+function VibeScoreSection({ vibe, loading, history }) {
   return (
     // md:mt-auto pins this to the bottom of the card on desktop, where the row
     // height is set by the taller chart card beside it. That space was empty.
@@ -85,13 +121,14 @@ function VibeScoreSection({ vibe, loading }) {
               Scored on {vibe.inputsUsed} of {vibe.inputsTotal} inputs
             </p>
           )}
+          <VibeHistorySparkline points={history} />
         </>
       )}
     </div>
   )
 }
 
-export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, vibeLoading = false }) {
+export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, vibeLoading = false, vibeHistory = [] }) {
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
@@ -132,7 +169,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         )}
       </div>
 
-      <VibeScoreSection vibe={vibe} loading={vibeLoading} />
+      <VibeScoreSection vibe={vibe} loading={vibeLoading} history={vibeHistory} />
     </div>
   )
 }
