@@ -49,9 +49,10 @@ most valuable thing on this list.
 
 **`metric_snapshots` is barely read.** The daily Actions job upserts a full
 metrics row per UTC day since it moved off the home Proxmox box, and the table
-has public `SELECT`. As of v1.6.5 exactly one consumer exists — `api/chain-data.js`
-reads the latest row's MVRV when BGeometrics is unavailable (§3.2b) — and not one
-line of `src/` touches it. Be honest
+has public `SELECT`. As of v1.6.9 it has two consumers — `api/chain-data.js`
+reads the latest row's MVRV when BGeometrics is unavailable (§3.2b), and the
+Vibe Score sparkline replays the last 30 rows (§3.2c), which is the first line
+of `src/` to touch it. Be honest
 about the scale, though: on 2026-08-06 the table held **3 rows** (4–6 Aug), of
 which the cron produced two — every field populated on all three, and no failed
 run yet. Nothing is broken; it is simply young. That makes this the cheapest
@@ -80,8 +81,9 @@ needs no new architecture.
 
 ### 3.2 Read the snapshot table
 
-**What.** Give any metric a history. Start with a sparkline under the Vibe Score
-and the ability to see the last 30 / 90 / 365 days.
+**What.** Give any metric a history. The sparkline under the Vibe Score has
+shipped; the range selector (30 / 90 / 365) and histories for other metrics
+have not.
 
 **Why.** The data already exists, the table is already publicly readable, and
 "how does today compare" is the question the current dashboard cannot answer at
@@ -99,13 +101,11 @@ soft and returns `null` when env vars are absent, so history must degrade to
 the documented sources and will fail otherwise. That test is doing its job — let
 it.
 
-**The sparkline, decided.** The Vibe Score shipped in v1.5.0 without one —
-history was never part of 3.1, and keeping it out kept that change a pure
-function with no Supabase read. When this item lands: **show the sparkline from
-7 data points, hide it below that**, and label it honestly (`since 4 Aug` until
-30 days exist, then `30d`). Never render a 2-point line — it reads as broken
-rather than as young — and never pad or backfill, because a fabricated history
-under a credibility-sensitive number is the worst trade available.
+**The sparkline rules, kept.** Shipped as decided: **7 data points minimum,
+hidden below that**, labelled `since 4 Aug` until 30 exist and `30d` after. No
+padding, no backfill. Those rules now live in `src/lib/vibeHistory.js` with
+tests, so anything built on top of this series inherits them rather than
+re-deciding them.
 
 #### Readiness, checked 2026-08-06
 
@@ -119,8 +119,9 @@ not a fault, and ~15 hours of headroom before the delay could push a row onto
 the wrong `captured_on` — but it is the reason to read the cron as "some time
 that morning" rather than as a clock.
 
-So the answer to *is it too soon* is that **§3.2 is three sub-items with three
-different readiness dates**, and only one of them is waiting on anything.
+The answer to *is it too soon* was that **§3.2 is three sub-items with three
+different readiness dates**. All three have now shipped; what remains of the
+item is below them.
 
 **3.2a — snapshot sufficiency. Shipped in v1.6.4; see the version-history row.**
 The row now carries `price_change_30d_pct`, so a stored day replays into the
@@ -132,16 +133,18 @@ momentum-less permanently, which is the whole reason it went first.
 answer, capped at 7 days old and labelled on the card. It is the first thing in
 the repo to read `metric_snapshots`.
 
-**3.2c — the sparkline itself.** Wants 7 rows by the rule above, which arrives
-around **10 Aug**. Building it before then is reasonable — the "not enough
-history yet" branch is the one that will actually render on the day it merges,
-which is a good reason to have written it deliberately rather than as an
-afterthought. With 3.2a shipped this is no longer blocked on anything but the
-row count. Recompute the score from a row's inputs via `vibeInputsFromMetrics`
-in `scripts/lib/metrics.js` rather than reimplementing the mapping — and expect
-the first three rows to score slightly differently from how the card read on
-those days, because they have no momentum. Label that, or start the series on
-7 Aug.
+**3.2c — the sparkline. Shipped in v1.6.9; see the version-history row.** It
+answered "start the series on 7 Aug" with a rule rather than a date: a row is
+plotted only if it reproduces all seven Vibe Score inputs, so the
+momentum-less rows exclude themselves and so does any future input added
+without a snapshot field.
+
+**What is left of §3.2** is the part the sparkline deliberately did not take:
+the 30 / 90 / 365 selector, and a history for anything other than the Vibe
+Score. Both want the table to be older than it is — the sparkline draws nothing
+until 7 comparable rows exist, and a 365-day control over 3 weeks of data is a
+control that lies about what is behind it. Revisit when the table has a
+quarter in it.
 
 ### 3.4 Alerts worth keeping
 

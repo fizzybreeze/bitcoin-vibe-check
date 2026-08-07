@@ -59,6 +59,21 @@ export const runtimeCaching = [
     },
   },
   {
+    // The Vibe Score history read of `metric_snapshots`. Scoped to that table
+    // rather than to the Supabase host: the only other browser call to Supabase
+    // is the donor list, and a shared rule would put the supporter ticker on
+    // this one's day-long expiry. The series gains one point per UTC day, so
+    // caching it for a day cannot show anything the network would not.
+    urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/rest\/v1\/metric_snapshots/,
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'api-metric-snapshots',
+      networkTimeoutSeconds: 5,
+      expiration: { maxEntries: 5, maxAgeSeconds: 86400 },
+      cacheableResponse: { statuses: [200] },
+    },
+  },
+  {
     // Own serverless MVRV route. Already cached 24h at the CDN edge, so the
     // long maxAge here mirrors that rather than inventing a second policy.
     urlPattern: /\/api\/chain-data/,

@@ -7,6 +7,7 @@ import ShareModal from './components/ShareModal.jsx'
 import PriceAlertsButton from './components/PriceAlertsButton.jsx'
 import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
 import { usePriceAlerts } from './hooks/usePriceAlerts.js'
+import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import {
   CURRENCY_META, fmtCurrency, computeChartChange,
@@ -653,6 +654,10 @@ export default function App() {
   // data the page already has.
   const vibeSummary = computeVibeSummary(vibeDimensionValues(computeVibeDimensions(vibeInputs)))
   const vibeLoading = loading || ohlcLoading || chainDataLoading
+  // Deliberately not folded into vibeLoading: the score is live data and the
+  // history is not, so a slow Supabase read must not put the number behind a
+  // skeleton — and an absent history is a normal state, not a pending one.
+  const vibeHistory = useVibeHistory()
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
@@ -724,6 +729,7 @@ export default function App() {
             athPct={athPct}
             vibe={vibe}
             vibeLoading={vibeLoading}
+            vibeHistory={vibeHistory}
           />
         </div>
         <div className="md:col-span-2 h-full">
