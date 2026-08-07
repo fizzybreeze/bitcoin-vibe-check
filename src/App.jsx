@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Analytics } from '@vercel/analytics/react'
-import {
-  ComposedChart, Area, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
-  LineChart, Line,
-} from 'recharts'
 import './App.css'
-import BeehiivEmbed from './components/BeehiivEmbed.jsx'
 import { usePersistedState } from './hooks/usePersistedState.js'
 import ShareButton from './components/ShareButton.jsx'
 import ShareModal from './components/ShareModal.jsx'
@@ -14,11 +9,10 @@ import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
 import { usePriceAlerts } from './hooks/usePriceAlerts.js'
 import { supabase } from './lib/supabase.js'
 import {
-  CURRENCY_META, fmtCurrency, fmtVolume, computeChartChange,
+  CURRENCY_META, fmtCurrency, computeChartChange,
 } from './utils.js'
 import {
-  computeAthDistance, computeIssuedSupply,
-  computeHashRateTrend, calcFiatFee, computeVibeScore, computePriceChange30d,
+  computeAthDistance, computeHashRateTrend, computeVibeScore, computePriceChange30d,
   computeVibeDimensions, computeVibeSummary, vibeDimensionValues,
 } from './lib/calculations.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
@@ -27,16 +21,23 @@ import {
   fetchKrakenCandles, parseKrakenOhlc,
 } from './lib/ohlc.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
-import CardTooltip from './components/CardTooltip.jsx'
 import BtcPriceCard from './components/BtcPriceCard.jsx'
-import Skeleton from './components/Skeleton.jsx'
 import NetworkPulseCard from './components/NetworkPulseCard.jsx'
 import RecentBlocksCard from './components/RecentBlocksCard.jsx'
 import NetworkHeartbeatCard from './components/NetworkHeartbeatCard.jsx'
 import HalvingCountdown from './components/HalvingCountdown.jsx'
 import VolumeCard from './components/VolumeCard.jsx'
+import MarketSentimentCard from './components/MarketSentimentCard.jsx'
+import NetworkFeesCard from './components/NetworkFeesCard.jsx'
+import SupplyIssuedCard from './components/SupplyIssuedCard.jsx'
+import SupporterTickerCard from './components/SupporterTickerCard.jsx'
+import MobileSupportersCard from './components/MobileSupportersCard.jsx'
+import DonationCard from './components/DonationCard.jsx'
+import NewsletterCard from './components/NewsletterCard.jsx'
+import NewsletterModal from './components/NewsletterModal.jsx'
+import SatoshiQuote from './components/SatoshiQuote.jsx'
+import PriceChartCard from './components/PriceChartCard.jsx'
 
-const ORANGE = '#fb923c'
 const CACHE_KEY = 'btc-cache'
 const VOL_HISTORY_KEY = 'btc-vol-history'
 const SOUND_KEY = 'btc-vibe-sound-enabled'
@@ -47,25 +48,6 @@ const RANGES = [
   { label: '1M', days: 30  },
   { label: '1Y', days: 365 },
 ]
-
-const QUOTES = [
-  { text: "If you don't believe it or don't get it, I don't have the time to try to convince you, sorry.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "The root problem with conventional currency is all the trust that's required to make it work.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "It might make sense just to get some in case it catches on.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "Writing a description for this thing for general audiences is bloody hard. There's nothing to relate it to.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "In a few decades when the reward gets too small, the transaction fee will become the main compensation for nodes.", attribution: 'Satoshi Nakamoto, Bitcoin Whitepaper' },
-  { text: "The nature of Bitcoin is such that once version 0.1 was released, the core design was set in stone for the rest of its lifetime.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-  { text: "Governments are good at cutting off the heads of centrally controlled networks like Napster, but pure P2P networks like Gnutella and Tor seem to be holding their own.", attribution: 'Satoshi Nakamoto, Bitcointalk' },
-]
-
-const FNG_COLOR = {
-  'Extreme Fear': 'text-red-400',
-  'Fear':         'text-amber-400',
-  'Neutral':      'text-yellow-400',
-  'Greed':        'text-lime-400',
-  'Extreme Greed':'text-green-400',
-}
 
 const WS_SYMBOL_MAP = {
   'BTC/USD': 'priceUsd',
@@ -225,341 +207,6 @@ function playPriceTick(ctx, up) {
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
   osc.start(now)
   osc.stop(now + 0.08)
-}
-
-const FNG_TOOLTIP        = 'A composite sentiment score from 0 (extreme fear) to 100 (extreme greed). Values below 25 have historically preceded recoveries; above 75 have preceded corrections. Measures crowd psychology, not fundamentals.'
-
-function MarketSentimentCard({ fng, fngHistory, loading }) {
-  const fngScore = fng?.value != null ? parseInt(fng.value, 10) : null
-  const fngClass = fng?.value_classification ?? null
-
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Market Sentiment</p>
-
-      <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
-        <div className="mt-2">
-          {loading || fngScore == null
-            ? <Skeleton className="h-8 w-10" />
-            : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
-          }
-          <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
-            {fngClass ?? (loading ? ' ' : '—')}
-          </p>
-        </div>
-      </div>
-
-      {fngHistory && (
-        <div className="mt-3">
-          <div className="h-20">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-                <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} activeDot={false} strokeWidth={1.5} isAnimationActive={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="mt-1 text-xs text-gray-600">SENTIMENT TREND (30D)</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
-const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable."
-
-export function KpiCard({ label, value, sub, subClassName, change }) {
-  const changePositive = change != null && change >= 0
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-      <div className="mt-3">
-        {value == null
-          ? <Skeleton className="h-9 w-32" />
-          : <p className="text-2xl font-bold text-orange-400 md:text-3xl">{value}</p>
-        }
-        {change != null && value != null && (
-          <p className={`mt-1.5 text-sm font-medium ${changePositive ? 'text-green-400' : 'text-red-400'}`}>
-            {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
-          </p>
-        )}
-        {sub && value != null && (
-          <p className={`mt-1.5 text-sm ${subClassName ?? 'text-gray-400'}`}>{sub}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-
-function NewsletterCard() {
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Satoshi's Weekly Brief</p>
-      <p className="mt-3 text-lg font-bold text-white">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
-      <p className="mt-1 text-xs text-gray-500">Join the newsletter. Unsubscribe any time.</p>
-      <div className="mt-4">
-        <BeehiivEmbed />
-      </div>
-    </div>
-  )
-}
-
-function NewsletterModal() {
-  const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    if (localStorage.getItem('btc-vibe-newsletter-prompted')) return
-    const id = setTimeout(() => setShow(true), 5000)
-    return () => clearTimeout(id)
-  }, [])
-
-  function dismiss() {
-    localStorage.setItem('btc-vibe-newsletter-prompted', 'true')
-    setShow(false)
-  }
-
-  useEffect(() => {
-    let timerId
-    function handleSubscribe() {
-      timerId = setTimeout(dismiss, 2500)
-    }
-    window.addEventListener('beehiiv:subscribe', handleSubscribe)
-    return () => {
-      window.removeEventListener('beehiiv:subscribe', handleSubscribe)
-      clearTimeout(timerId)
-    }
-  }, [])
-
-  if (!show) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="relative w-full max-w-[480px] rounded-2xl bg-gray-900 border border-orange-500/30 p-6">
-        <button
-          onClick={dismiss}
-          aria-label="Close"
-          className="absolute top-4 right-4 text-sm text-gray-500 hover:text-gray-300"
-        >
-          ✕
-        </button>
-        <h2 className="text-2xl font-bold text-white">Satoshi's Weekly Brief</h2>
-        <p className="mt-2 text-sm text-gray-400">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
-        <div className="mt-4">
-          <BeehiivEmbed />
-        </div>
-        <button
-          onClick={dismiss}
-          className="mt-4 text-xs text-gray-500 underline hover:text-gray-400"
-        >
-          No thanks, I'll stick to the dashboard
-        </button>
-      </div>
-    </div>
-  )
-}
-
-const GENESIS_HASH = '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
-
-function SatoshiQuote() {
-  const timeoutRef        = useRef(null)
-  const genesisTimeoutRef = useRef(null)
-  const incrementRef      = useRef(0)
-  const [index, setIndex]           = useState(() => Math.floor(Math.random() * QUOTES.length))
-  const [visible, setVisible]       = useState(true)
-  const [showGenesis, setShowGenesis] = useState(false)
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setVisible(false)
-      timeoutRef.current = setTimeout(() => {
-        incrementRef.current += 1
-        setIndex(i => (i + 1) % QUOTES.length)
-        setVisible(true)
-        if (incrementRef.current % QUOTES.length === 0) {
-          setShowGenesis(true)
-          genesisTimeoutRef.current = setTimeout(() => setShowGenesis(false), 12000)
-        }
-      }, 500)
-    }, 12000)
-    return () => {
-      clearInterval(id)
-      clearTimeout(timeoutRef.current)
-      clearTimeout(genesisTimeoutRef.current)
-    }
-  }, [])
-
-  const quote = QUOTES[index]
-  return (
-    <footer className="py-10 text-center">
-      <div className={`transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
-        <p className="text-sm italic text-white">"{quote.text}"</p>
-        <p className="mt-2 text-xs text-orange-400">— {quote.attribution}</p>
-        {showGenesis && (
-          <a
-            href="https://bitcoin.org/bitcoin.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 block font-mono text-xs text-gray-600 hover:text-gray-400 transition-colors max-w-full px-4 break-all overflow-x-auto"
-          >
-            {GENESIS_HASH}
-          </a>
-        )}
-      </div>
-    </footer>
-  )
-}
-
-function mempoolCongestion(vsize) {
-  if (vsize == null) return null
-  if (vsize < 5_000_000)  return { label: 'Low',      cls: 'text-green-400',  bar: 'bg-green-400'  }
-  if (vsize <= 50_000_000) return { label: 'Moderate', cls: 'text-orange-400', bar: 'bg-orange-400' }
-  return                           { label: 'High',     cls: 'text-red-400',    bar: 'bg-red-400'    }
-}
-
-function ChartTooltip({ active, payload, label, currency }) {
-  if (!active || !payload?.length) return null
-  const priceEntry  = payload.find(p => p.dataKey === 'price')
-  const volumeEntry = payload.find(p => p.dataKey === 'volume')
-  if (!priceEntry) return null
-  return (
-    <div style={{
-      background: '#111827', border: '1px solid #374151',
-      borderRadius: 8, padding: '8px 12px', fontSize: 13,
-      boxShadow: '0 4px 12px rgb(0 0 0 / 0.4)',
-    }}>
-      <p style={{ color: '#6b7280', marginBottom: 4, fontSize: 11 }}>{label}</p>
-      <p style={{ color: ORANGE, fontWeight: 600 }}>{fmtCurrency(priceEntry.value, currency)}</p>
-      {volumeEntry && (
-        <p style={{ color: '#6b7280', marginTop: 4, fontSize: 11 }}>
-          Vol&nbsp;{fmtVolume(volumeEntry.value, currency)}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function SupporterTickerCard({ donors }) {
-  const content = donors.length
-    ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
-    : null
-  return (
-    <div className="hidden md:block rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Supporters ⚡</p>
-      {content ? (
-        <div className="relative w-full overflow-hidden">
-          <span
-            className="inline-block whitespace-nowrap font-mono text-xs text-orange-400 py-1"
-            style={{ animation: 'ticker-scroll 30s linear infinite', willChange: 'transform' }}
-            onMouseEnter={e => { e.currentTarget.style.animationPlayState = 'paused' }}
-            onMouseLeave={e => { e.currentTarget.style.animationPlayState = 'running' }}
-          >
-            {content}{content}
-          </span>
-        </div>
-      ) : (
-        <p className="font-mono text-xs text-gray-600 py-1">Be the first to support Bitcoin Vibe Check ⚡</p>
-      )}
-    </div>
-  )
-}
-
-function MobileSupportersCard({ donors }) {
-  return (
-    <div className="md:hidden rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {donors.length > 0
-          ? donors.map(d => (
-              <span key={d.id} className="font-mono text-xs text-orange-400 bg-gray-800 rounded-full px-3 py-1">
-                {d.name}
-              </span>
-            ))
-          : <p className="text-xs text-gray-600">Be the first to support Bitcoin Vibe Check ⚡</p>
-        }
-      </div>
-    </div>
-  )
-}
-
-function DonationCard() {
-  const [name, setName]           = useState('')
-  const [validErr, setValidErr]   = useState(null)
-  const [submitted, setSubmitted] = useState(false)
-  const [status, setStatus]       = useState('idle') // idle | loading | success | error
-
-  async function handleSubmit() {
-    setSubmitted(true)
-    const trimmed = name.trim()
-    if (trimmed.length < 2)  { setValidErr('Name must be at least 2 characters.'); return }
-    if (trimmed.length > 50) { setValidErr('Name must be 50 characters or less.'); return }
-    setValidErr(null)
-    setStatus('loading')
-    if (!supabase) { setStatus('error'); return }
-    const { error } = await supabase.from('donors').insert({ name: trimmed, approved: false })
-    if (error) {
-      setStatus('error')
-    } else {
-      setStatus('success')
-      setName('')
-      setSubmitted(false)
-    }
-  }
-
-  function handleNameChange(e) {
-    setName(e.target.value)
-    if (validErr) setValidErr(null)
-    if (status !== 'idle') setStatus('idle')
-  }
-
-  return (
-    <div className="rounded-2xl bg-gray-900 p-6 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Support Bitcoin Vibe Check</p>
-      <div className="mt-3 space-y-1">
-        <p className="text-sm text-gray-500">
-          1. Send any amount to Strike:{' '}
-          <a
-            href="https://strike.me/fizzybreeze"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-orange-400 hover:text-orange-300"
-          >
-            Open Strike to pay ⚡₿
-          </a>
-        </p>
-        <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
-        <p className="text-sm text-gray-600">We'll add you to the list once we see your payment come through.</p>
-      </div>
-      <div className="mt-4">
-        <input
-          type="text"
-          value={name}
-          onChange={handleNameChange}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="Your name or handle…"
-          maxLength={50}
-          className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-        />
-        {submitted && validErr && <p className="mt-2 text-xs text-red-400">{validErr}</p>}
-      </div>
-      <div className="mt-3">
-        <button
-          onClick={handleSubmit}
-          disabled={status === 'loading'}
-          className="rounded-full border border-orange-500 bg-transparent px-6 py-2 text-sm font-semibold text-orange-500 transition-colors hover:bg-orange-500 hover:text-white disabled:opacity-50"
-        >
-          Submit my name
-        </button>
-      </div>
-      {status === 'success' && (
-        <p className="mt-3 text-xs text-green-400">Thanks! You'll appear in the banner within 24 hours.</p>
-      )}
-      {status === 'error' && (
-        <p className="mt-3 text-xs text-red-400">Something went wrong. Please try again.</p>
-      )}
-    </div>
-  )
 }
 
 // Singleton: ensures loadData() fires only once on mount even under React StrictMode
@@ -981,12 +628,6 @@ export default function App() {
     requestPermission,
   } = usePriceAlerts(price, currency)
 
-  const chartPrices = chart?.map(d => d.price) ?? []
-  const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
-  const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
-  const pad = (hi - lo) * 0.08
-
-  const xInterval   = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
   const currencySym = CURRENCY_META[currency]?.sym ?? '$'
 
   const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
@@ -1086,157 +727,17 @@ export default function App() {
           />
         </div>
         <div className="md:col-span-2 h-full">
-          <div className="rounded-2xl bg-gray-900 p-6 h-full">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">
-                  Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
-                </p>
-                {chartChange != null && !chartLoading && (
-                  <span
-                    data-testid="chart-range-change"
-                    className={`text-xs font-semibold ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}
-                  >
-                    {chartChange >= 0 ? '▲' : '▼'}&nbsp;{chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col items-start md:items-end gap-1">
-              <div className="flex items-center gap-1 overflow-x-auto">
-                {RANGES.map(({ label }) => (
-                  <button
-                    key={label}
-                    onClick={() => setRange(label)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                      range === label
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <button
-                  onClick={refreshChart}
-                  disabled={chartLoading}
-                  aria-label="Refresh chart"
-                  className="ml-1 rounded-full p-1 text-gray-600 transition-colors hover:text-gray-300 disabled:opacity-30"
-                >
-                  <svg
-                    width="13" height="13" viewBox="0 0 13 13"
-                    fill="none" stroke="currentColor" strokeWidth="1.5"
-                    strokeLinecap="round" strokeLinejoin="round"
-                    className={chartLoading ? 'animate-spin' : ''}
-                    aria-hidden="true"
-                  >
-                    <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-                    <polyline points="11.5 1.5 11.5 5 8 5"/>
-                  </svg>
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">Chart in USD</p>
-              </div>
-            </div>
-
-            {chartError === 'temp' && (
-              <p className="mb-4 text-xs text-red-500/70">Data temporarily unavailable. Retrying...</p>
-            )}
-            {chartError === 'permanent' && (
-              <div className="mb-4 flex items-center gap-2">
-                <p className="text-xs text-red-500/70">Unable to load chart data. Try again shortly.</p>
-                <button
-                  onClick={refreshChart}
-                  aria-label="Retry chart"
-                  className="text-gray-600 transition-colors hover:text-gray-400"
-                >
-                  <svg
-                    width="13" height="13" viewBox="0 0 13 13"
-                    fill="none" stroke="currentColor" strokeWidth="1.5"
-                    strokeLinecap="round" strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-                    <polyline points="11.5 1.5 11.5 5 8 5"/>
-                  </svg>
-                </button>
-              </div>
-            )}
-
-            {chartLoading && !chart
-              ? <Skeleton className="h-64" />
-              : (
-                <div className="relative">
-                  <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                    <ResponsiveContainer width="100%" height={264}>
-                      <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                        <defs>
-                          <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor={ORANGE} stopOpacity={0.18} />
-                            <stop offset="95%" stopColor={ORANGE} stopOpacity={0}    />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                        <XAxis
-                          dataKey="date"
-                          interval={xInterval}
-                          tick={{ fill: '#6b7280', fontSize: 11 }}
-                          axisLine={false} tickLine={false}
-                        />
-                        <YAxis
-                          yAxisId="price"
-                          domain={[lo - pad, hi + pad]}
-                          tick={{ fill: '#6b7280', fontSize: 11 }}
-                          axisLine={false} tickLine={false}
-                          tickFormatter={v => `$${Math.round(v / 1000)}k`}
-                          width={52}
-                        />
-                        <YAxis yAxisId="volume" hide />
-                        <Tooltip content={<ChartTooltip currency="usd" />} />
-                        <Bar
-                          yAxisId="volume" dataKey="volume"
-                          fill={ORANGE} fillOpacity={0.15}
-                          strokeWidth={0} legendType="none"
-                          isAnimationActive={false}
-                        />
-                        <Area
-                          yAxisId="price"
-                          type="monotone" dataKey="price"
-                          stroke={ORANGE} strokeWidth={2}
-                          fill="url(#priceGrad)" dot={false}
-                          activeDot={{ r: 4, fill: ORANGE, strokeWidth: 0 }}
-                        />
-                        {chartPrices.length > 0 && (
-                          <>
-                            <ReferenceLine
-                              yAxisId="price"
-                              y={hi}
-                              stroke="#4ade80"
-                              strokeDasharray="3 3"
-                              strokeWidth={1}
-                              label={{ value: `H: $${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: '#4ade80', fontSize: 10 }}
-                            />
-                            <ReferenceLine
-                              yAxisId="price"
-                              y={lo}
-                              stroke="#f87171"
-                              strokeDasharray="3 3"
-                              strokeWidth={1}
-                              label={{ value: `L: $${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: '#f87171', fontSize: 10 }}
-                            />
-                          </>
-                        )}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {chartLoading && (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <p className="text-xs text-gray-500">Loading...</p>
-                    </div>
-                  )}
-                </div>
-              )
-            }
-          </div>
+          <PriceChartCard
+            chart={chart}
+            chartLoading={chartLoading}
+            chartError={chartError}
+            chartChange={chartChange}
+            range={range}
+            setRange={setRange}
+            refreshChart={refreshChart}
+            ranges={RANGES}
+            currency={currency}
+          />
         </div>
       </div>
 
@@ -1291,112 +792,19 @@ export default function App() {
             loading={loading}
           />
         </div>
-        <div className="rounded-2xl bg-gray-900 p-4 md:p-6 flex flex-col gap-4 justify-between">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Network Fees<CardTooltip text="Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear." /></p>
-
-          {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
-          {mempool != null && (() => {
-            const cg = mempoolCongestion(mempool.vsize)
-            const pct = Math.min(100, (mempool.vsize / 100_000_000) * 100)
-            return (
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Mempool Congestion</p>
-                  <span className={`text-xs font-semibold ${cg.cls}`}>{cg.label}</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
-                  <div className={`h-full rounded-full ${cg.bar}`} style={{ width: `${pct}%` }} />
-                </div>
-                <p className="mt-1.5 text-xs text-gray-500">
-                  {mempool.count.toLocaleString('en-US')} unconfirmed transactions
-                </p>
-              </div>
-            )
-          })()}
-
-          {/* Fee tiers */}
-          <div className="grid grid-cols-3 gap-2">
-            {loading || !fees
-              ? [0, 1, 2].map(i => <Skeleton key={i} className="h-20" />)
-              : [
-                  { label: 'Slow',   time: '~1 hour',  value: fees.hourFee     },
-                  { label: 'Medium', time: '~30 min',  value: fees.halfHourFee },
-                  { label: 'Fast',   time: '~10 min',  value: fees.fastestFee  },
-                ].map(({ label, time, value }) => {
-                  const fiatFee = price > 0 ? calcFiatFee(value, price) : null
-                  const fiatStr = fiatFee != null
-                    ? `≈ ${currencySym}${fiatFee >= 0.10 ? fiatFee.toFixed(2) : fiatFee.toFixed(4)}`
-                    : null
-                  return (
-                    <div key={label} className="flex flex-col justify-center rounded-xl bg-gray-800 px-2 py-3 md:px-3 md:py-4">
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">{label}</p>
-                      <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
-                        <span className="text-lg font-bold text-orange-400 md:text-2xl">{value}</span>
-                        <span className="text-xs text-gray-500">sat/vB</span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-gray-600">{time}</p>
-                      {fiatStr && <p className="mt-0.5 text-xs text-gray-500">{fiatStr}</p>}
-                    </div>
-                  )
-                })
-            }
-          </div>
-
-          {/* Lightning Network */}
-          <div className="h-px bg-gray-800" />
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Lightning Network</p>
-            {loading && !lightning
-              ? <div className="grid grid-cols-3 gap-2">
-                  {[0, 1, 2].map(i => <Skeleton key={i} className="h-10" />)}
-                </div>
-              : lightning?.latest
-                ? (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Capacity</p>
-                      <div className="mt-1 flex items-baseline gap-0.5">
-                        <span className="text-base font-bold text-orange-400">
-                          {(lightning.latest.total_capacity / 1e8).toFixed(1)}
-                        </span>
-                        <span className="text-xs text-gray-500">BTC</span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Nodes</p>
-                      <p className="mt-1 text-base font-bold text-orange-400">
-                        {lightning.latest.node_count.toLocaleString('en-US')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Channels</p>
-                      <p className="mt-1 text-base font-bold text-orange-400">
-                        {lightning.latest.channel_count.toLocaleString('en-US')}
-                      </p>
-                    </div>
-                  </div>
-                )
-                : <p className="text-xs text-gray-500">Unavailable</p>
-            }
-          </div>
-        </div>
+        <NetworkFeesCard
+          fees={fees}
+          mempool={mempool}
+          lightning={lightning}
+          loading={loading}
+          price={price}
+          currencySym={currencySym}
+        />
       </div>
 
       {/* Row 6: Supply / Epoch */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl bg-gray-900 p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Supply Issued</p>
-          {blockHeight != null ? (
-            <>
-              <p className="mt-2 text-lg font-bold text-white">
-                {computeIssuedSupply(blockHeight).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
-              </p>
-              <p className="mt-0.5 text-xs text-gray-500">of 21,000,000 maximum</p>
-            </>
-          ) : (
-            <Skeleton className="mt-2 h-7 w-36" />
-          )}
-        </div>
+        <SupplyIssuedCard blockHeight={blockHeight} />
         <div className="lg:col-span-3">
           <HalvingCountdown blockHeight={blockHeight} />
         </div>

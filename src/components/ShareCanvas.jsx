@@ -7,8 +7,10 @@ import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculat
 // Shared with api/og.js — the exported card and the link preview show the same
 // two labelled scales, so they cannot be allowed to colour them differently.
 import { vibeLabelHex, fngLabelHex } from '../lib/vibePalette.js'
+// Same accent the live chart and its tooltip use — an exported card that is a
+// different orange from the card it was exported from is the whole failure.
+import { ORANGE } from '../lib/colors.js'
 
-const ORANGE = '#fb923c'
 const CARD_BG = '#111827'
 const MUTED = '#6b7280'
 const WHITE = '#ffffff'
