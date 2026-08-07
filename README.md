@@ -168,15 +168,17 @@ The service worker keeps one NetworkFirst cache per source above. `src/__tests__
 
 ```
 src/
-  App.jsx                    most components, plus all data fetching and state orchestration
+  App.jsx                    the root component — state, effects and data orchestration
   utils.js                   pure helpers — formatting, halving math, dominance labels
   lib/
     calculations.js          Vibe Score, ATH distance, sats per fiat, supply issued, hash trend
-    ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing
+    ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing,
+                             and the in-flight dedupe the three daily-candle callers share
+    colors.js                the brand accent as hex, for the places that cannot use a class
     supabase.js              Supabase client; returns null when env vars are absent
   utils/cycleCalculations.js Power Law fair value, Mayer Multiple
   hooks/                     usePersistedState, usePriceAlerts, useShareImage
-  components/                BtcPriceCard, CycleIndicatorsCard, share flow, price alerts, tooltip
+  components/                every card, plus the share flow, price alerts and tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
 api/lib/mvrvFallback.js      which stored snapshot row the MVRV fallback serves, and when it refuses
@@ -191,7 +193,10 @@ smoke/                       Playwright tests against the deployed site (real up
 vercel.json                  deploy config plus security and caching headers
 ```
 
-`src/App.jsx` is around 2,000 lines and holds most of the app. When you touch a card in it, consider extracting that card into `src/components/` — smaller diffs are what make review on a phone practical.
+Every card lives in `src/components/`. `src/App.jsx` keeps the root component,
+its state and its effects — that was the end state issue #22 asked for, and it
+is there as of v1.7.0. A new card belongs in `src/components/`, not in
+`App.jsx`: smaller diffs are what make review on a phone practical.
 
 ---
 

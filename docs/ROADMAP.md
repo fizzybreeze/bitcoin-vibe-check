@@ -353,13 +353,6 @@ to do regardless.
 
 Not features. The roadmap stalls without them.
 
-**Break up `src/App.jsx`.** It is ~1,985 lines and holds most of the app. Every
-card added to it makes the next diff harder to review on a phone, which is the
-whole workflow this project is built around. The rule already in `CLAUDE.md` —
-extract a card when you touch it — is the right one. The Vibe Score work took
-`BtcPriceCard` and `Skeleton` out in v1.5.0; the cycle row and the chart card
-are the next obvious candidates.
-
 **Data-source resilience.** Each source is a single point of failure. If
 CoinPaprika has a bad morning, the price, volume, market cap and dominance cards
 all go blank together. `Promise.allSettled` means the page survives, but the

@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   KRAKEN_INTERVAL, KRAKEN_MAX_CANDLES,
   krakenParamsForDays, krakenOhlcUrl, extractKrakenOhlc, parseKrakenOhlc,
+  fetchKrakenCandles, _resetInFlight, KRAKEN_FETCH_TIMEOUT_MS,
 } from '../ohlc.js'
 
 // Kraken candle: [time_s, open, high, low, close, vwap, volume_base, count]
@@ -135,5 +136,176 @@ describe('parseKrakenOhlc', () => {
 
     const daily = parseKrakenOhlc([candle(1_700_000_000, 100)], 30, 30)
     expect(daily[0].date).not.toMatch(/^\d{2}:\d{2}$/)
+  })
+})
+
+// #24. The 1M chart, the 1Y chart and the 200-day MA series all resolve to the
+// same `interval=1440` URL now that Kraken has no `limit` parameter.
+describe('fetchKrakenCandles', () => {
+  const okBody = candles => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ error: [], result: { XXBTZUSD: candles, last: 1 } }),
+  })
+
+  /** A promise plus its resolvers, so a request can be held in flight. */
+  function deferred() {
+    let resolve, reject
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+    return { promise, resolve, reject }
+  }
+
+  beforeEach(() => {
+    _resetInFlight()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    _resetInFlight()
+  })
+
+  it('collapses concurrent requests for the same URL into one fetch', async () => {
+    const gate = deferred()
+    fetch.mockReturnValue(gate.promise)
+
+    // 1M, 1Y and the 200-day series, all interval=1440, all still in flight.
+    const a = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    const b = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    const c = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    gate.resolve(okBody([candle(DAY_S, 100)]))
+
+    const [ra, rb, rc] = await Promise.all([a, b, c])
+    expect(fetch).toHaveBeenCalledTimes(1)
+    // The same array, not merely an equal one — which is why callers must slice
+    // rather than mutate.
+    expect(ra).toBe(rb)
+    expect(rb).toBe(rc)
+  })
+
+  it('does not share between different intervals', async () => {
+    fetch.mockResolvedValue(okBody([candle(DAY_S, 100)]))
+
+    await Promise.all([
+      fetchKrakenCandles(KRAKEN_INTERVAL.DAY),
+      fetchKrakenCandles(KRAKEN_INTERVAL.HOUR),
+    ])
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const urls = fetch.mock.calls.map(([url]) => url)
+    expect(urls).toContain(krakenOhlcUrl(KRAKEN_INTERVAL.DAY))
+    expect(urls).toContain(krakenOhlcUrl(KRAKEN_INTERVAL.HOUR))
+  })
+
+  it('refetches once the previous request has settled', async () => {
+    // In-flight dedupe, not a response cache. The 200-day series refreshes
+    // every 6 hours and the chart retries after a failure; both must reach the
+    // network rather than replay a stored body.
+    fetch.mockResolvedValue(okBody([candle(DAY_S, 100)]))
+
+    await fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    await fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retain a failed request', async () => {
+    // A rejection left in the map would pin the error for the rest of the
+    // session: every later caller would replay it without touching the network.
+    fetch.mockRejectedValueOnce(new Error('network down'))
+    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow('network down')
+
+    fetch.mockResolvedValueOnce(okBody([candle(DAY_S, 100)]))
+    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).resolves.toHaveLength(1)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects every sharer of a failed request', async () => {
+    const gate = deferred()
+    fetch.mockReturnValue(gate.promise)
+
+    const a = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    const b = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+    gate.reject(new Error('network down'))
+
+    await expect(a).rejects.toThrow('network down')
+    await expect(b).rejects.toThrow('network down')
+  })
+
+  it('does not raise an unhandled rejection when a shared request fails', async () => {
+    // The map is cleared with then(clear, clear), not .finally(clear): finally
+    // re-throws, so its derived promise would reject with nothing awaiting it
+    // and every failed fetch would log an unhandled rejection.
+    // Reached through globalThis because these test files lint against browser
+    // globals; the rejection is still reported by the Node process vitest runs
+    // in, which is the only place it can be observed.
+    const unhandled = []
+    const onUnhandled = reason => unhandled.push(reason)
+    globalThis.process.on('unhandledRejection', onUnhandled)
+    try {
+      fetch.mockRejectedValueOnce(new Error('network down'))
+      await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow('network down')
+      // Node reports unhandled rejections at the end of the event-loop turn.
+      await new Promise(resolve => setTimeout(resolve, 0))
+    } finally {
+      globalThis.process.off('unhandledRejection', onUnhandled)
+    }
+    expect(unhandled).toEqual([])
+  })
+
+  it('bounds the request so a hang cannot pin the URL forever', async () => {
+    // The regression this exists for: `clear` only runs on settle, so a fetch
+    // that never settles keeps its entry in the map for the page's lifetime —
+    // and since the entry is shared, the 1M chart, the 1Y chart and the
+    // 6-hourly 200-day refresh would all attach to the dead promise. The chart
+    // would spin forever with no error and a disabled Refresh button. Before
+    // the dedupe each call site issued its own fetch and recovered on its own.
+    //
+    // Asserted through a real abort signal rather than by reading the option
+    // back off the mock: passing a signal nothing honours would satisfy that
+    // and fix nothing.
+    fetch.mockImplementation((_url, { signal } = {}) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(signal.reason))
+    }))
+
+    vi.useFakeTimers()
+    try {
+      const request = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+      const settled = request.then(() => 'resolved', () => 'rejected')
+
+      // Still in flight: a second caller shares it rather than refetching.
+      await vi.advanceTimersByTimeAsync(KRAKEN_FETCH_TIMEOUT_MS - 1)
+      fetchKrakenCandles(KRAKEN_INTERVAL.DAY).catch(() => {})
+      expect(fetch).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(2)
+      expect(await settled).toBe('rejected')
+
+      // Past the deadline the entry is gone, so the next caller — the 1M chart,
+      // or the 200-day refresh six hours later — reaches the network again.
+      fetchKrakenCandles(KRAKEN_INTERVAL.DAY).catch(() => {})
+      expect(fetch).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('throws on a non-ok response', async () => {
+    fetch.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) })
+    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow(/429/)
+  })
+
+  it('throws on a Kraken error reported inside a 200', async () => {
+    // res.ok is true here, so without extractKrakenOhlc the chart would render
+    // an empty series rather than retry.
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ error: ['EGeneral:Temporary lockout'], result: {} }),
+    })
+    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow(/Temporary lockout/)
+  })
+
+  it('throws when the body carries no candles', async () => {
+    fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ error: [], result: {} }) })
+    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow(/no candles/)
   })
 })
