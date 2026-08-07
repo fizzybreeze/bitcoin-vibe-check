@@ -329,6 +329,13 @@ function mayerLabel(multiple) {
 
 function CycleIndicatorsShareCard({ cardData }) {
   const mvrv      = cardData.chainData?.mvrv?.value ?? null
+  // `/api/chain-data` serves the last stored MVRV when the BGeometrics budget
+  // is exhausted. This image gets posted publicly and outlives the moment it
+  // was made, so it has to carry the same caveat the live card does — a week-old
+  // number presented as today's is worse in a share than it is on screen.
+  const mvrvStored = cardData.chainData?.mvrv?.source === 'snapshot'
+    ? cardData.chainData.mvrv.date
+    : null
   const ma200     = cardData.ma200 ?? null
   const price     = cardData.priceUsd ?? null
   const fairValue = calcPowerLawFairValue()
@@ -348,6 +355,11 @@ function CycleIndicatorsShareCard({ cardData }) {
             {mvrv != null ? mvrv.toFixed(2) : '—'}
           </p>
           {mvrvLbl && <p style={{ ...SUB_STYLE, color: mvrvLbl.color, fontWeight: 600 }}>{mvrvLbl.text}</p>}
+          {mvrvStored && (
+            <p style={{ ...SUB_STYLE, color: MUTED, fontSize: 10 }}>
+              {mvrvStored} · from daily snapshot
+            </p>
+          )}
         </div>
         <div>
           <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Power Law Fair Value</p>

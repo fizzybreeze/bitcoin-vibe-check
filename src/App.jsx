@@ -1771,6 +1771,7 @@ export default function App() {
           fxRate={(price != null && priceUsd) ? price / priceUsd : 1}
           mvrv={chainData?.mvrv?.value}
           dataDate={chainData?.mvrv?.date}
+          mvrvSource={chainData?.mvrv?.source}
           mvrvLoading={chainDataLoading}
           mvrvError={chainDataError}
         />
