@@ -17,6 +17,7 @@ const DATA_SOURCES = [
   ['mempool.space', 'https://mempool.space/api/v1/fees/recommended'],
   ['Alternative.me', 'https://api.alternative.me/fng/?limit=30'],
   ['chain-data',   'https://bitcoinvibecheck.com/api/chain-data'],
+  ['metric snapshots', 'https://abcdef123456.supabase.co/rest/v1/metric_snapshots?select=captured_on,metrics'],
 ]
 
 function ruleFor(url) {
@@ -34,6 +35,13 @@ describe('PWA runtime caching', () => {
 
   it('has no rule matching Binance, which answers US visitors with HTTP 451', () => {
     expect(ruleFor('https://api.binance.com/api/v3/klines')).toBeUndefined()
+  })
+
+  it('does not cache the donor list alongside the snapshot history', () => {
+    // The snapshot rule is scoped to one table on purpose. Widening it to the
+    // Supabase host would put the supporter ticker — a list people expect to
+    // see their own name appear in — behind the history's day-long expiry.
+    expect(ruleFor('https://abcdef123456.supabase.co/rest/v1/donors?select=name')).toBeUndefined()
   })
 
   it('serves fresh data when the network is up', () => {
