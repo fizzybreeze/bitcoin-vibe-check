@@ -85,13 +85,27 @@ export function _resetInFlight() {
   inFlight.clear()
 }
 
+// A request that never settles would otherwise pin its URL in `inFlight` for
+// the lifetime of the page — and because the entry is now *shared*, one stalled
+// request would take the 1M chart, the 1Y chart and the 6-hourly 200-day
+// refresh down with it, permanently. Browsers apply no default `fetch` timeout,
+// and a TCP blackhole across a mobile network handoff is exactly the case this
+// app has to survive, so the deadline is ours to set.
+//
+// Generous against a slow handset connection — Kraken normally answers in well
+// under a second — and short enough that the chart's own retry, five seconds
+// after the failure it surfaces, is still a recovery rather than a formality.
+export const KRAKEN_FETCH_TIMEOUT_MS = 15_000
+
 /**
  * Fetch Kraken candles for an interval, sharing a request already in flight for
  * the same URL.
  *
  * Throws on transport failure, on a Kraken-reported error (which arrives inside
- * a 200, so `res.ok` sails past it) and on a body with no candles. The chart's
- * retry path and the 200-day effect's error state both want the throw.
+ * a 200, so `res.ok` sails past it), on a body with no candles, and on the
+ * request outlasting `KRAKEN_FETCH_TIMEOUT_MS`. The chart's retry path and the
+ * 200-day effect's error state both want the throw — a hang gives them neither,
+ * which is why the timeout exists at all.
  *
  * The resolved array is *shared* between concurrent callers, so consumers must
  * treat it as read-only. Both do — `parseKrakenOhlc` and the 200-day effect
@@ -104,11 +118,28 @@ export function fetchKrakenCandles(interval, pair = 'XBTUSD') {
   if (existing) return existing
 
   const request = (async () => {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Kraken OHLC: HTTP ${res.status}`)
-    const candles = extractKrakenOhlc(await res.json())
-    if (!candles) throw new Error('Kraken OHLC: no candles in response')
-    return candles
+    // An explicit controller rather than `AbortSignal.timeout`, for two
+    // reasons: the timer is cleared on success, so a completed request does not
+    // leave one pending for the rest of the window; and it is an ordinary
+    // `setTimeout`, which means the timeout is exercisable under fake timers
+    // instead of only by waiting fifteen seconds.
+    const controller = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, KRAKEN_FETCH_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) throw new Error(`Kraken OHLC: HTTP ${res.status}`)
+      const candles = extractKrakenOhlc(await res.json())
+      if (!candles) throw new Error('Kraken OHLC: no candles in response')
+      return candles
+    } catch (err) {
+      // An abort surfaces as a bare "operation was aborted"; say what actually
+      // happened, since this is the one failure with no server response to
+      // quote back.
+      throw timedOut ? new Error(`Kraken OHLC: no response within ${KRAKEN_FETCH_TIMEOUT_MS}ms`) : err
+    } finally {
+      clearTimeout(timer)
+    }
   })()
 
   inFlight.set(url, request)

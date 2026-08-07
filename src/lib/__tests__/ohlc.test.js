@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   KRAKEN_INTERVAL, KRAKEN_MAX_CANDLES,
   krakenParamsForDays, krakenOhlcUrl, extractKrakenOhlc, parseKrakenOhlc,
-  fetchKrakenCandles, _resetInFlight,
+  fetchKrakenCandles, _resetInFlight, KRAKEN_FETCH_TIMEOUT_MS,
 } from '../ohlc.js'
 
 // Kraken candle: [time_s, open, high, low, close, vwap, volume_base, count]
@@ -249,6 +249,43 @@ describe('fetchKrakenCandles', () => {
       globalThis.process.off('unhandledRejection', onUnhandled)
     }
     expect(unhandled).toEqual([])
+  })
+
+  it('bounds the request so a hang cannot pin the URL forever', async () => {
+    // The regression this exists for: `clear` only runs on settle, so a fetch
+    // that never settles keeps its entry in the map for the page's lifetime —
+    // and since the entry is shared, the 1M chart, the 1Y chart and the
+    // 6-hourly 200-day refresh would all attach to the dead promise. The chart
+    // would spin forever with no error and a disabled Refresh button. Before
+    // the dedupe each call site issued its own fetch and recovered on its own.
+    //
+    // Asserted through a real abort signal rather than by reading the option
+    // back off the mock: passing a signal nothing honours would satisfy that
+    // and fix nothing.
+    fetch.mockImplementation((_url, { signal } = {}) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(signal.reason))
+    }))
+
+    vi.useFakeTimers()
+    try {
+      const request = fetchKrakenCandles(KRAKEN_INTERVAL.DAY)
+      const settled = request.then(() => 'resolved', () => 'rejected')
+
+      // Still in flight: a second caller shares it rather than refetching.
+      await vi.advanceTimersByTimeAsync(KRAKEN_FETCH_TIMEOUT_MS - 1)
+      fetchKrakenCandles(KRAKEN_INTERVAL.DAY).catch(() => {})
+      expect(fetch).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(2)
+      expect(await settled).toBe('rejected')
+
+      // Past the deadline the entry is gone, so the next caller — the 1M chart,
+      // or the 200-day refresh six hours later — reaches the network again.
+      fetchKrakenCandles(KRAKEN_INTERVAL.DAY).catch(() => {})
+      expect(fetch).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('throws on a non-ok response', async () => {
