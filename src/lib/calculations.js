@@ -285,3 +285,11 @@ export function calcFiatFee(feeRateSatsPerVbyte, priceInCurrency) {
   const totalSats = feeRateSatsPerVbyte * TX_VSIZE
   return (totalSats / 100_000_000) * priceInCurrency
 }
+
+// Mean of the tracked 24h-volume history (last 7 days, one entry per day).
+// Needs at least two entries — a single day compared against itself is always
+// 0% and reads as a real "in line with 7d avg" signal when it is no signal.
+export function computeVol7dAvg(history) {
+  if (!history || history.length < 2) return null
+  return history.reduce((sum, h) => sum + h.volume, 0) / history.length
+}

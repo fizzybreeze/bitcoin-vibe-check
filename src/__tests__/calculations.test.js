@@ -8,6 +8,7 @@ import {
   computeHashRateTrend,
   computeMempoolPressurePct,
   calcFiatFee,
+  computeVol7dAvg,
   computeVibeScore,
   computeVibeSummary,
   computeVibeDimensions,
@@ -531,5 +532,22 @@ describe('calcFiatFee', () => {
 
   it('returns 0 for price of 0', () => {
     expect(calcFiatFee(10, 0)).toBe(0)
+  })
+})
+
+// ─── 7-day volume average ────────────────────────────────────────────────────
+
+describe('computeVol7dAvg', () => {
+  it('averages the tracked history', () => {
+    expect(computeVol7dAvg([{ volume: 10 }, { volume: 20 }, { volume: 30 }])).toBe(20)
+  })
+
+  it('returns null for a single day — one entry compared against itself is 0%, which is no signal', () => {
+    expect(computeVol7dAvg([{ volume: 10 }])).toBeNull()
+  })
+
+  it('returns null for missing or empty history', () => {
+    expect(computeVol7dAvg(null)).toBeNull()
+    expect(computeVol7dAvg([])).toBeNull()
   })
 })
