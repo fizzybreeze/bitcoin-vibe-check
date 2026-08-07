@@ -1,7 +1,7 @@
-// Render tests for the four cards extracted out of App.jsx in #22. They had no
-// unit coverage while they lived there — the whole file was too large to test
-// piecemeal — so the point of extracting them is that each is now cheap to
-// exercise on its own.
+// Render tests for the five cards extracted out of App.jsx in #22, and the
+// blockTimeColors helper two of them share. They had no unit coverage while
+// they lived in App.jsx — nothing there is importable without the whole file —
+// so making them cheap to exercise is most of what the extraction buys.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import NetworkPulseCard from '../NetworkPulseCard.jsx'
@@ -18,6 +18,9 @@ function stubFetch(json) {
 }
 
 beforeEach(() => stubFetch({}))
+// RTL auto-cleans (globals: true), but unmounting explicitly here keeps it
+// ordered before the unstub rather than relying on hook registration order —
+// these cards abort an in-flight fetch on unmount.
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('blockTimeColors', () => {
