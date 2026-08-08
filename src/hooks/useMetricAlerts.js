@@ -98,9 +98,29 @@ export function useMetricAlerts(metrics) {
     setAlerts(prev => prev.filter(a => !a.triggered))
   }
 
+  // Callers share the request already in flight rather than issuing a second
+  // one. Chromium answers a *concurrent* `Notification.requestPermission()`
+  // with a promise it never settles — measured, not assumed: of four fired
+  // together, two resolved and two hung for good. The panel no longer awaits
+  // this, so a hung promise can no longer lose an alert, but an unsettled
+  // request still means `setNotificationPermission` never runs for that
+  // caller, and the panel goes on showing a prompt-me state after the visitor
+  // has already answered.
+  //
+  // Cleared with `.then(clear, clear)` rather than `.finally(clear)`, the same
+  // trap recorded in v1.6.10: `finally` re-throws, so a rejected permission
+  // request would surface as an unhandled rejection with nothing awaiting it.
+  const permissionRequest = useRef(null)
+
   const requestPermission = async () => {
     if (!('Notification' in window)) return
-    await Notification.requestPermission()
+    if (!permissionRequest.current) {
+      const clear = () => { permissionRequest.current = null }
+      permissionRequest.current = Promise.resolve()
+        .then(() => Notification.requestPermission())
+        .then(clear, clear)
+    }
+    await permissionRequest.current
     setNotificationPermission(Notification.permission)
   }
 

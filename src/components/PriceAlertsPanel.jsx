@@ -30,7 +30,7 @@ export default function PriceAlertsPanel({
     setInputError('')
   }
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault()
     // The registry's own predicate, not a second copy of it. A hard-coded
     // "> 0" here would reject a Fear & Greed alert at 0 that the rule model
@@ -44,12 +44,25 @@ export default function PriceAlertsPanel({
     }
     setInputError('')
 
-    if (notificationPermission !== 'granted') {
-      await onRequestPermission()
-    }
-
+    // The alert is stored first, and the permission prompt is deliberately not
+    // awaited. This used to read `await onRequestPermission()` before `onAdd`,
+    // which lost alerts outright: Chromium leaves a *concurrent*
+    // `Notification.requestPermission()` unsettled rather than resolving it, so
+    // a second Set pressed while the first prompt was still open awaited a
+    // promise that never came and never reached `onAdd`. Measured in a real
+    // browser — of four requests fired together, two resolved and two hung
+    // forever — and four rapid Sets stored one alert.
+    //
+    // Nothing about creating the rule needs the answer: an alert with
+    // notifications denied still lists, still crosses and still shows
+    // "✓ Triggered". Asking afterwards also puts the prompt in context, with
+    // the row the visitor just made already on screen.
     onAdd(parsed, meta.id)
     setInputValue('')
+
+    if (notificationPermission !== 'granted') {
+      onRequestPermission()
+    }
   }
 
   return (

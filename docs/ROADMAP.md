@@ -159,14 +159,6 @@ Push, which is §4.1. Until then the panel says so outright — "Alerts only fir
 while this tab is open — they are not push notifications" — which is the copy
 half of 3.4b and the most this item can honestly do without §4.1.
 
-> A separate, **pre-existing** defect was found while verifying 3.4b and is
-> deliberately not fixed there: `handleSubmit` awaits `onRequestPermission()`
-> before calling `onAdd`, so several submits fired inside the same permission
-> round-trip collapse into one — four rapid Sets store one alert. Reproduced
-> unchanged on the v1.7.1 panel, so it is not a regression, but 3.4b makes it
-> easier to reach by inviting several alerts across metrics in one sitting.
-> Worth its own diff and its own test.
-
 ---
 
 ## 4. Next — become a destination, and a source
