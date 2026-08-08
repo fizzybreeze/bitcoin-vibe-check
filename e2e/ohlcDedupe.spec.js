@@ -66,6 +66,33 @@ test.describe('Kraken OHLC request dedupe', () => {
     await expect(page.getByTestId('card-cycle-indicators')).toContainText(/Mayer/i)
   })
 
+  // #41 — the active range fetched twice by two code paths.
+  //
+  // A different mechanism from the one above, which is why the in-flight dedupe
+  // in `src/lib/ohlc.js` does not collapse it: the mount prefetch has *landed*
+  // by the time the chart effect's 400ms debounce expires, so the two requests
+  // never overlap. Only a cache consulted at fetch time collapses them, and only
+  // the real app can say whether the two paths actually line up that way — the
+  // unit tests prove the store dedupes, not that these two callers meet in it.
+  test('the default range is fetched once, not once per prefetch path', async ({ page }) => {
+    const urls = recordOhlcRequests(page)
+    await mockApis(page)
+    await page.goto('/')
+
+    await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
+    await settle(page, urls)
+
+    // 7D is the default range and the only caller of interval=240 — nothing else
+    // in the app wants four-hourly candles. Before the fix this was 2: the mount
+    // prefetch at ~270ms, then `doFetch` at ~645ms refetching what the prefetch
+    // had already written to the cache it checked at t=0.
+    const fourHourly = urls.filter(u => u.includes('interval=240'))
+    expect(fourHourly).toHaveLength(1)
+
+    // And the chart still drew, so this is one request rather than none.
+    await expect(page.locator('.recharts-bar-rectangle').first()).toBeVisible({ timeout: SLOW_TIMEOUT })
+  })
+
   test('1M and 1Y keep their own window of the shared candle array', async ({ page }) => {
     // The two ranges now resolve from one shared array, sliced to different
     // lengths. A caller that mutated it instead of slicing would corrupt the

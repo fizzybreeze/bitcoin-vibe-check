@@ -9,6 +9,7 @@ import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
 import { useMetricAlerts } from './hooks/useMetricAlerts.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
+import { createChartCache } from './lib/chartCache.js'
 import {
   CURRENCY_META, fmtCurrency, computeChartChange,
 } from './utils.js'
@@ -130,6 +131,11 @@ async function fetchChart(days) {
   return parseKrakenOhlc(candles, days, count)
 }
 
+/** Chart data for a range label — the fetch sitting behind the per-range cache. */
+function fetchChartForRange(label) {
+  return fetchChart(RANGES.find(r => r.label === label)?.days ?? 7)
+}
+
 function readCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') } catch { return null }
 }
@@ -228,12 +234,15 @@ export default function App() {
   const [wsLive, setWsLive]           = useState(false)
   const [volHistory, setVolHistory]   = useState(() => readVolumeHistory())
   const [donors, setDonors]           = useState([])
-  const chartCache       = useRef(new Map())
+  // Lazily initialised: `useRef(createChartCache(…))` would build and discard a
+  // fresh store on every render, and this component re-renders on every price
+  // tick.
+  const chartCache       = useRef(null)
+  if (chartCache.current == null) { chartCache.current = createChartCache(fetchChartForRange) }
   const debounceRef      = useRef(null)
   const retryRef         = useRef(null)
   const fetchIdRef       = useRef(0)
   const prevCacheKeyRef  = useRef(null)
-  const prefetchingRef   = useRef(new Set())
   const wsRef        = useRef(null)
   const reconnectRef = useRef(null)
 
@@ -309,19 +318,13 @@ export default function App() {
     return () => { active = false }
   }, [])
 
-  // Prefetch all four chart ranges on mount so the main chart effect hits cache.
-  // prefetchingRef deduplication prevents StrictMode run 2 from firing duplicate requests;
-  // chartCache is a ref so writes from run 1 survive the mock unmount/remount.
+  // Warm all four chart ranges on mount so a toggle is instant. The chart effect
+  // below joins whichever of these covers the active range rather than racing it
+  // — the store dedupes both against the cache and against a request in flight,
+  // which is what stops the active range being fetched twice (#41). That same
+  // dedupe absorbs StrictMode's second invocation.
   useEffect(() => {
-    RANGES.forEach(({ label, days }) => {
-      const key = label
-      if (chartCache.current.has(key) || prefetchingRef.current.has(key)) return
-      prefetchingRef.current.add(key)
-      fetchChart(days)
-        .then(r  => { chartCache.current.set(key, r) })
-        .catch(() => {})
-        .finally(() => { prefetchingRef.current.delete(key) })
-    })
+    RANGES.forEach(({ label }) => { chartCache.current.load(label).catch(() => {}) })
   }, [])
 
   // 60-second refresh cycle for KPI data (prices handled by WebSocket)
@@ -464,7 +467,6 @@ export default function App() {
 
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
-    const days = RANGES.find(r => r.label === range)?.days ?? 7
     const cacheKey = range
     const prevCacheKey = prevCacheKeyRef.current
     prevCacheKeyRef.current = cacheKey
@@ -498,26 +500,23 @@ export default function App() {
     const myId = ++fetchIdRef.current
 
     // After loading the active range, silently cache the other three ranges.
-    // Fire-and-forget: errors are swallowed, prefetchingRef prevents duplicate concurrent fetches.
+    // Fire-and-forget: errors are swallowed, and the store skips anything the
+    // mount prefetch already holds or still has in flight. On a healthy cold
+    // load that is all three — this is the recovery path for a mount prefetch
+    // that failed, not the normal one.
     function startBackgroundPrefetch() {
       RANGES
         .filter(r => r.label !== range)
-        .forEach(({ label, days: d }) => {
-          const key = label
-          if (chartCache.current.has(key) || prefetchingRef.current.has(key)) return
-          prefetchingRef.current.add(key)
-          fetchChart(d)
-            .then(r  => { chartCache.current.set(key, r) })
-            .catch(() => {})
-            .finally(() => { prefetchingRef.current.delete(key) })
-        })
+        .forEach(({ label }) => { chartCache.current.load(label).catch(() => {}) })
     }
 
     async function doFetch() {
       try {
-        const result = await fetchChart(days)
+        // `load` re-reads the cache and joins a request in flight. The check in
+        // the effect body above happened 400ms ago — long enough for the mount
+        // prefetch to have landed this very range (#41).
+        const result = await chartCache.current.load(cacheKey)
         if (fetchIdRef.current !== myId) return
-        chartCache.current.set(cacheKey, result)
         setChart(result)
         setChartChange(computeChartChange(result))
         setChartLoading(false)
@@ -529,9 +528,8 @@ export default function App() {
         setChartError('temp')
         retryRef.current = setTimeout(async () => {
           try {
-            const result = await fetchChart(days)
+            const result = await chartCache.current.load(cacheKey)
             if (fetchIdRef.current !== myId) return
-            chartCache.current.set(cacheKey, result)
             setChart(result)
             setChartChange(computeChartChange(result))
             setChartError(null)
@@ -597,7 +595,10 @@ export default function App() {
   }, [data?.priceUsd, soundEnabled])
 
   function refreshChart() {
-    chartCache.current.delete(range)
+    // Disowns a request for this range still in flight as well as the stored
+    // candles — otherwise Refresh could be answered by the very fetch it was
+    // pressed to replace.
+    chartCache.current.invalidate(range)
     setChartNonce(n => n + 1)
   }
 
