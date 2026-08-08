@@ -73,7 +73,9 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Price Alerts
 - Set custom price alerts for BTC in any supported currency
-- Browser **push notification** support with a one-time permission request
+- Alerts on **price, network fees, Fear & Greed and the Mayer Multiple**, not just price
+- **Push to this device** — an optional toggle that registers the browser for Web Push, so alerts can arrive with the tab closed. Requires `VITE_VAPID_PUBLIC_KEY`; without it the panel says so rather than offering a toggle that stores nothing
+- With push off, alerts fire as in-tab notifications and **only while the tab is open** — the panel states which of the two you are getting in every state
 - Active alerts shown via an indicator on the header button; triggered alerts are tracked separately
 - Alert panel accessible from the header on any screen size
 - Alerts persist in `localStorage` (`btc-vibe-price-alerts`)
@@ -177,6 +179,8 @@ src/
     calculations.js          Vibe Score, ATH distance, sats per fiat, supply issued, hash trend
     runtimeCaching.js        one NetworkFirst rule per data source, read by the service worker
     pushMessage.js           what a push payload shows, and where clicking it is allowed to go
+    vapid.js                 the VAPID public key decoded and checked before the browser sees it
+    pushSubscription.js      a PushSubscription as a table row, and what the insert's outcome means
     ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing,
                              and the in-flight dedupe the three daily-candle callers share
     colors.js                the brand accent as hex, for the places that cannot use a class
@@ -259,6 +263,8 @@ Copy `.env.example` to `.env` and fill in what you need. `.env` is gitignored; t
 |---|---|---|---|
 | `VITE_SUPABASE_URL` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
 | `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
+| `VITE_VAPID_PUBLIC_KEY` | `src/lib/vapid.js` | Web Push subscriptions | Public by definition. Generate with `npx web-push generate-vapid-keys`; blank means the push toggle says unavailable |
+| `VAPID_PRIVATE_KEY` | nothing yet | Signing pushes (§4.1b) | **Server-side only.** Anyone holding it can notify every subscriber |
 | `BGEOMETRICS_API_KEY` | `api/chain-data.js` | MVRV in Cycle Indicators | **Server-side only** — set it in Vercel, never with a `VITE_` prefix |
 | `SUPABASE_URL` · `SUPABASE_ANON_KEY` | `api/chain-data.js` | The MVRV fallback (optional) | Falls back to the `VITE_` pair, which is the same project. Anon, never service-role |
 
@@ -358,6 +364,9 @@ Schema lives in `supabase/migrations/`. Both tables have RLS enabled.
 |---|---|---|
 | `donors` | Names submitted via the donation card | `SELECT` where `approved = true`; `INSERT` only with `approved = false`. No update or delete. |
 | `metric_snapshots` | One row per UTC day of dashboard metrics (`jsonb`) | `SELECT` only. Writes use the service role. |
+| `push_subscriptions` | One row per browser opted in to Web Push | **`INSERT` only.** No read (an endpoint is a capability and a durable browser identifier), no update, and no delete — unsubscribing happens in the browser, and dead endpoints are reaped by the sender on a `410`. |
+
+> Row-level security is only half the gate. RLS decides which *rows*; the table grant decides which *verbs* — and `TRUNCATE` bypasses RLS entirely, while Supabase grants it to `anon` by default. Every table above now holds exactly the verbs the app uses. When adding one, revoke first and grant back.
 
 `scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. `api/chain-data.js` reads the table for its MVRV fallback; nothing in the browser does yet. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
 

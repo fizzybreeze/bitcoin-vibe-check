@@ -7,6 +7,7 @@ import ShareModal from './components/ShareModal.jsx'
 import PriceAlertsButton from './components/PriceAlertsButton.jsx'
 import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
 import { useMetricAlerts } from './hooks/useMetricAlerts.js'
+import { usePushSubscription } from './hooks/usePushSubscription.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import { createChartCache } from './lib/chartCache.js'
@@ -647,6 +648,22 @@ export default function App() {
     mayer: mayerMultiple,
   })
 
+  const { pushStatus, pushBusy, subscribePush, unsubscribePush } = usePushSubscription()
+
+  // Permission is requested here, through the one deduped request the alerts
+  // hook owns, and only then handed to `subscribePush`. Chromium leaves a
+  // *concurrent* `Notification.requestPermission()` unsettled for good
+  // (v1.7.4), and `pushManager.subscribe()` prompts on its own when permission
+  // is still 'default' — so letting it do that beside the panel's own request
+  // would reintroduce that race from the other side. Awaiting is safe
+  // precisely because every request now funnels through one in-flight promise:
+  // there is never a second native call to be concurrent with.
+  async function enablePush() {
+    await requestPermission()
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    await subscribePush()
+  }
+
   // Vibe Score.
   const vibeInputs = {
     fngScore,
@@ -868,6 +885,10 @@ export default function App() {
           onClearTriggered={clearTriggered}
           notificationPermission={notificationPermission}
           onRequestPermission={requestPermission}
+          pushStatus={pushStatus}
+          pushBusy={pushBusy}
+          onEnablePush={enablePush}
+          onDisablePush={unsubscribePush}
           onClose={() => setIsPriceAlertsOpen(false)}
         />
       )}
