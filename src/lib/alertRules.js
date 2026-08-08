@@ -31,13 +31,17 @@ function formatCurrency(value, currency) {
   }
 }
 
+function trimNumber(value, maxDecimals) {
+  return Number(value.toFixed(maxDecimals)).toLocaleString('en-US')
+}
+
 /**
  * The metrics a rule may be written against.
  *
- * Price is the only entry today — §3.4b adds fees, Fear & Greed and the Mayer
- * Multiple, and does it by adding rows here rather than by touching anything
- * below. Three things each entry has to answer, because each is a place where
- * metrics genuinely differ rather than a place where uniformity was available:
+ * Adding one is a row here plus the field it reads on the metrics object —
+ * nothing below this changes, and neither does the hook. Three things each
+ * entry has to answer, because each is a place where metrics genuinely differ
+ * rather than a place where uniformity was available:
  *
  * - `currencyScoped` — a price of 60,000 means nothing without saying in what.
  *   A fee tier in sat/vB has no such qualifier, and giving it one would invent
@@ -52,14 +56,77 @@ function formatCurrency(value, currency) {
  *   rule would fire at once quoting "Now $0".
  * - `format` — the label is written once, at creation, and is what the
  *   notification quotes back. Money, an index and a ratio do not format alike.
+ *
+ * The remaining fields are the panel's, and they live here rather than in
+ * `PriceAlertsPanel.jsx` for one reason: a metric whose copy is somewhere else
+ * is a metric someone can add and forget to describe, which shows up as a blank
+ * placeholder and a validation message about prices on a fee alert.
+ *
+ * - `shortName` — the pill, and the prefix on each row. `name` is a sentence
+ *   fragment ("BTC price has crossed…") and is too long for both.
+ * - `unit` — the suffix beside the input. Null for currency-scoped metrics,
+ *   which show the currency code there instead, and for Fear & Greed, which is
+ *   an index of nothing.
+ * - `colorDirection` — whether the row's arrow is tinted green for above and
+ *   red for below. True for price only: up-is-green is a market convention that
+ *   holds for a price and inverts for a fee, where a red down-arrow on "tell me
+ *   when fees drop to 5" is bad-news styling on the good news the visitor
+ *   actually asked to be told about.
  */
 export const ALERT_METRICS = {
   price: {
     id: 'price',
     name: 'BTC price',
+    shortName: 'Price',
     currencyScoped: true,
     isValidValue: v => Number.isFinite(v) && v > 0,
     format: (value, rule) => formatCurrency(value, rule?.currency),
+    unit: null,
+    colorDirection: true,
+    placeholder: 'Target price',
+    exampleValue: 80000,
+    invalidMessage: 'Enter a price above zero.',
+  },
+  fee: {
+    id: 'fee',
+    name: 'Network fee',
+    shortName: 'Fees',
+    currencyScoped: false,
+    isValidValue: v => Number.isFinite(v) && v > 0,
+    format: value => `${trimNumber(value, 1)} sat/vB`,
+    unit: 'sat/vB',
+    colorDirection: false,
+    placeholder: 'Fee level',
+    exampleValue: 5,
+    invalidMessage: 'Enter a fee above zero, in sat/vB.',
+  },
+  fng: {
+    id: 'fng',
+    name: 'Fear & Greed',
+    shortName: 'Fear & Greed',
+    currencyScoped: false,
+    // 0 is a real reading and so is 100; 140 is not. This is the entry the
+    // shared `v > 0` predicate would have been wrong for.
+    isValidValue: v => Number.isFinite(v) && v >= 0 && v <= 100,
+    format: value => trimNumber(value, 0),
+    unit: null,
+    colorDirection: false,
+    placeholder: 'Index level',
+    exampleValue: 20,
+    invalidMessage: 'Enter an index level between 0 and 100.',
+  },
+  mayer: {
+    id: 'mayer',
+    name: 'Mayer Multiple',
+    shortName: 'Mayer',
+    currencyScoped: false,
+    isValidValue: v => Number.isFinite(v) && v > 0,
+    format: value => value.toFixed(2),
+    unit: '×',
+    colorDirection: false,
+    placeholder: 'Multiple',
+    exampleValue: 2.4,
+    invalidMessage: 'Enter a multiple above zero.',
   },
 }
 

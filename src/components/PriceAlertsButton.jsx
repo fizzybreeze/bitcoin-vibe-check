@@ -2,7 +2,7 @@ export default function PriceAlertsButton({ onClick, hasActiveAlerts }) {
   return (
     <button
       onClick={onClick}
-      aria-label="Price alerts"
+      aria-label="Alerts"
       className="relative flex items-center justify-center w-7 h-7 rounded-full text-orange-400 transition-colors hover:text-orange-300 md:w-auto md:h-auto md:gap-1.5 md:bg-gray-800 md:px-3 md:py-1 md:text-xs md:font-semibold md:hover:bg-gray-700 md:hover:text-orange-400"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
