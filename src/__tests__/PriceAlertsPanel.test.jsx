@@ -177,6 +177,62 @@ describe('PriceAlertsPanel metric picker', () => {
     expect(screen.getByText(/between 0 and 100/i)).toBeInTheDocument()
   })
 
+  // The regression this suite exists to pin. `handleSubmit` used to await
+  // `onRequestPermission()` before `onAdd`, and Chromium leaves a concurrent
+  // `Notification.requestPermission()` unsettled — so a Set pressed while an
+  // earlier prompt was still open awaited a promise that never arrived and the
+  // alert was lost for good. A permission request that never resolves must not
+  // be able to swallow an alert.
+  it('stores every alert even when the permission prompt never resolves', () => {
+    const onAdd = vi.fn()
+    const onRequestPermission = vi.fn(() => new Promise(() => {}))
+    render(
+      <PriceAlertsPanel
+        {...baseProps}
+        notificationPermission="default"
+        onAdd={onAdd}
+        onRequestPermission={onRequestPermission}
+      />
+    )
+    for (const v of ['120000', '130000', '140000']) {
+      fireEvent.change(screen.getByPlaceholderText('Target price'), { target: { value: v } })
+      fireEvent.submit(screen.getByRole('button', { name: 'Set' }))
+    }
+    expect(onAdd).toHaveBeenCalledTimes(3)
+    expect(onAdd.mock.calls.map(c => c[0])).toEqual([120000, 130000, 140000])
+  })
+
+  it('still asks for permission, just not before storing the alert', () => {
+    const calls = []
+    const onAdd = vi.fn(() => calls.push('add'))
+    const onRequestPermission = vi.fn(() => { calls.push('ask'); return new Promise(() => {}) })
+    render(
+      <PriceAlertsPanel
+        {...baseProps}
+        notificationPermission="default"
+        onAdd={onAdd}
+        onRequestPermission={onRequestPermission}
+      />
+    )
+    fireEvent.change(screen.getByPlaceholderText('Target price'), { target: { value: '120000' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Set' }))
+    expect(calls).toEqual(['add', 'ask'])
+  })
+
+  it('does not ask again once permission is already granted', () => {
+    const onRequestPermission = vi.fn()
+    render(
+      <PriceAlertsPanel
+        {...baseProps}
+        notificationPermission="granted"
+        onRequestPermission={onRequestPermission}
+      />
+    )
+    fireEvent.change(screen.getByPlaceholderText('Target price'), { target: { value: '120000' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Set' }))
+    expect(onRequestPermission).not.toHaveBeenCalled()
+  })
+
   it('clears a half-typed value when the metric changes', () => {
     render(<PriceAlertsPanel {...baseProps} />)
     fireEvent.change(screen.getByPlaceholderText('Target price'), { target: { value: '80000' } })

@@ -201,6 +201,59 @@ describe('metric crossing', () => {
   })
 })
 
+// ─── notification permission ─────────────────────────────────────────────────
+
+describe('requestPermission', () => {
+  it('issues one browser request when several callers ask at once', async () => {
+    Notification.permission = 'default'
+    let settle
+    Notification.requestPermission = vi.fn(() => new Promise(res => { settle = res }))
+
+    const { result } = renderHook(() => useMetricAlerts(usd(50000)))
+    await act(async () => {
+      result.current.requestPermission()
+      result.current.requestPermission()
+      result.current.requestPermission()
+      // The hook reaches the browser API a microtask later, so that a
+      // synchronous throw from it lands as a rejection rather than escaping.
+      await Promise.resolve()
+      Notification.permission = 'denied'
+      settle('denied')
+    })
+
+    // Without sharing the in-flight request, three calls reach the browser and
+    // Chromium leaves the concurrent two unsettled.
+    expect(Notification.requestPermission).toHaveBeenCalledTimes(1)
+    expect(result.current.notificationPermission).toBe('denied')
+  })
+
+  it('asks again on a later, separate request', async () => {
+    Notification.permission = 'default'
+    Notification.requestPermission = vi.fn().mockResolvedValue('default')
+
+    const { result } = renderHook(() => useMetricAlerts(usd(50000)))
+    await act(async () => { await result.current.requestPermission() })
+    await act(async () => { await result.current.requestPermission() })
+
+    // The share is *in-flight only*. Caching the settled promise would mean a
+    // visitor who dismissed the first prompt could never be asked again.
+    expect(Notification.requestPermission).toHaveBeenCalledTimes(2)
+  })
+
+  it('survives a permission request that rejects', async () => {
+    Notification.permission = 'default'
+    Notification.requestPermission = vi.fn().mockRejectedValue(new Error('nope'))
+
+    const { result } = renderHook(() => useMetricAlerts(usd(50000)))
+    await act(async () => { await expect(result.current.requestPermission()).resolves.toBeUndefined() })
+
+    // And the ref is cleared, so a rejection does not wedge every later ask.
+    Notification.requestPermission = vi.fn().mockResolvedValue('granted')
+    await act(async () => { await result.current.requestPermission() })
+    expect(Notification.requestPermission).toHaveBeenCalledTimes(1)
+  })
+})
+
 // ─── clearTriggered ───────────────────────────────────────────────────────────
 
 describe('clearTriggered', () => {

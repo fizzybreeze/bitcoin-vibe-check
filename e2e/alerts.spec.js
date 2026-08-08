@@ -54,6 +54,32 @@ test.describe('Metric alerts', () => {
     })
   }
 
+  // Deliberately runs with the default context permissions — no
+  // `permissions: ['notifications']` grant — because the whole failure needed
+  // an *unanswered* prompt. Chromium leaves a concurrent
+  // `Notification.requestPermission()` unsettled, and while `handleSubmit`
+  // awaited that before adding, rapid Sets lost alerts outright. jsdom cannot
+  // reproduce it: it has no permission flow to leave hanging.
+  //
+  // This is an integration check and it goes red only against the *pair* of
+  // defects — either fix alone is enough to make it green, and how many alerts
+  // are lost varies with timing, which is what a race looks like. The two
+  // halves are pinned individually by unit tests instead: the panel by "stores
+  // every alert even when the permission prompt never resolves", the hook by
+  // "issues one browser request when several callers ask at once".
+  test('four rapid Sets store four alerts, prompt unanswered', async ({ page }) => {
+    const panel = page.getByRole('dialog', { name: 'Alerts' })
+    for (const v of ['120000', '130000', '140000', '150000']) {
+      await panel.getByRole('spinbutton').fill(v)
+      await panel.getByRole('button', { name: 'Set' }).click()
+    }
+    await expect(panel.getByRole('listitem')).toHaveCount(4)
+    const stored = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('btc-vibe-price-alerts')).map(a => a.label)
+    )
+    expect(stored).toEqual(['$120,000', '$130,000', '$140,000', '$150,000'])
+  })
+
   test('says these are not push notifications', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: 'Alerts' }))
       .toContainText(/only fire while this tab is open/i)
