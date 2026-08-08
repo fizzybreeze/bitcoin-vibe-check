@@ -194,21 +194,20 @@ was accurate — the `workbox` block is *ignored* rather than rejected under
 injectManifest, so leaving the rules there would have cached nothing while
 looking configured. Nothing below needs a service-worker change any more.
 
-#### 4.1a — subscription plumbing, no sender
+#### 4.1a — subscription plumbing, no sender. **Shipped: v1.7.5 + v1.7.6.**
 
-**Split. The SW strategy switch shipped in v1.7.5; the rest is still ahead.**
-That half was isolated because it is verifiable on its own — the build reports
-the same precache manifest before and after — and because reviewing an
-anonymous-write RLS policy alongside a workbox rewrite asks two questions with
-nothing in common.
+Both halves are done — see the version-history rows. A browser can subscribe,
+the row is stored, and nothing sends to it yet. The answer to "can an anonymous
+client reach a row that is not its own" was measured against the real table
+rather than argued: no read, no oracle on a guessed endpoint, no delete, no
+update. The one thing it *did* find was that RLS is only half the gate —
+`TRUNCATE` bypasses it and Supabase grants it to `anon` by default — which is
+now fixed on all three tables and written up in `CLAUDE.md`.
 
-What is left: the `push_subscriptions` migration and its RLS, VAPID keys as
-env vars, and the subscribe/unsubscribe UI in the alerts panel. Nothing
-evaluates anything yet — verify by pushing to your own endpoint by hand. This
-is the diff the security review is *about*: can an anonymous client reach a row
-that is not its own. Note it cannot demonstrate anything on a Vercel preview
-until `VITE_VAPID_PUBLIC_KEY` is set and the migration is applied, so plan the
-verification before the code.
+**Before 4.1b can do anything, a human has to set the keys.** Run
+`npx web-push generate-vapid-keys`, put the public half in
+`VITE_VAPID_PUBLIC_KEY` and the private half in `VAPID_PRIVATE_KEY`. Until then
+the panel reports push as unavailable, which is the correct thing for it to say.
 
 #### 4.1b — the evaluator
 

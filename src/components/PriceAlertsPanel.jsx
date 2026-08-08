@@ -1,5 +1,21 @@
 import { useState } from 'react'
 import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/alertRules.js'
+import {
+  PUSH_BLOCKED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED, PUSH_UNSUPPORTED,
+} from '../hooks/usePushSubscription.js'
+
+// What the footer says, per push state. Kept as data next to the component
+// rather than as a chain of ternaries in the JSX, because the honest sentence
+// differs in every state and the wrong one is worse than none: telling someone
+// their alerts survive a closed tab when they do not is the single most
+// misleading thing this panel could say.
+const PUSH_COPY = {
+  [PUSH_ON]:           'Alerts are pushed to this device, even with the tab closed.',
+  [PUSH_OFF]:          'Alerts only fire while this tab is open. Turn on push to get them with the tab closed.',
+  [PUSH_BLOCKED]:      'Notifications are blocked in your browser, so alerts cannot be pushed. Enable them in browser settings.',
+  [PUSH_UNSUPPORTED]:  'Alerts only fire while this tab is open — this browser does not support push notifications.',
+  [PUSH_UNCONFIGURED]: 'Alerts only fire while this tab is open — they are not push notifications.',
+}
 
 export default function PriceAlertsPanel({
   alerts,
@@ -9,6 +25,10 @@ export default function PriceAlertsPanel({
   onClearTriggered,
   notificationPermission,
   onRequestPermission,
+  pushStatus = PUSH_UNCONFIGURED,
+  pushBusy = false,
+  onEnablePush,
+  onDisablePush,
   onClose,
 }) {
   const [metric, setMetric] = useState(DEFAULT_ALERT_METRIC)
@@ -213,11 +233,37 @@ export default function PriceAlertsPanel({
           )}
         </div>
 
-        {/* Disclaimer. Deliberately explicit rather than merely accurate: these
-            are not push notifications, and §4.1 is what makes them so. */}
-        <p className="mt-4 text-xs text-gray-600">
-          Alerts only fire while this tab is open — they are not push notifications.
-        </p>
+        {/* Push toggle, and the disclaimer it replaces once push is on. The
+            sentence is deliberately explicit in every state rather than merely
+            accurate — see PUSH_COPY. */}
+        <div className="mt-4 border-t border-gray-800 pt-3">
+          {(pushStatus === PUSH_ON || pushStatus === PUSH_OFF) && (
+            <button
+              type="button"
+              onClick={pushStatus === PUSH_ON ? onDisablePush : onEnablePush}
+              disabled={pushBusy}
+              aria-pressed={pushStatus === PUSH_ON}
+              className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl bg-gray-800 px-3 py-2 text-left transition-colors hover:bg-gray-700 disabled:opacity-50"
+            >
+              <span className="text-xs font-semibold text-white">Push to this device</span>
+              <span
+                aria-hidden="true"
+                className={`flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                  pushStatus === PUSH_ON ? 'bg-orange-500' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`h-4 w-4 rounded-full bg-white transition-transform ${
+                    pushStatus === PUSH_ON ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+            </button>
+          )}
+          <p className="text-xs text-gray-600">
+            {PUSH_COPY[pushStatus] ?? PUSH_COPY[PUSH_UNCONFIGURED]}
+          </p>
+        </div>
 
       </div>
     </div>

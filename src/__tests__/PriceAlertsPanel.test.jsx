@@ -266,3 +266,77 @@ describe('PriceAlertsPanel metric picker', () => {
     expect(screen.getByText('↓')).not.toHaveClass('text-red-400')
   })
 })
+
+// ─── Push toggle (roadmap §4.1a) ─────────────────────────────────────────────
+
+describe('PriceAlertsPanel push toggle', () => {
+  const toggle = () => screen.queryByRole('button', { name: /push to this device/i })
+
+  it('offers the toggle when push is available and off', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="off" />)
+    expect(toggle()).toBeInTheDocument()
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('reports the toggle as on once subscribed', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="on" />)
+    expect(toggle()).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('subscribes on tap when off, and unsubscribes when on', () => {
+    const onEnablePush = vi.fn()
+    const onDisablePush = vi.fn()
+
+    const { unmount } = render(
+      <PriceAlertsPanel {...baseProps} pushStatus="off" onEnablePush={onEnablePush} onDisablePush={onDisablePush} />
+    )
+    fireEvent.click(toggle())
+    expect(onEnablePush).toHaveBeenCalledTimes(1)
+    expect(onDisablePush).not.toHaveBeenCalled()
+    unmount()
+
+    render(
+      <PriceAlertsPanel {...baseProps} pushStatus="on" onEnablePush={onEnablePush} onDisablePush={onDisablePush} />
+    )
+    fireEvent.click(toggle())
+    expect(onDisablePush).toHaveBeenCalledTimes(1)
+    expect(onEnablePush).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not offer a toggle that cannot work', () => {
+    // A control that reports success and stores nothing is worse than no
+    // control. Each of these states has a sentence instead.
+    for (const status of ['unsupported', 'unconfigured', 'blocked']) {
+      const { unmount } = render(<PriceAlertsPanel {...baseProps} pushStatus={status} />)
+      expect(toggle()).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('never claims a closed tab is covered when it is not', () => {
+    // The single most misleading thing this panel could say. Every state that
+    // is not PUSH_ON has to keep the old caveat.
+    for (const status of ['off', 'unsupported', 'unconfigured', 'blocked']) {
+      const { unmount } = render(<PriceAlertsPanel {...baseProps} pushStatus={status} />)
+      expect(screen.getByText(/only fire while this tab is open|blocked in your browser/i)).toBeInTheDocument()
+      expect(screen.queryByText(/even with the tab closed/i)).not.toBeInTheDocument()
+      unmount()
+    }
+
+    render(<PriceAlertsPanel {...baseProps} pushStatus="on" />)
+    expect(screen.getByText(/even with the tab closed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/only fire while this tab is open/i)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the tab-only caveat when no push status is given at all', () => {
+    // App forgetting to pass the prop must not read as "you are covered".
+    render(<PriceAlertsPanel {...baseProps} />)
+    expect(screen.getByText(/only fire while this tab is open/i)).toBeInTheDocument()
+    expect(toggle()).not.toBeInTheDocument()
+  })
+
+  it('disables the toggle while a subscribe is in flight', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="off" pushBusy />)
+    expect(toggle()).toBeDisabled()
+  })
+})
