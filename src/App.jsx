@@ -12,6 +12,7 @@ import { syncableRules } from './lib/pushRules.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import { createChartCache } from './lib/chartCache.js'
+import { mergeMarketData } from './lib/marketData.js'
 import {
   CURRENCY_META, fmtCurrency, computeChartChange,
 } from './utils.js'
@@ -75,51 +76,23 @@ async function loadData() {
     fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD,XBTGBP,XBTEUR,XBTCAD,XBTCHF').then(r => r.json()),
   ])
 
-  const paprika      = paprikaTickerRes.status  === 'fulfilled' ? (paprikaTickerRes.value?.quotes?.USD  ?? {}) : {}
-  const paprikaGlobal = paprikaGlobalRes.status === 'fulfilled' ? (paprikaGlobalRes.value               ?? {}) : {}
-  const krakenResult = krakenTickerRes.status   === 'fulfilled' ? (krakenTickerRes.value?.result         ?? {}) : {}
-  const fngData      = fngRes.status            === 'fulfilled' ? fngRes.value                                  : null
+  // Unwrap only. Every decision about what a missing body means — and which
+  // source can stand in for which — lives in `mergeMarketData`, where it is
+  // testable without a network.
+  const body = (settled) => (settled.status === 'fulfilled' ? settled.value ?? null : null)
 
-  const findKrakenPrice = (suffix) => {
-    const key = Object.keys(krakenResult).find(k => k.endsWith(suffix))
-    return key ? parseFloat(krakenResult[key].c[0]) : null
-  }
-
-  const priceUsd = parseFloat(paprika.price) || null
-  const priceGbp = findKrakenPrice('GBP')
-  const priceEur = findKrakenPrice('EUR')
-  const priceCad = findKrakenPrice('CAD')
-  const priceChf = findKrakenPrice('CHF')
-  const volumeUsd = paprika.volume_24h ?? null
-
-  return {
-    priceUsd,
-    priceGbp,
-    priceEur,
-    priceCad,
-    priceChf,
-    volumeUsd,
-    volumeGbp:      (volumeUsd != null && priceUsd && priceGbp) ? volumeUsd * priceGbp / priceUsd : null,
-    volumeEur:      (volumeUsd != null && priceUsd && priceEur) ? volumeUsd * priceEur / priceUsd : null,
-    volumeCad:      (volumeUsd != null && priceUsd && priceCad) ? volumeUsd * priceCad / priceUsd : null,
-    volumeChf:      (volumeUsd != null && priceUsd && priceChf) ? volumeUsd * priceChf / priceUsd : null,
-    priceChange24h: paprika.percent_change_24h ?? null,
-    marketCapUsd:   paprika.market_cap         ?? null,
-    fees:           feesRes.status      === 'fulfilled' ? feesRes.value                                           : null,
-    blockHeight:    heightRes.status    === 'fulfilled' ? heightRes.value                                         : null,
-    fng:            fngData?.data?.[0]  ?? null,
-    fngHistory:     Array.isArray(fngData?.data) && fngData.data.length
-                      ? [...fngData.data].reverse().map(d => ({ v: parseInt(d.value, 10) }))
-                      : null,
-    difficulty:     diffRes.status      === 'fulfilled' ? diffRes.value                                           : null,
-    btcDominance:   paprikaGlobal.bitcoin_dominance_percentage ?? null,
-    mempool:        mempoolRes.status   === 'fulfilled' ? mempoolRes.value                                        : null,
-    lastBlockTs:    blocksRes.status    === 'fulfilled' && Array.isArray(blocksRes.value) && blocksRes.value.length > 0
-                      ? (blocksRes.value[0].timestamp ?? null)
-                      : null,
-    lightning:      lightningRes.status === 'fulfilled' ? lightningRes.value                                      : null,
-    athUsd:         parseFloat(paprika.ath_price) || null,
-  }
+  return mergeMarketData({
+    paprikaTicker: body(paprikaTickerRes),
+    paprikaGlobal: body(paprikaGlobalRes),
+    krakenTicker:  body(krakenTickerRes),
+    fng:           body(fngRes),
+    fees:          body(feesRes),
+    blockHeight:   body(heightRes),
+    difficulty:    body(diffRes),
+    mempool:       body(mempoolRes),
+    blocks:        body(blocksRes),
+    lightning:     body(lightningRes),
+  })
 }
 
 async function fetchChart(days) {
