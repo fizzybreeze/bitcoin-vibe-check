@@ -338,11 +338,18 @@ to do regardless.
 
 Not features. The roadmap stalls without them.
 
-**Data-source resilience.** Each source is a single point of failure. If
-CoinPaprika has a bad morning, the price, volume, market cap and dominance cards
-all go blank together. `Promise.allSettled` means the page survives, but the
-cards do not. A documented fallback per source — Kraken REST already seeds
-prices and could cover more — plus a test that asserts graceful degradation.
+**Data-source resilience. The price half shipped in v1.7.9.** `priceUsd` now
+falls back to the Kraken ticker already fetched in the same burst, the mapping
+lives in `src/lib/marketData.js` where each source failing is a unit test, and
+`e2e/resilience.spec.js` aborts a source outright to check what a visitor is
+left with. Which sources deliberately have *no* fallback — 24h volume, 24h
+change, market cap, dominance — is written down in that module with the reason.
+
+What is left is the smaller half: volume, market cap and dominance still blank
+together when CoinPaprika is down, and the honest options there are a second
+aggregator (a new dependency, against §1's keyless preference) or deriving
+market cap from price × issued supply, which the dashboard already computes
+from block height. Neither is urgent now that the price survives.
 
 **Rate-limit and abuse posture.** Required before §4.2. §3.3 shipped the first
 unauthenticated compute endpoint anyone can hammer, and its only defence is the

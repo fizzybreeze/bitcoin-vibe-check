@@ -75,6 +75,11 @@ export const paprikaGlobalFixture = {
 // Key must end with the currency suffix for findKrakenPrice() to match it
 export const krakenTickerFixture = {
   result: {
+    // Kraken's own asset codes, not the pair names you ask for: XBTUSD comes
+    // back as XXBTZUSD. Present here because the real response carries it and
+    // the app now reads it as the fallback when CoinPaprika is down — a
+    // fixture that omits it cannot exercise that path.
+    XXBTZUSD: { c: ['104500'] },
     XBTGBP: { c: ['82000'] },
     XBTEUR: { c: ['96000'] },
     XBTCAD: { c: ['142000'] },
