@@ -11,6 +11,9 @@
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- iOS ignores the manifest's icons entirely. Without this, adding the
+         site to the home screen uses a screenshot of the page. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <meta name="theme-color" content="#0a0a0f" />

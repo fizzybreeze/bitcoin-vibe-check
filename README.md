@@ -194,6 +194,7 @@ api/lib/mvrvFallback.js      which stored snapshot row the MVRV fallback serves,
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
+scripts/generate-icons.mjs   rasterises the PWA/notification icons — run by hand, not in CI
 scripts/lib/rollbackTarget.js which production deployment to roll back to, as a pure function
 supabase/migrations/         schema as code — every DB change belongs here
 e2e/                         Playwright dashboard tests (fully mocked, no network)

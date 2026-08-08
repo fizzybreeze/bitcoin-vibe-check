@@ -68,6 +68,11 @@ describe('pushNotification', () => {
     // caught it: the field is a string, so every other assertion passes.
     const PUBLIC = join(resolve(import.meta.dirname, '../..'), 'public')
     const { options } = pushNotification(JSON.stringify({ body: 'x' }))
+    // Naming an icon at all is half of it: with no icon the browser draws its
+    // own, which is the "is this really from that site" ambiguity a
+    // notification cannot afford. The repo had no raster icon to point at
+    // until it did, so this would have been a lie to assert earlier.
+    expect(options.icon).toBeTruthy()
     for (const field of ['icon', 'badge', 'image']) {
       const path = options[field]
       if (path === undefined) continue

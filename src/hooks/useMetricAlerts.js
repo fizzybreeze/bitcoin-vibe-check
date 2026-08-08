@@ -27,11 +27,11 @@ function fireNotification(rule, value) {
   const body = alertNotificationBody(rule, value)
   if (!body) return
   try {
-    // No `icon`. There is no `favicon.ico` in this repo or in the build, so
-    // the one this used to name has been a 404 since alerts shipped — and a
-    // broken icon renders as the browser's own default, not as nothing. See
-    // `pushMessage.js` for why pointing at the SVGs would not help either.
-    new Notification('Bitcoin Vibe Check', { body, tag: rule.id })
+    // Same icon the push path uses, so an in-tab alert and a pushed one are
+    // not visibly from different senders. This named a non-existent
+    // /favicon.ico until v1.7.5 and then nothing at all, because no raster
+    // icon existed to point at.
+    new Notification('Bitcoin Vibe Check', { body, icon: '/icons/icon-192.png', tag: rule.id })
   } catch {
     // Notification API unavailable or permission revoked
   }
