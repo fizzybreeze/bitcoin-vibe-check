@@ -68,6 +68,16 @@ export function mergeMarketData({
   // `||` rather than `??`: a missing price parses to NaN and a zero price is
   // not a price, and both mean "ask Kraken" — the same reasoning recorded in
   // v1.6.5 and v1.6.6, pointing the other way for once.
+  //
+  // **Deliberately not labelled on the card**, which is the opposite of what
+  // v1.6.5 decided for the MVRV fallback, so the difference is worth stating.
+  // That one served a *stored* value from a previous day, and a stale number
+  // presenting itself as live was the one way it could be worse than a blank.
+  // This one is neither stale nor foreign: `App` streams `BTC/USD` from
+  // Kraken's WebSocket into this very field seconds after load, so Kraken is
+  // already the live source of the USD price on a healthy visit — CoinPaprika
+  // only seeds it. Announcing the seed's provenance would be noise about a
+  // number that was going to come from Kraken anyway.
   const priceUsd = positive(paprika.price) || krakenPrice(krakenResult, 'USD')
 
   const priceGbp = krakenPrice(krakenResult, 'GBP')

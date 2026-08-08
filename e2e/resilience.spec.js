@@ -31,15 +31,23 @@ test.describe('Data source resilience', () => {
     await expect(page.getByText(/\$104,500/).first()).toBeVisible({ timeout: 15000 })
   })
 
-  test('still converts volume into other currencies when CoinPaprika is down', async ({ page }) => {
-    // Volume itself is CoinPaprika's and correctly goes blank. This asserts the
-    // page did not fall over on the arithmetic that divides by priceUsd.
+  test('blanks the CoinPaprika-only figures rather than breaking them', async ({ page }) => {
+    // Volume, market cap and dominance have no second source and correctly go
+    // blank. The risk is not that they are missing — it is that the arithmetic
+    // around them (every fiat volume divides by priceUsd) reaches the DOM as
+    // NaN or Infinity instead. An earlier version of this spec was named for
+    // volume surviving, which it cannot and does not: it asserted only the
+    // price, so the name claimed more than the test checked.
     await mockApis(page)
     await breakSource(page, 'https://api.coinpaprika.com/v1/tickers/btc-bitcoin')
     const errors = []
     page.on('pageerror', e => errors.push(e.message))
     await page.goto('/')
+
     await expect(page.getByText(/\$104,500/).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('body')).not.toContainText('NaN')
+    await expect(page.locator('body')).not.toContainText('Infinity')
+    await expect(page.locator('body')).not.toContainText('undefined')
     expect(errors).toEqual([])
   })
 
