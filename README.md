@@ -162,6 +162,8 @@ Every source is keyless except BGeometrics, which is proxied server-side so the 
 
 The service worker keeps one NetworkFirst cache per source above. `src/__tests__/pwaRuntimeCaching.test.js` asserts that correspondence, so adding a data source without giving it a cache — or retiring one and leaving its rule behind — fails the unit suite rather than quietly degrading the offline experience.
 
+The worker itself is `src/sw.js`, built with `vite-plugin-pwa`'s `injectManifest` strategy rather than `generateSW`. That is not a preference: `push` and `notificationclick` are events, and generateSW writes the whole worker from a config block, leaving no source file to hang a listener on.
+
 ---
 
 ## Project Structure
@@ -169,9 +171,12 @@ The service worker keeps one NetworkFirst cache per source above. `src/__tests__
 ```
 src/
   App.jsx                    the root component — state, effects and data orchestration
+  sw.js                      the service worker — precache, the caching routes, push listeners
   utils.js                   pure helpers — formatting, halving math, dominance labels
   lib/
     calculations.js          Vibe Score, ATH distance, sats per fiat, supply issued, hash trend
+    runtimeCaching.js        one NetworkFirst rule per data source, read by the service worker
+    pushMessage.js           what a push payload shows, and where clicking it is allowed to go
     ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing,
                              and the in-flight dedupe the three daily-candle callers share
     colors.js                the brand accent as hex, for the places that cannot use a class

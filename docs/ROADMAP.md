@@ -186,22 +186,29 @@ short cadence is a different cost profile from one daily snapshot; check the
 Actions minutes before committing to a frequency, and consider a Supabase edge
 function instead.
 
-**The service worker is not ready for this, and that is the hidden cost.**
-`vite.config.js` configures `VitePWA` with a `workbox: {...}` block — the
-generateSW strategy, where there is no service-worker source file to hang a
-`push` or `notificationclick` listener on. Adding one means either
-`injectManifest` with a new `src/sw.js`, or `workbox.importScripts`. Under
-`injectManifest` the exported `runtimeCaching` array moves into the SW source,
-so `pwaRuntimeCaching.test.js` gets reworked alongside it. Budget for this
-explicitly; it is not a line of config.
+**The service worker was not ready for this, and that cost is now paid.**
+Shipped in v1.7.5: `VitePWA` is on `injectManifest` with a real `src/sw.js`,
+`runtimeCaching` has moved to `src/lib/runtimeCaching.js`, and the `push` and
+`notificationclick` listeners exist with nothing sending to them. The warning
+was accurate — the `workbox` block is *ignored* rather than rejected under
+injectManifest, so leaving the rules there would have cached nothing while
+looking configured. Nothing below needs a service-worker change any more.
 
 #### 4.1a — subscription plumbing, no sender
 
-SW strategy switch, the `push_subscriptions` migration and its RLS, the
-subscribe/unsubscribe UI, and a `push` handler that renders a notification.
-Nothing evaluates anything yet — verify by pushing to your own endpoint by hand.
-Worth isolating because this is the diff the security review is *about*: can an
-anonymous client reach a row that is not its own, and does the PWA still install.
+**Split. The SW strategy switch shipped in v1.7.5; the rest is still ahead.**
+That half was isolated because it is verifiable on its own — the build reports
+the same precache manifest before and after — and because reviewing an
+anonymous-write RLS policy alongside a workbox rewrite asks two questions with
+nothing in common.
+
+What is left: the `push_subscriptions` migration and its RLS, VAPID keys as
+env vars, and the subscribe/unsubscribe UI in the alerts panel. Nothing
+evaluates anything yet — verify by pushing to your own endpoint by hand. This
+is the diff the security review is *about*: can an anonymous client reach a row
+that is not its own. Note it cannot demonstrate anything on a Vercel preview
+until `VITE_VAPID_PUBLIC_KEY` is set and the migration is applied, so plan the
+verification before the code.
 
 #### 4.1b — the evaluator
 

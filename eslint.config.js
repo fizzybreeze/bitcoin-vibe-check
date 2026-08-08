@@ -24,4 +24,12 @@ export default defineConfig([
     files: ['api/**/*.js', 'scripts/**/*.js', 'e2e/**/*.js', '*.config.js'],
     languageOptions: { globals: globals.node },
   },
+  // The service worker runs in neither. `self` there is a
+  // ServiceWorkerGlobalScope, not a Window — `clients`, `registration` and
+  // `skipWaiting` exist and `document` does not, so the browser globals would
+  // be wrong in both directions.
+  {
+    files: ['src/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
 ])
