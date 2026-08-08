@@ -16,19 +16,14 @@ const DEFAULT_TITLE = 'Bitcoin Vibe Check'
 const DEFAULT_BODY = 'A metric you are watching has crossed its alert level.'
 const DEFAULT_PATH = '/'
 
-// No `icon` or `badge`, deliberately. The first draft of this copied
-// `icon: '/favicon.ico'` from `useMetricAlerts.js` — and there is no
-// `favicon.ico` in this repo or in the build output, so that path has been a
-// 404 for as long as alerts have existed. A broken icon does not render as
-// nothing; it renders as the browser's own default, which is exactly the "is
-// this really from that site" ambiguity a notification cannot afford.
-//
-// Pointing at what does exist would not help: `public/` holds only SVGs, and
-// Chrome does not accept SVG for a notification icon. Omitting the field gets
-// the same default without the dead reference, and `pushMessage.test.js`
-// asserts no asset is named that is not on disk. A real 192×192 PNG is worth
-// adding — it would serve the manifest and the iOS install prompt too — but
-// that is an asset change, not this one.
+// v1.7.5 removed a dead `icon: '/favicon.ico'` from here and left the field
+// off entirely, because the only images in `public/` were SVGs and Chrome does
+// not accept SVG for a notification icon. That PNG now exists, so the
+// notification carries the site's own mark rather than the browser's default —
+// which is the whole "is this really from that site" question a notification
+// has to answer at a glance. `pushMessage.test.js` asserts the file is
+// actually on disk, which is what caught the dead path in the first place.
+const ICON = '/icons/icon-192.png'
 
 /**
  * The first candidate that is a non-blank string, trimmed.
@@ -92,6 +87,10 @@ export function pushNotification(raw) {
     title,
     options: {
       body,
+      icon: ICON,
+      // Deliberately no `badge`: Android wants a small monochrome silhouette
+      // there and silhouettes a full-colour icon into a solid blob. Omitting
+      // it gets the browser's own badge, which is legible.
       // Read back by the `notificationclick` handler — `event.notification`
       // carries `data` across the gap between the two events, and nothing else
       // does.
