@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { pushNotification, notificationTargetUrl, clientToFocus } from '../lib/pushMessage.js'
 
 // These three functions are the whole of what `src/sw.js`'s push listeners
@@ -55,6 +57,22 @@ describe('pushNotification', () => {
     // minute collapse into one notification, losing the second outright.
     const { options } = pushNotification(JSON.stringify({ body: 'x' }))
     expect('tag' in options).toBe(false)
+  })
+
+  it('names no asset that is not actually in public/', () => {
+    // The first draft set `icon` and `badge` to '/favicon.ico', copied from
+    // the in-tab notification path — and no such file exists in this repo or
+    // in the build output. A 404 icon does not render as nothing; it renders
+    // as the browser's own default, which is precisely the "is this from that
+    // site" ambiguity a notification cannot afford. Nothing else would have
+    // caught it: the field is a string, so every other assertion passes.
+    const PUBLIC = join(resolve(import.meta.dirname, '../..'), 'public')
+    const { options } = pushNotification(JSON.stringify({ body: 'x' }))
+    for (const field of ['icon', 'badge', 'image']) {
+      const path = options[field]
+      if (path === undefined) continue
+      expect(existsSync(join(PUBLIC, path)), `${field} → ${path}`).toBe(true)
+    }
   })
 
   it('survives a JSON payload that is not an object', () => {

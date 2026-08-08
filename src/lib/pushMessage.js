@@ -15,7 +15,20 @@
 const DEFAULT_TITLE = 'Bitcoin Vibe Check'
 const DEFAULT_BODY = 'A metric you are watching has crossed its alert level.'
 const DEFAULT_PATH = '/'
-const ICON = '/favicon.ico'
+
+// No `icon` or `badge`, deliberately. The first draft of this copied
+// `icon: '/favicon.ico'` from `useMetricAlerts.js` — and there is no
+// `favicon.ico` in this repo or in the build output, so that path has been a
+// 404 for as long as alerts have existed. A broken icon does not render as
+// nothing; it renders as the browser's own default, which is exactly the "is
+// this really from that site" ambiguity a notification cannot afford.
+//
+// Pointing at what does exist would not help: `public/` holds only SVGs, and
+// Chrome does not accept SVG for a notification icon. Omitting the field gets
+// the same default without the dead reference, and `pushMessage.test.js`
+// asserts no asset is named that is not on disk. A real 192×192 PNG is worth
+// adding — it would serve the manifest and the iOS install prompt too — but
+// that is an asset change, not this one.
 
 /**
  * The first candidate that is a non-blank string, trimmed.
@@ -79,8 +92,6 @@ export function pushNotification(raw) {
     title,
     options: {
       body,
-      icon: ICON,
-      badge: ICON,
       // Read back by the `notificationclick` handler — `event.notification`
       // carries `data` across the gap between the two events, and nothing else
       // does.
