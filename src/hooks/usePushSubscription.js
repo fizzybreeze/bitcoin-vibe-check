@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase.js'
+import { supabase, pushRulesClientFor } from '../lib/supabase.js'
 import { readVapidPublicKey, urlBase64ToUint8Array } from '../lib/vapid.js'
 import { isSubscriptionStored, subscriptionRow } from '../lib/pushSubscription.js'
+import {
+  hashPushSecret, readOrCreatePushSecret, readPushSecret, syncableRules,
+} from '../lib/pushRules.js'
 
 // Push status, as one value rather than a pile of booleans — the panel has to
 // render exactly one of these and a boolean soup makes "supported but
@@ -118,8 +121,14 @@ export function usePushSubscription() {
           applicationServerKey: urlBase64ToUint8Array(vapidKey),
         }))
 
+      // The secret is generated before the row exists, because its hash is
+      // part of the row: without it the subscription is stored but no browser
+      // can ever write rules to it, and the RLS policy has nothing to match.
+      const secret = readOrCreatePushSecret()
+      const secretHash = secret ? await hashPushSecret(secret) : ''
+
       const row = subscriptionRow(subscription)
-      if (!row) {
+      if (!row || !secretHash) {
         // A subscription we cannot describe is one the sender could never
         // encrypt for, so it is not a subscription worth keeping — drop it
         // rather than leave the browser holding something that will never
@@ -128,7 +137,9 @@ export function usePushSubscription() {
         return false
       }
 
-      const { error } = await supabase.from('push_subscriptions').insert(row)
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .insert({ ...row, secret_hash: secretHash })
       // No `.select()`. There is no SELECT policy on this table, so asking
       // PostgREST to return the inserted row would turn every successful
       // subscribe into a 403.
@@ -170,5 +181,39 @@ export function usePushSubscription() {
     }
   }, [])
 
-  return { pushStatus: status, pushBusy: busy, subscribePush: subscribe, unsubscribePush: unsubscribe }
+  /**
+   * Replace this subscription's stored rules.
+   *
+   * The update is deliberately **unfiltered**, which looks alarming and is the
+   * point of the design: `.eq('endpoint', …)` would need SELECT on that column,
+   * which anon does not have and must not get — a readable endpoint column is
+   * an enumeration oracle. Instead RLS scopes the statement, matching only the
+   * row whose `secret_hash` equals the hash of the header this client carries.
+   * Measured against the real table: an unfiltered update presenting one
+   * browser's secret affected 1 row, not 2.
+   *
+   * No `.select()`, for the same reason as the insert — there is no SELECT
+   * policy, so asking for the changed row back would 403 a successful write.
+   */
+  const syncRules = useCallback(async (alerts) => {
+    if (status !== PUSH_ON) return false
+    const client = pushRulesClientFor(readPushSecret())
+    if (!client) return false
+    try {
+      const { error } = await client
+        .from('push_subscriptions')
+        .update({ rules: syncableRules(alerts) })
+      return !error
+    } catch {
+      return false
+    }
+  }, [status])
+
+  return {
+    pushStatus: status,
+    pushBusy: busy,
+    subscribePush: subscribe,
+    unsubscribePush: unsubscribe,
+    syncPushRules: syncRules,
+  }
 }
