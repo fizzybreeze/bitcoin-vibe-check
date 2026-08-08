@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { runtimeCaching } from '../../vite.config.js'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { runtimeCaching } from '../lib/runtimeCaching.js'
 
 // The service worker's runtime caching drifted once already: it carried a rule
 // for api.coingecko.com long after CoinGecko was replaced, while the two hosts
@@ -59,6 +61,19 @@ describe('PWA runtime caching', () => {
     for (const rule of runtimeCaching) {
       expect(rule.options.cacheableResponse.statuses).toEqual([200])
     }
+  })
+
+  it('is actually registered by the service worker', () => {
+    // These rules used to be handed to VitePWA's `workbox` block, which read
+    // them. Under injectManifest nothing reads them unless `src/sw.js` does —
+    // so without this, the array could keep passing every assertion above
+    // while caching nothing at all.
+    const source = readFileSync(
+      join(resolve(import.meta.dirname, '../..'), 'src/sw.js'),
+      'utf8'
+    )
+    expect(source).toMatch(/from '\.\/lib\/runtimeCaching\.js'/)
+    expect(source).toMatch(/registerRoute\(/)
   })
 
   it('gives every rule a distinct cache name and a bounded expiration', () => {
