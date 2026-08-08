@@ -7,11 +7,31 @@ import { isSubscriptionStored, subscriptionRow } from '../lib/pushSubscription.j
 // render exactly one of these and a boolean soup makes "supported but
 // unconfigured" and "configured but blocked" indistinguishable at the call
 // site.
+export const PUSH_LOADING = 'loading'            // still reading the real state
 export const PUSH_UNSUPPORTED = 'unsupported'   // no service worker / Push API
 export const PUSH_UNCONFIGURED = 'unconfigured' // no VAPID key or no Supabase
 export const PUSH_BLOCKED = 'blocked'           // notifications denied
 export const PUSH_OFF = 'off'
 export const PUSH_ON = 'on'
+
+// `navigator.serviceWorker.ready` never settles when no worker is registered.
+// Measured in Chromium rather than assumed: on a page with no registration it
+// was still pending after two seconds, and it never rejects — there is no
+// failure path to catch, only a wait that does not end. Awaiting it unguarded
+// would pin `busy` on for the life of the page and leave the toggle disabled
+// with no error, which is the v1.6.10 trap in a different API.
+//
+// Five seconds: the worker is registered on `window.load`, so a healthy page
+// resolves this in milliseconds. Anything approaching the deadline means the
+// registration failed, which is a state to render, not to keep waiting on.
+const SW_READY_TIMEOUT_MS = 5000
+
+function activeRegistration() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise(resolve => { setTimeout(() => resolve(null), SW_READY_TIMEOUT_MS) }),
+  ])
+}
 
 function browserSupportsPush() {
   return (
@@ -37,7 +57,10 @@ function browserSupportsPush() {
  * has nothing left to prompt for.
  */
 export function usePushSubscription() {
-  const [status, setStatus] = useState(PUSH_UNSUPPORTED)
+  // Starts at LOADING, not UNSUPPORTED. The real state cannot be known until
+  // the registration resolves, and opening on "this browser does not support
+  // push" would flash a claim that is usually false.
+  const [status, setStatus] = useState(PUSH_LOADING)
   const [busy, setBusy] = useState(false)
 
   const vapidKey = readVapidPublicKey(import.meta.env)
@@ -58,7 +81,12 @@ export function usePushSubscription() {
       if (!configured) return setStatus(PUSH_UNCONFIGURED)
       if (Notification.permission === 'denied') return setStatus(PUSH_BLOCKED)
       try {
-        const registration = await navigator.serviceWorker.ready
+        const registration = await activeRegistration()
+        // No worker means no push, whatever the browser is capable of.
+        if (!registration) {
+          if (!cancelled) setStatus(PUSH_UNSUPPORTED)
+          return
+        }
         const existing = await registration.pushManager.getSubscription()
         if (!cancelled) setStatus(existing ? PUSH_ON : PUSH_OFF)
       } catch {
@@ -79,7 +107,8 @@ export function usePushSubscription() {
 
     setBusy(true)
     try {
-      const registration = await navigator.serviceWorker.ready
+      const registration = await activeRegistration()
+      if (!registration) return false
       const subscription =
         (await registration.pushManager.getSubscription()) ??
         (await registration.pushManager.subscribe({
@@ -90,7 +119,14 @@ export function usePushSubscription() {
         }))
 
       const row = subscriptionRow(subscription)
-      if (!row) return false
+      if (!row) {
+        // A subscription we cannot describe is one the sender could never
+        // encrypt for, so it is not a subscription worth keeping — drop it
+        // rather than leave the browser holding something that will never
+        // deliver. Same reasoning as the insert-failed path below.
+        await subscription.unsubscribe().catch(() => {})
+        return false
+      }
 
       const { error } = await supabase.from('push_subscriptions').insert(row)
       // No `.select()`. There is no SELECT policy on this table, so asking
@@ -116,8 +152,8 @@ export function usePushSubscription() {
     if (!browserSupportsPush()) return false
     setBusy(true)
     try {
-      const registration = await navigator.serviceWorker.ready
-      const existing = await registration.pushManager.getSubscription()
+      const registration = await activeRegistration()
+      const existing = registration ? await registration.pushManager.getSubscription() : null
       // Browser-side only, and that is the design rather than a shortcut. The
       // table has no DELETE policy — PostgREST honours an unfiltered DELETE,
       // so a policy permissive enough to erase your own row is permissive

@@ -1,20 +1,26 @@
 import { useState } from 'react'
 import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/alertRules.js'
 import {
-  PUSH_BLOCKED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED, PUSH_UNSUPPORTED,
+  PUSH_BLOCKED, PUSH_LOADING, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED, PUSH_UNSUPPORTED,
 } from '../hooks/usePushSubscription.js'
 
 // What the footer says, per push state. Kept as data next to the component
 // rather than as a chain of ternaries in the JSX, because the honest sentence
 // differs in every state and the wrong one is worse than none: telling someone
 // their alerts survive a closed tab when they do not is the single most
-// misleading thing this panel could say.
+// misleading thing this panel could say. Exactly one state says the tab may be
+// closed, and it is the one where that is true.
+//
+// `unsupported` does not blame the browser. It is also what a service worker
+// that failed to register looks like, and "your browser can't do this" is a
+// dead end where "not available here" is merely accurate.
 const PUSH_COPY = {
   [PUSH_ON]:           'Alerts are pushed to this device, even with the tab closed.',
   [PUSH_OFF]:          'Alerts only fire while this tab is open. Turn on push to get them with the tab closed.',
-  [PUSH_BLOCKED]:      'Notifications are blocked in your browser, so alerts cannot be pushed. Enable them in browser settings.',
-  [PUSH_UNSUPPORTED]:  'Alerts only fire while this tab is open — this browser does not support push notifications.',
+  [PUSH_BLOCKED]:      'Alerts only fire while this tab is open, and push needs notification permission — currently blocked.',
+  [PUSH_UNSUPPORTED]:  'Alerts only fire while this tab is open — push notifications are not available here.',
   [PUSH_UNCONFIGURED]: 'Alerts only fire while this tab is open — they are not push notifications.',
+  [PUSH_LOADING]:      'Alerts only fire while this tab is open — they are not push notifications.',
 }
 
 export default function PriceAlertsPanel({

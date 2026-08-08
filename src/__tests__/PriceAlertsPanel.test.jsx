@@ -303,10 +303,18 @@ describe('PriceAlertsPanel push toggle', () => {
     expect(onEnablePush).toHaveBeenCalledTimes(1)
   })
 
+  it('does not blame the browser for a worker that failed to register', () => {
+    // `unsupported` is also what a failed service-worker registration looks
+    // like, which is not the browser's fault and not something the visitor can
+    // act on by switching browsers.
+    render(<PriceAlertsPanel {...baseProps} pushStatus="unsupported" />)
+    expect(screen.queryByText(/does not support/i)).not.toBeInTheDocument()
+  })
+
   it('does not offer a toggle that cannot work', () => {
     // A control that reports success and stores nothing is worse than no
     // control. Each of these states has a sentence instead.
-    for (const status of ['unsupported', 'unconfigured', 'blocked']) {
+    for (const status of ['unsupported', 'unconfigured', 'blocked', 'loading']) {
       const { unmount } = render(<PriceAlertsPanel {...baseProps} pushStatus={status} />)
       expect(toggle()).not.toBeInTheDocument()
       unmount()
@@ -316,9 +324,12 @@ describe('PriceAlertsPanel push toggle', () => {
   it('never claims a closed tab is covered when it is not', () => {
     // The single most misleading thing this panel could say. Every state that
     // is not PUSH_ON has to keep the old caveat.
-    for (const status of ['off', 'unsupported', 'unconfigured', 'blocked']) {
+    // Every state but "on" says it, in the same words, including the two that
+    // mean "we could not find out" — loading and a worker that never
+    // registered. A caveat that is only usually present is not a caveat.
+    for (const status of ['off', 'unsupported', 'unconfigured', 'blocked', 'loading']) {
       const { unmount } = render(<PriceAlertsPanel {...baseProps} pushStatus={status} />)
-      expect(screen.getByText(/only fire while this tab is open|blocked in your browser/i)).toBeInTheDocument()
+      expect(screen.getByText(/only fire while this tab is open/i)).toBeInTheDocument()
       expect(screen.queryByText(/even with the tab closed/i)).not.toBeInTheDocument()
       unmount()
     }
