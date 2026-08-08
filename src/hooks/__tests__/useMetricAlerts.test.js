@@ -144,6 +144,48 @@ describe('metric crossing', () => {
     expect(Notification.mock.calls.length).toBe(callCountAfterFirst)
   })
 
+  // The metrics-object shape is what makes this a row in the registry rather
+  // than a second argument and a second branch. `metricsKey` is derived from
+  // `ALERT_METRIC_IDS`, so a fee reading has to wake the effect on its own —
+  // deleting `fee` from the key would leave this alert armed and silent.
+  it('triggers a fee alert on a fee reading, with the price unchanged', () => {
+    const { result, rerender } = renderHook(
+      ({ metrics }) => useMetricAlerts(metrics),
+      { initialProps: { metrics: { currency: 'usd', price: 50000, fee: 12 } } }
+    )
+    act(() => result.current.addAlert(5, 'fee'))
+    expect(result.current.alerts[0].direction).toBe('below')
+    expect(result.current.alerts[0].triggered).toBe(false)
+
+    rerender({ metrics: { currency: 'usd', price: 50000, fee: 4 } })
+    expect(result.current.alerts[0].triggered).toBe(true)
+    expect(Notification.mock.calls[0][1].body).toContain('Network fee')
+  })
+
+  it('triggers a Fear & Greed alert at a reading of 0', () => {
+    const { result, rerender } = renderHook(
+      ({ metrics }) => useMetricAlerts(metrics),
+      { initialProps: { metrics: { currency: 'usd', price: 50000, fng: 45 } } }
+    )
+    act(() => result.current.addAlert(10, 'fng'))
+    rerender({ metrics: { currency: 'usd', price: 50000, fng: 0 } })
+    expect(result.current.alerts[0].triggered).toBe(true)
+  })
+
+  // An un-scoped rule must survive the currency switch that correctly parks a
+  // price rule. Scoping a fee would have invented a way for it to stop matching.
+  it('still fires a Mayer alert after the displayed currency changes', () => {
+    const { result, rerender } = renderHook(
+      ({ metrics }) => useMetricAlerts(metrics),
+      { initialProps: { metrics: { currency: 'usd', price: 50000, mayer: 1.8 } } }
+    )
+    act(() => result.current.addAlert(2.4, 'mayer'))
+    expect(result.current.alerts[0].currency).toBeUndefined()
+
+    rerender({ metrics: { currency: 'gbp', price: 40000, mayer: 2.5 } })
+    expect(result.current.alerts[0].triggered).toBe(true)
+  })
+
   it('does not trigger a GBP alert when the current currency is USD', () => {
     const { result, rerender } = renderHook(
       ({ metrics }) => useMetricAlerts(metrics),

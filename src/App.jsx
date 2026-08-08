@@ -621,6 +621,17 @@ export default function App() {
   const athPct = computeAthDistance(priceUsd, athUsd)
   const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
 
+  const currencySym = CURRENCY_META[currency]?.sym ?? '$'
+
+  const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
+
+  // Mayer must be computed in USD — ma200 comes from Kraken's XBTUSD candles,
+  // so pairing it with a converted price would be nonsense. Which is also why
+  // the alert registry leaves it un-scoped: there is only ever one of it.
+  const mayerMultiple = calcMayerMultiple(priceUsd, ma200)
+
+  // Every reading a rule may be written against. All four are values this
+  // component already holds for the cards below — an alert costs no fetch.
   const {
     alerts,
     addAlert,
@@ -628,17 +639,18 @@ export default function App() {
     clearTriggered,
     notificationPermission,
     requestPermission,
-  } = useMetricAlerts({ currency, price })
+  } = useMetricAlerts({
+    currency,
+    price,
+    fee:   fees?.fastestFee ?? null,
+    fng:   fngScore,
+    mayer: mayerMultiple,
+  })
 
-  const currencySym = CURRENCY_META[currency]?.sym ?? '$'
-
-  const fngScore   = fng?.value != null ? parseInt(fng.value, 10) : null
-
-  // Vibe Score. Mayer must be computed in USD — ma200 comes from Kraken's
-  // XBTUSD candles, so pairing it with a converted price would be nonsense.
+  // Vibe Score.
   const vibeInputs = {
     fngScore,
-    mayerMultiple:       calcMayerMultiple(priceUsd, ma200),
+    mayerMultiple,
     mvrv:                chainData?.mvrv?.value ?? null,
     priceChange30dPct:   computePriceChange30d(ohlcData200),
     hashRateTrendPct:    hashRateTrend,

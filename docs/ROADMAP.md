@@ -148,42 +148,24 @@ quarter in it.
 
 ### 3.4 Alerts worth keeping
 
-Two problems, one theme: alerts exist but do not yet do the job.
-
-**Fee-window alerts.** "Tell me when fees drop below 5 sat/vB" is plausibly the
-most practically useful alert this dashboard could offer. Price alerts are a
-commodity; a nudge that saves someone real money when they move coins is a
-reason to keep the PWA installed. That surgery is done as of v1.7.1 —
-`useMetricAlerts` takes a metrics object and every decision lives in
-`src/lib/alertRules.js` — so what remains is fees, Fear & Greed extremes and
-Mayer crossings in the registry and in the panel.
+**Shipped: 3.4a in v1.7.1 (the rule model), 3.4b in v1.7.2 (fees, Fear & Greed
+and Mayer in the panel).** See the version-history rows. What is left of §3.4 is
+the half it could never have fixed on its own:
 
 **They only fire when the tab is open.** `fireNotification` calls
 `new Notification(...)` from inside the running page, so an alert set at 2am
 fires only if the browser tab survived until 2am. Fixing that properly is Web
-Push, which is §4.1 — but it is worth being clear that until then, alerts are a
-convenience for open tabs rather than a background service, and the copy should
-not overpromise.
+Push, which is §4.1. Until then the panel says so outright — "Alerts only fire
+while this tab is open — they are not push notifications" — which is the copy
+half of 3.4b and the most this item can honestly do without §4.1.
 
-**3.4a — the rule model. Shipped in v1.7.1; see the version-history row.**
-`src/lib/alertRules.js` holds the metric registry and the crossing predicate as
-pure functions, and `useMetricAlerts` migrates rules stored under the old
-price-only shape on read. Nothing new is in the panel yet — that is 3.4b.
-
-#### 3.4b — the new metrics in the panel
-
-Fees, Fear & Greed extremes, Mayer crossings, plus the copy fix above.
-Adding each is a row in `ALERT_METRICS` plus the field it reads on the metrics
-object; the panel is the part that has to be designed.
-`PriceAlertsPanel.jsx` is already 153 lines and this is the change that grows
-it, which is why it is worth its own diff: 3.4a's review question was "is the
-rule model right", 3.4b's is "does this work on a phone". Both are worth asking;
-neither is served by asking them in one PR.
-
-> **These three metrics are all keyless** — mempool.space, alternative.me, and
-> Kraken OHLC plus a price for the Mayer Multiple. Nothing in §3.4 touches the
-> BGeometrics quota or needs §3.2. MVRV is the one metric that would, which is
-> the argument for leaving it out of the first cut.
+> A separate, **pre-existing** defect was found while verifying 3.4b and is
+> deliberately not fixed there: `handleSubmit` awaits `onRequestPermission()`
+> before calling `onAdd`, so several submits fired inside the same permission
+> round-trip collapse into one — four rapid Sets store one alert. Reproduced
+> unchanged on the v1.7.1 panel, so it is not a regression, but 3.4b makes it
+> easier to reach by inviting several alerts across metrics in one sitting.
+> Worth its own diff and its own test.
 
 ---
 
@@ -246,9 +228,11 @@ format*, and §3.4a is the change that invented one; building §4.1 first would
 have meant inventing a provisional format and then rewriting it.
 
 The overlap that tempts you to merge them is the crossing predicate, and 3.4a's
-extraction is the answer to it — `hasAlertCrossed` is what §4.1b imports.
-Three PRs left, in order: **3.4b → 4.1a → 4.1b**. 4.1a and
-4.1b merge less cleanly than 3.4a and 3.4b would have. Nothing should merge across the §3/§4 boundary — the
+extraction is the answer to it — `hasAlertCrossed` is what §4.1b imports, and as
+of 3.4b it arbitrates four metrics rather than one, so the evaluator inherits
+fees and Fear & Greed without a second format to invent.
+Two PRs left, in order: **4.1a → 4.1b**. They merge less
+cleanly than 3.4a and 3.4b would have. Nothing should merge across the §3/§4 boundary — the
 review questions on either side have almost nothing in common, and the whole
 point of the phone workflow is that a diff can be judged on its own terms.
 

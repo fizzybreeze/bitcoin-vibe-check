@@ -45,6 +45,57 @@ describe('ALERT_METRICS', () => {
       expect(typeof meta.format).toBe('function')
     }
   })
+
+  // The panel drives its placeholder, unit slot, example line and validation
+  // message off these. A row that omits one renders a blank placeholder or an
+  // empty error, and nothing else in the suite would notice.
+  it('gives every metric the copy the panel renders', () => {
+    for (const id of ALERT_METRIC_IDS) {
+      const meta = ALERT_METRICS[id]
+      expect(meta.shortName).toBeTruthy()
+      expect(meta.placeholder).toBeTruthy()
+      expect(meta.invalidMessage).toBeTruthy()
+      expect(typeof meta.colorDirection).toBe('boolean')
+      expect(meta.isValidValue(meta.exampleValue)).toBe(true)
+    }
+  })
+
+  it('carries the three §3.4b metrics, none of them currency-scoped', () => {
+    for (const id of ['fee', 'fng', 'mayer']) {
+      expect(ALERT_METRIC_IDS).toContain(id)
+      expect(ALERT_METRICS[id].currencyScoped).toBe(false)
+    }
+  })
+
+  // The reason `isValidValue` is per-metric rather than one shared `v > 0`.
+  it('accepts 0 and 100 for Fear & Greed and nothing outside them', () => {
+    const { isValidValue } = ALERT_METRICS.fng
+    expect(isValidValue(0)).toBe(true)
+    expect(isValidValue(100)).toBe(true)
+    expect(isValidValue(-1)).toBe(false)
+    expect(isValidValue(101)).toBe(false)
+  })
+
+  it('rejects a non-positive fee or Mayer Multiple', () => {
+    expect(ALERT_METRICS.fee.isValidValue(0)).toBe(false)
+    expect(ALERT_METRICS.mayer.isValidValue(0)).toBe(false)
+  })
+
+  it('formats each metric in its own units', () => {
+    expect(ALERT_METRICS.fee.format(5)).toBe('5 sat/vB')
+    expect(ALERT_METRICS.fee.format(12.5)).toBe('12.5 sat/vB')
+    expect(ALERT_METRICS.fng.format(20)).toBe('20')
+    expect(ALERT_METRICS.mayer.format(2.4)).toBe('2.40')
+  })
+
+  // Price is the one metric where up-is-green is a market convention. A fee
+  // alert tinted the same way styles the good news the visitor asked for as bad.
+  it('tints the direction arrow for price only', () => {
+    expect(ALERT_METRICS.price.colorDirection).toBe(true)
+    for (const id of ['fee', 'fng', 'mayer']) {
+      expect(ALERT_METRICS[id].colorDirection).toBe(false)
+    }
+  })
 })
 
 // ─── readAlertMetric ─────────────────────────────────────────────────────────
@@ -265,5 +316,76 @@ describe('alertNotificationBody', () => {
 
   it('returns null for an unknown metric', () => {
     expect(alertNotificationBody({ ...rule, metric: 'hashrate' }, 1)).toBeNull()
+  })
+
+  it('names the metric it is actually about', () => {
+    const fee = { metric: 'fee', threshold: 5, direction: 'below', label: '5 sat/vB' }
+    expect(alertNotificationBody(fee, 4)).toBe(
+      'Network fee has crossed your lower alert at 5 sat/vB. Now 4 sat/vB.'
+    )
+  })
+})
+
+// ─── the §3.4b metrics end to end ────────────────────────────────────────────
+//
+// The registry rows above are the whole change, so these assert that nothing
+// below them needed one: reading, crossing, creating, storing and re-reading a
+// fee, index or ratio rule all go through the same code price does.
+
+describe('the §3.4b metrics', () => {
+  const live = { currency: 'usd', price: 50000, fee: 12, fng: 45, mayer: 1.8 }
+
+  it('reads each new metric off the metrics object', () => {
+    expect(readAlertMetric({ metric: 'fee' }, live)).toBe(12)
+    expect(readAlertMetric({ metric: 'fng' }, live)).toBe(45)
+    expect(readAlertMetric({ metric: 'mayer' }, live)).toBe(1.8)
+  })
+
+  // The point of `currencyScoped: false`. A fee is a fee whatever the header
+  // happens to be showing, and scoping it would invent a way to stop matching.
+  it('reads an un-scoped metric whatever currency is on screen', () => {
+    expect(readAlertMetric({ metric: 'fee' }, { ...live, currency: 'gbp' })).toBe(12)
+    expect(readAlertMetric({ metric: 'fee' }, { fee: 12 })).toBe(12)
+  })
+
+  it('fires a fee rule when fees drop to the level asked for', () => {
+    const rule = { metric: 'fee', threshold: 5, direction: 'below' }
+    expect(hasAlertCrossed(rule, { ...live, fee: 6 })).toBe(false)
+    expect(hasAlertCrossed(rule, { ...live, fee: 5 })).toBe(true)
+  })
+
+  // Extreme fear is exactly the reading someone sets this alert for, and a
+  // shared `v > 0` predicate would have refused to read it.
+  it('fires a Fear & Greed rule at a reading of 0', () => {
+    expect(hasAlertCrossed({ metric: 'fng', threshold: 10, direction: 'below' }, { ...live, fng: 0 })).toBe(true)
+  })
+
+  it('never fires a Fear & Greed rule on an impossible reading', () => {
+    expect(hasAlertCrossed({ metric: 'fng', threshold: 90, direction: 'above' }, { ...live, fng: 140 })).toBe(false)
+  })
+
+  it('creates an un-scoped rule with no currency on it at all', () => {
+    const rule = createAlertRule(5, { metric: 'fee', metrics: live })
+    expect(rule.metric).toBe('fee')
+    expect(rule.threshold).toBe(5)
+    expect(rule.currency).toBeUndefined()
+    expect(rule.direction).toBe('below')   // current fee is 12
+    expect(rule.label).toBe('5 sat/vB')
+  })
+
+  it('creates an un-scoped rule even when no currency is known', () => {
+    expect(createAlertRule(2.4, { metric: 'mayer', metrics: { mayer: 1.8 } })).not.toBeNull()
+  })
+
+  it('refuses a threshold the new metric calls impossible', () => {
+    expect(createAlertRule(101, { metric: 'fng', metrics: live })).toBeNull()
+    expect(createAlertRule(0, { metric: 'fee', metrics: live })).toBeNull()
+    expect(createAlertRule(0, { metric: 'fng', metrics: live })).not.toBeNull()
+  })
+
+  it('survives a round trip through storage', () => {
+    const rule = createAlertRule(20, { metric: 'fng', metrics: live })
+    const [back] = migrateStoredRules(JSON.parse(JSON.stringify([rule])))
+    expect(back).toEqual(rule)
   })
 })
