@@ -7,7 +7,8 @@ import ShareModal from './components/ShareModal.jsx'
 import PriceAlertsButton from './components/PriceAlertsButton.jsx'
 import PriceAlertsPanel from './components/PriceAlertsPanel.jsx'
 import { useMetricAlerts } from './hooks/useMetricAlerts.js'
-import { usePushSubscription } from './hooks/usePushSubscription.js'
+import { usePushSubscription, PUSH_ON } from './hooks/usePushSubscription.js'
+import { syncableRules } from './lib/pushRules.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import { createChartCache } from './lib/chartCache.js'
@@ -648,7 +649,24 @@ export default function App() {
     mayer: mayerMultiple,
   })
 
-  const { pushStatus, pushBusy, subscribePush, unsubscribePush } = usePushSubscription()
+  const { pushStatus, pushBusy, subscribePush, unsubscribePush, syncPushRules } =
+    usePushSubscription()
+
+  // Keep the stored rules in step with the panel while push is on. Keyed by the
+  // rules' own content rather than by `alerts` identity, so this fires when a
+  // rule is added, removed or triggered — not on every render. The hook itself
+  // no-ops unless push is on, so switching it on is what performs the first
+  // sync, and switching it off leaves the last set in place until the sender
+  // reaps the endpoint.
+  const syncedRulesKey = JSON.stringify(syncableRules(alerts))
+  useEffect(() => {
+    if (pushStatus !== PUSH_ON) return
+    syncPushRules(alerts)
+  // `alerts` is intentionally omitted: the key above already changes whenever
+  // anything the server cares about changes, and depending on the array would
+  // re-sync on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncedRulesKey, pushStatus, syncPushRules])
 
   // Permission is requested here, through the one deduped request the alerts
   // hook owns, and only then handed to `subscribePush`. Chromium leaves a

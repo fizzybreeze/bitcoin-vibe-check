@@ -15,8 +15,8 @@ import {
 // that failed to register looks like, and "your browser can't do this" is a
 // dead end where "not available here" is merely accurate.
 const PUSH_COPY = {
-  [PUSH_ON]:           'Alerts are pushed to this device, even with the tab closed.',
-  [PUSH_OFF]:          'Alerts only fire while this tab is open. Turn on push to get them with the tab closed.',
+  [PUSH_ON]:           'Alerts are pushed to this device, even with the tab closed. Your alert list is stored on the server so it can be checked while you are away.',
+  [PUSH_OFF]:          'Alerts only fire while this tab is open. Turning on push stores your alert list on the server so it can be checked with the tab closed.',
   [PUSH_BLOCKED]:      'Alerts only fire while this tab is open, and push needs notification permission — currently blocked.',
   [PUSH_UNSUPPORTED]:  'Alerts only fire while this tab is open — push notifications are not available here.',
   [PUSH_UNCONFIGURED]: 'Alerts only fire while this tab is open — they are not push notifications.',

@@ -211,6 +211,19 @@ the panel reports push as unavailable, which is the correct thing for it to say.
 
 #### 4.1b — the evaluator
 
+**Split. The rules-sync half shipped in v1.7.8; the sender is what is left.**
+That half went first because the job had nothing to read — rules lived only in
+`localStorage` — and because it is verifiable today, against a real table, while
+the sender cannot be until VAPID keys exist.
+
+**Two findings that change the sender's shape.** GitHub Actions cron is *not*
+usable here: `snapshot.yml` asks for 06:17 UTC and its scheduled runs have
+started at 09:10, nearly three hours late. Fine for a daily row, disqualifying
+for a price alert. Vercel Hobby crons are once-daily. So this wants **pg_cron
+calling a Supabase edge function** — both extensions are already installed on
+the project. Cadence is still open; every 5 minutes costs ~8.6k edge invocations
+a month against a 500k free tier, and the upstreams are keyless.
+
 The scheduled job, importing 3.4a's predicate. Its "read the current metrics"
 half is a job `scripts/snapshot.js` already does — reuse that fetch layer rather
 than inventing a second one, and note it is the *fetch* layer that is reusable,
