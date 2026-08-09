@@ -1,12 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
+import { hashPushSecret } from '../../lib/pushRules.js'
 
 // Stubbed rather than mocked away: this hook's whole job is to read browser
 // state correctly, so replacing it with a fake that always answers would test
 // nothing. `supabase` is the one real module stubbed, because there is no
 // project to insert into here.
 const insert = vi.fn(async () => ({ error: null }))
-const update = vi.fn(async () => ({ error: null }))
+const eq = vi.fn()
+let syncError = null
+
+// Faithful to PostgREST rather than permissive, which is the whole reason the
+// v1.7.8 sync could ship broken and green: the old mock had no `.eq` in the
+// chain and resolved to success unconditionally, so a filter the real API
+// *requires* was neither sent nor missed. Awaiting the update with no filter
+// now answers the way the server does — 21000, "UPDATE requires a WHERE
+// clause" — so dropping `.eq` turns this suite red instead of silently
+// reproducing the outage.
+const update = vi.fn(() => ({
+  then: resolve => resolve({
+    error: { code: '21000', message: 'UPDATE requires a WHERE clause' },
+  }),
+  eq: (column, value) => {
+    eq(column, value)
+    return Promise.resolve({ error: syncError })
+  },
+}))
+
 const pushClientFor = vi.fn(secret => (secret ? {
   from: () => ({ update: (...args) => update(...args) }),
 } : null))
@@ -58,7 +78,8 @@ function stubBrowser({ ready, permission = 'granted', existing = null, key = VAL
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   localStorage.clear()
-  insert.mockClear(); update.mockClear(); pushClientFor.mockClear()
+  insert.mockClear(); update.mockClear(); pushClientFor.mockClear(); eq.mockClear()
+  syncError = null
 })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
@@ -188,27 +209,57 @@ describe('usePushSubscription', () => {
     expect(Object.values(row)).not.toContain(secret)
   })
 
-  it('syncs rules with an unfiltered update, scoped by the secret header', async () => {
-    // Deliberately unfiltered: `.eq('endpoint', …)` would need SELECT on that
-    // column, which anon does not have and must not get — a readable endpoint
-    // column is an enumeration oracle. RLS scopes the statement instead.
+  it('syncs rules filtered on the secret hash, scoped by the secret header', async () => {
+    // Filtered on `secret_hash`, not on `endpoint`: an endpoint is a capability
+    // and a durable browser identifier, and a readable endpoint column is an
+    // enumeration oracle. The hash is something this browser can recompute from
+    // the secret it already holds.
+    //
+    // It is filtered *at all* because PostgREST refuses an unfiltered UPDATE
+    // with 21000 before Postgres sees it — which is what v1.7.8 shipped, and
+    // why every sync silently failed until v1.7.16.
+    const SECRET = 'a'.repeat(64)
     const { pushManager } = stubBrowser({ existing: SUBSCRIPTION })
     stubBrowser({ ready: Promise.resolve({ pushManager }) })
     const { result } = renderHook(() => usePushSubscription())
     await waitFor(() => expect(result.current.pushStatus).toBe(PUSH_ON))
 
-    localStorage.setItem('btc-vibe-push-secret', 'a'.repeat(64))
+    localStorage.setItem('btc-vibe-push-secret', SECRET)
     let ok
     await act(async () => { ok = await result.current.syncPushRules([
       { id: 'r1', metric: 'price', threshold: 80000, direction: 'above', currency: 'usd', label: '$80,000' },
     ]) })
 
     expect(ok).toBe(true)
-    expect(pushClientFor).toHaveBeenCalledWith('a'.repeat(64))
+    expect(pushClientFor).toHaveBeenCalledWith(SECRET)
     expect(update).toHaveBeenCalledTimes(1)
     expect(update.mock.calls[0][0]).toEqual({
       rules: [{ id: 'r1', metric: 'price', threshold: 80000, direction: 'above', currency: 'usd' }],
     })
+    // The filter is the hash of the secret, never the secret itself — the
+    // secret only ever travels in the header.
+    expect(eq).toHaveBeenCalledWith('secret_hash', await hashPushSecret(SECRET))
+    expect(eq.mock.calls[0][1]).not.toBe(SECRET)
+  })
+
+  it('says so when the sync is refused, instead of failing into a void', async () => {
+    // Nothing awaits `syncPushRules`, so a silent `return false` is invisible:
+    // the subscription simply keeps `rules: []` and the sender has nothing to
+    // send. That is exactly how the v1.7.8 breakage survived undetected.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    syncError = { code: '42501', message: 'permission denied' }
+
+    const { pushManager } = stubBrowser({ existing: SUBSCRIPTION })
+    stubBrowser({ ready: Promise.resolve({ pushManager }) })
+    const { result } = renderHook(() => usePushSubscription())
+    await waitFor(() => expect(result.current.pushStatus).toBe(PUSH_ON))
+
+    localStorage.setItem('btc-vibe-push-secret', 'b'.repeat(64))
+    let ok
+    await act(async () => { ok = await result.current.syncPushRules([]) })
+
+    expect(ok).toBe(false)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('permission denied'))
   })
 
   it('does not sync rules when push is off', async () => {
