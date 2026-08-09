@@ -3,14 +3,14 @@ import Skeleton from './Skeleton.jsx'
 
 export default function SupplyIssuedCard({ blockHeight }) {
   return (
-    <div data-testid="card-supply-issued" className="rounded-2xl bg-gray-900 p-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Supply Issued</p>
+    <div data-testid="card-supply-issued" className="rounded-2xl bg-surface p-4">
+      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Supply Issued</p>
       {blockHeight != null ? (
         <>
-          <p className="mt-2 text-lg font-bold text-white">
+          <p className="mt-2 text-lg font-bold text-ink">
             {computeIssuedSupply(blockHeight).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;BTC
           </p>
-          <p className="mt-0.5 text-xs text-gray-450">of 21,000,000 maximum</p>
+          <p className="mt-0.5 text-xs text-quiet">of 21,000,000 maximum</p>
         </>
       ) : (
         <Skeleton className="mt-2 h-7 w-36" />

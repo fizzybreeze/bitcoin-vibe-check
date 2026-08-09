@@ -2,11 +2,28 @@ import { useState, useRef } from 'react'
 import ShareCanvas from './ShareCanvas.jsx'
 import { useShareImage } from '../hooks/useShareImage.js'
 import { SHARE_CARDS } from './shareCards.js'
+import { PALETTE, resolveTheme } from '../lib/palette.js'
 
-export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary, currency }) {
+/**
+ * A token as rgba. Inline styles cannot use Tailwind's `/30` opacity syntax,
+ * and this modal is styled inline throughout — so the three translucent
+ * surfaces here are derived from the same tokens the classes would have used
+ * rather than being written out as a second set of colours.
+ */
+function withAlpha(hex, a) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
+export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary, currency, theme }) {
   const [selectedCards, setSelectedCards] = useState(() => SHARE_CARDS.map(c => c.key))
   const canvasRef = useRef(null)
-  const { generateImage, isGenerating } = useShareImage(canvasRef)
+  // Resolved here rather than in each consumer: the modal, the off-screen
+  // canvas and the html2canvas background must all be the same theme, or the
+  // captured image gets a border of the other one.
+  const t = resolveTheme(theme)
+  const p = PALETTE[t]
+  const { generateImage, isGenerating } = useShareImage(canvasRef, t)
 
   if (!isOpen) return null
 
@@ -21,34 +38,34 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
       role="dialog"
       aria-modal="true"
       aria-label="Share dashboard image"
-      style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.7)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: withAlpha(p.scrim, 0.7) }}
     >
       <div style={{
         position: 'relative',
         width: '100%',
         maxWidth: 480,
-        background: '#111827',
-        border: '1px solid rgba(249,115,22,0.3)',
+        background: p.surface,
+        border: `1px solid ${withAlpha(p.accent, 0.3)}`,
         borderRadius: 16,
         padding: 24,
-        color: '#ffffff',
+        color: p.ink,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}>
         {/* Close button */}
         <button
           onClick={onClose}
           aria-label="Close"
-          style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: '#6b7280', fontSize: 14, cursor: 'pointer', padding: 4, lineHeight: 1 }}
+          style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: p.quiet, fontSize: 14, cursor: 'pointer', padding: 4, lineHeight: 1 }}
         >
           ✕
         </button>
 
         <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>Share Dashboard</h2>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6b7280' }}>Choose cards to include in your share image.</p>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: p.quiet }}>Choose cards to include in your share image.</p>
 
         {/* Card selection */}
         <fieldset style={{ border: 'none', padding: 0, margin: '0 0 20px' }}>
-          <legend style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: 12 }}>
+          <legend style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: p.quiet, marginBottom: 12 }}>
             Include Cards
           </legend>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
@@ -59,7 +76,7 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
                   checked={selectedCards.includes(key)}
                   onChange={() => toggleCard(key)}
                   aria-label={label}
-                  style={{ accentColor: '#f97316', width: 14, height: 14, cursor: 'pointer' }}
+                  style={{ accentColor: p.accent, width: 14, height: 14, cursor: 'pointer' }}
                 />
                 {label}
               </label>
@@ -80,8 +97,8 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
               fontWeight: 600,
               cursor: isGenerating || selectedCards.length === 0 ? 'not-allowed' : 'pointer',
               border: 'none',
-              background: '#f97316',
-              color: '#ffffff',
+              background: p['accent-fill'],
+              color: p['accent-ink'],
               opacity: isGenerating || selectedCards.length === 0 ? 0.6 : 1,
               display: 'flex',
               alignItems: 'center',
@@ -111,9 +128,9 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
               fontSize: 14,
               fontWeight: 600,
               cursor: isGenerating || selectedCards.length === 0 ? 'not-allowed' : 'pointer',
-              border: '1px solid rgba(249,115,22,0.4)',
+              border: `1px solid ${withAlpha(p.accent, 0.4)}`,
               background: 'transparent',
-              color: '#fb923c',
+              color: p.accent,
               opacity: isGenerating || selectedCards.length === 0 ? 0.6 : 1,
             }}
           >
@@ -130,7 +147,7 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
               cursor: 'pointer',
               border: 'none',
               background: 'transparent',
-              color: '#6b7280',
+              color: p.quiet,
             }}
           >
             Cancel
@@ -144,6 +161,7 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
           cardData={cardData}
           currency={currency}
           forwardedRef={canvasRef}
+          theme={t}
         />
       </div>
     </div>

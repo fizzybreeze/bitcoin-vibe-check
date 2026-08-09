@@ -71,7 +71,7 @@ export function btcToFiat(btc, price) {
 
 export function btcDominanceLabel(dominance) {
   if (dominance == null) return null
-  if (dominance > 60)  return { text: 'Bitcoin season', cls: 'text-orange-400' }
-  if (dominance < 45)  return { text: 'Altcoin season', cls: 'text-purple-400' }
-  return                      { text: 'Mixed market',   cls: 'text-gray-500'   }
+  if (dominance > 60)  return { text: 'Bitcoin season', cls: 'text-accent'  }
+  if (dominance < 45)  return { text: 'Altcoin season', cls: 'text-support' }
+  return                      { text: 'Mixed market',   cls: 'text-quiet'   }
 }

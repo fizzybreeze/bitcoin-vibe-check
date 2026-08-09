@@ -4,8 +4,8 @@
   "description": "Read the room.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#12101c",
+  "theme_color": "#12101c",
   "orientation": "portrait-primary",
   "icons": [
     {

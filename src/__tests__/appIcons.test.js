@@ -72,6 +72,27 @@ describe('apple touch icon', () => {
   })
 })
 
+describe('favicon', () => {
+  it('is declared in index.html and is a real PNG', () => {
+    // Was `favicon.svg` until the Afterglow redesign — a lightning bolt
+    // inherited from the Vite starter, in a purple belonging to no part of
+    // this product. It is now the same rasterised ₿ as every other icon, so a
+    // stale reference here means the tab falls back to the browser's default
+    // globe while the home screen still shows the mark.
+    const href = indexHtml.match(/<link[^>]+rel="icon"[^>]*href="([^"]+)"/)?.[1]
+    expect(href).toBe('/favicon.png')
+    const path = join(PUBLIC, href)
+    expect(existsSync(path), `${href} is missing`).toBe(true)
+    expect(isPng(path)).toBe(true)
+  })
+
+  it('no longer ships the file it replaced', () => {
+    // Left behind, it would still be precached and still be served to anything
+    // that guesses the conventional path.
+    expect(existsSync(join(PUBLIC, 'favicon.svg'))).toBe(false)
+  })
+})
+
 describe('precaching', () => {
   it('ships every icon through the build', async () => {
     // Everything under public/ is copied to dist/ and matched by the PWA

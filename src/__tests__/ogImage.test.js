@@ -9,6 +9,14 @@ import {
   buildOgModel, ogElement, ogModelIsRenderable, fmtOgTimestamp, OG_WIDTH, OG_HEIGHT,
 } from '../../api/lib/ogView.js'
 import { collectOgData } from '../../api/og.js'
+// Read rather than transcribed. These used to be literals, which is the same
+// mistake the file under test was making — and it meant the preview could be
+// re-hued without a single assertion noticing, because the literals here would
+// have been updated to match whatever it now produced. The image is always
+// rendered in the dark theme; there is no visitor to ask for a preference.
+import { PALETTE } from '../lib/palette.js'
+
+const C = PALETTE.dark
 
 const NOW = new Date('2026-08-06T14:05:00Z')
 
@@ -31,9 +39,9 @@ describe('buildOgModel', () => {
     const up   = buildOgModel({ ...FULL, priceChange24h: 2.41 }).change
     const down = buildOgModel({ ...FULL, priceChange24h: -3.2 }).change
     expect(up.text).toBe('▲ +2.41% 24h')
-    expect(up.color).toBe('#4ade80')
+    expect(up.color).toBe(C.up)
     expect(down.text).toBe('▼ -3.20% 24h')
-    expect(down.color).toBe('#f87171')
+    expect(down.color).toBe(C.down)
   })
 
   it('reports distance from the all-time high', () => {
@@ -43,13 +51,13 @@ describe('buildOgModel', () => {
   it('calls out an all-time high rather than printing -0.0%', () => {
     const at = buildOgModel({ ...FULL, priceUsd: 126_000, athUsd: 126_000 }).ath
     expect(at.text).toBe('AT ALL-TIME HIGH')
-    expect(at.color).toBe('#4ade80')
+    expect(at.color).toBe(C.up)
   })
 
   it('colours the Vibe Score by its temperature label', () => {
-    expect(buildOgModel(FULL).vibe).toEqual({ score: '68', label: 'Hot', color: '#fb923c' })
+    expect(buildOgModel(FULL).vibe).toEqual({ score: '68', label: 'Hot', color: C['vibe-hot'] })
     expect(buildOgModel({ ...FULL, vibe: { score: 12, label: 'Ice Cold' } }).vibe.color)
-      .toBe('#38bdf8')
+      .toBe(C['vibe-ice'])
   })
 
   it('renders a score of 0 rather than treating it as absent', () => {
@@ -70,13 +78,13 @@ describe('buildOgModel', () => {
   // the label is what the reader sees, so the label decides the colour.
   it('colours Fear & Greed by the label the source sent, not by the number', () => {
     expect(buildOgModel({ ...FULL, fngScore: 25, fngLabel: 'Extreme Fear' }).fng)
-      .toEqual({ text: 'Fear & Greed 25 · Extreme Fear', color: '#f87171' })
+      .toEqual({ text: 'Fear & Greed 25 · Extreme Fear', color: C['fng-extreme-fear'] })
   })
 
   it('falls back to numeric bands only when no classification came back', () => {
     expect(buildOgModel({ ...FULL, fngScore: 12, fngLabel: null }).fng)
-      .toEqual({ text: 'Fear & Greed 12', color: '#f87171' })
-    expect(buildOgModel({ ...FULL, fngScore: 90, fngLabel: null }).fng.color).toBe('#4ade80')
+      .toEqual({ text: 'Fear & Greed 12', color: C['fng-extreme-fear'] })
+    expect(buildOgModel({ ...FULL, fngScore: 90, fngLabel: null }).fng.color).toBe(C['fng-extreme-greed'])
   })
 
   it('stamps the time in UTC', () => {

@@ -44,8 +44,8 @@ describe('PriceChartCard', () => {
     for (const { label } of RANGES) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
-    expect(screen.getByRole('button', { name: '7D' })).toHaveClass('bg-orange-500')
-    expect(screen.getByRole('button', { name: '1M' })).not.toHaveClass('bg-orange-500')
+    expect(screen.getByRole('button', { name: '7D' })).toHaveClass('bg-accent-fill')
+    expect(screen.getByRole('button', { name: '1M' })).not.toHaveClass('bg-accent-fill')
   })
 
   it('reports the chosen range to its parent', () => {
@@ -62,14 +62,14 @@ describe('PriceChartCard', () => {
 
   it('colours the range change by direction', () => {
     const { rerender } = renderCard({ chartChange: 2.5 })
-    expect(screen.getByTestId('chart-range-change')).toHaveClass('text-green-400')
+    expect(screen.getByTestId('chart-range-change')).toHaveClass('text-up')
     expect(screen.getByTestId('chart-range-change')).toHaveTextContent('+2.50%')
 
     rerender(
       <PriceChartCard chart={chart} chartLoading={false} chartError={null} chartChange={-1.25}
         range="7D" setRange={() => {}} refreshChart={() => {}} ranges={RANGES} currency="usd" />
     )
-    expect(screen.getByTestId('chart-range-change')).toHaveClass('text-red-400')
+    expect(screen.getByTestId('chart-range-change')).toHaveClass('text-down')
   })
 
   it('hides the range change while a fetch is in flight', () => {

@@ -8,10 +8,24 @@
 //
 // Only structurally fragile cards are snapshotted — four, not seventeen — since
 // every baseline is a maintenance cost paid on each intentional design change.
-// Regenerate them with the `update-visual-baselines` label on a PR (see
-// .github/workflows/visual-baselines.yml); do NOT run --update-snapshots
-// locally, because the baselines are pixel-compared against CI's font
-// rendering, not this machine's.
+// Regenerate them with `.github/workflows/visual-baselines.yml` — the
+// `update-visual-baselines` label on a PR, or *Run workflow* from the Actions
+// tab. Do NOT run --update-snapshots locally: the baselines are pixel-compared
+// against CI's font rendering, not this machine's.
+//
+// **Both themes are captured, and the theme is pinned explicitly.** Until
+// v1.8.0 this file said nothing about colour scheme, which was harmless while
+// the app had one theme — and stopped being harmless the moment it had two.
+// Playwright's default is `light`, so the first regenerated set of baselines
+// came back light without anyone choosing that, leaving the product's *default*
+// theme with no pixel coverage at all. Eight baselines rather than four is the
+// price of the suite covering what the app actually ships.
+//
+// The layout is identical between themes, so this is not really a second
+// layout test — it is the one check that catches an element wearing the wrong
+// *token*. `palette.test.js` proves no Tailwind hue survives and that every
+// token clears AA; neither can tell that a value which should read `text-ink`
+// is quietly using `text-quiet`, because both are legal tokens.
 import { test, expect } from '@playwright/test'
 import { mockApis } from './mocks.js'
 
@@ -32,8 +46,14 @@ const CARDS = [
   ['recent-blocks', 'card-recent-blocks'],
 ]
 
-test.describe('Visual regression (mobile)', () => {
+for (const theme of ['dark', 'light']) {
+test.describe(`Visual regression (mobile, ${theme})`, () => {
   test.beforeEach(async ({ page }) => {
+    // Pinned rather than inherited. `emulateMedia` alone is enough: with no
+    // stored preference the boot script follows the OS, which is what this
+    // emulates — so it exercises the real resolution path rather than forcing
+    // the class on and skipping it.
+    await page.emulateMedia({ colorScheme: theme })
     // setFixedTime rather than install/pauseAt: it pins Date.now() while
     // leaving setTimeout and setInterval running, so the app's own load path is
     // untouched. Pausing the timers risks the page never finishing its render
@@ -50,12 +70,12 @@ test.describe('Visual regression (mobile)', () => {
   })
 
   for (const [name, testId] of CARDS) {
-    test(`${name} card matches its baseline`, async ({ page }) => {
+    test(`${name} card matches its ${theme} baseline`, async ({ page }) => {
       const card = page.getByTestId(testId)
       await expect(card).toBeVisible({ timeout: TIMEOUT })
       // Component-level rather than full-page, so an unrelated change to one
       // card does not churn the other three baselines.
-      await expect(card).toHaveScreenshot(`${name}.png`, {
+      await expect(card).toHaveScreenshot(`${name}-${theme}.png`, {
         // Absorbs subpixel antialiasing without absorbing a layout break: a
         // broken grid moves whole blocks of pixels, far past this threshold.
         maxDiffPixelRatio: 0.01,
@@ -63,3 +83,4 @@ test.describe('Visual regression (mobile)', () => {
     })
   }
 })
+}

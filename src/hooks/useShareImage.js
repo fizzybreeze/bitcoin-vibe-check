@@ -1,6 +1,12 @@
 import { useState } from 'react'
+import { PALETTE, resolveTheme } from '../lib/palette.js'
 
-export function useShareImage(ref) {
+/**
+ * The theme is the one the canvas was rendered in, not a preference: this
+ * colour fills anything the captured element does not paint itself, so a
+ * mismatch shows up as a frame of the other theme around the image.
+ */
+export function useShareImage(ref, theme) {
   const [isGenerating, setIsGenerating] = useState(false)
 
   async function generateImage(forceDownload = false) {
@@ -9,7 +15,7 @@ export function useShareImage(ref) {
     try {
       const html2canvas = (await import('html2canvas')).default
       const canvas = await html2canvas(ref.current, {
-        backgroundColor: '#030712',
+        backgroundColor: PALETTE[resolveTheme(theme)].ground,
         scale: 2,
         useCORS: true,
         allowTaint: true,

@@ -41,39 +41,39 @@ export default function HalvingCountdown({ blockHeight }) {
 
   const epochBarContent = epochPct != null ? (
     <>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
-        <div className="h-full rounded-full bg-orange-400" style={{ width: `${epochPct}%` }} />
+      <div className="h-2 w-full overflow-hidden rounded-full bg-raised">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${epochPct}%` }} />
       </div>
-      <p className="mt-1 text-xs text-gray-400">
-        <span className="font-semibold text-white">{Math.round(epochPct)}%</span>
-        <span className="ml-1 text-gray-450">of current epoch complete</span>
+      <p className="mt-1 text-xs text-muted">
+        <span className="font-semibold text-ink">{Math.round(epochPct)}%</span>
+        <span className="ml-1 text-quiet">of current epoch complete</span>
       </p>
     </>
   ) : <Skeleton className="h-2 w-full" />
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-4 mb-4">
+    <div className="rounded-2xl bg-surface p-4 mb-4">
 
       {/* Mobile: two columns top row + epoch bar below */}
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
-              ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
+              ? <p className="mt-1 text-xl font-bold text-accent tabular-nums">
                   {blocksRemaining.toLocaleString('en-US')}
                 </p>
               : <Skeleton className="mt-1 h-7 w-20" />
             }
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Estimated Time</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Estimated Time</p>
             {secsLeft != null
               ? <>
-                  <p className="mt-1 text-xl font-bold text-white tabular-nums">
+                  <p className="mt-1 text-xl font-bold text-ink tabular-nums">
                     {days}d {hours}h {mins}m
                   </p>
-                  {estStr && <p className="text-xs text-gray-450">est. {estStr}</p>}
+                  {estStr && <p className="text-xs text-quiet">est. {estStr}</p>}
                 </>
               : <Skeleton className="mt-1 h-7 w-28" />
             }
@@ -86,34 +86,34 @@ export default function HalvingCountdown({ blockHeight }) {
       <div className="hidden md:flex gap-0">
 
         <div className="flex-1 pr-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Blocks to Halving</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Blocks to Halving</p>
           {blocksRemaining != null
-            ? <p className="mt-1.5 text-2xl font-bold text-orange-400 tabular-nums">
+            ? <p className="mt-1.5 text-2xl font-bold text-accent tabular-nums">
                 {blocksRemaining.toLocaleString('en-US')}
               </p>
             : <Skeleton className="mt-1.5 h-8 w-28" />
           }
         </div>
 
-        <div className="w-px self-stretch bg-gray-800" />
+        <div className="w-px self-stretch bg-raised" />
 
         <div className="flex-1 px-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Estimated Time</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Estimated Time</p>
           {secsLeft != null
             ? <>
-                <p className="mt-1.5 text-2xl font-bold text-white tabular-nums">
+                <p className="mt-1.5 text-2xl font-bold text-ink tabular-nums">
                   {days}d {hours}h {mins}m
                 </p>
-                {estStr && <p className="mt-1 text-sm text-gray-450">est. {estStr}</p>}
+                {estStr && <p className="mt-1 text-sm text-quiet">est. {estStr}</p>}
               </>
             : <Skeleton className="mt-1.5 h-8 w-40" />
           }
         </div>
 
-        <div className="w-px self-stretch bg-gray-800" />
+        <div className="w-px self-stretch bg-raised" />
 
         <div className="flex-1 pl-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Epoch Progress</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Epoch Progress</p>
           <div className="mt-2">{epochBarContent}</div>
         </div>
 

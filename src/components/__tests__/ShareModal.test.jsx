@@ -1,13 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ShareModal from '../ShareModal.jsx'
 import { SHARE_CARDS } from '../shareCards.js'
+import { PALETTE } from '../../lib/palette.js'
+import html2canvas from 'html2canvas'
 
 vi.mock('html2canvas', () => ({
   default: vi.fn().mockResolvedValue({
     toBlob: vi.fn((cb) => cb(new Blob(['img'], { type: 'image/png' }))),
   }),
 }))
+
+// jsdom serialises an inline colour as `rgb(r, g, b)`.
+function rgb(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
+  return `rgb(${r}, ${g}, ${b})`
+}
 
 const mockCardData = {
   priceUsd: 100_000,
@@ -102,6 +110,41 @@ describe('ShareModal', () => {
     renderModal()
     expect(screen.queryByRole('button', { name: '16:9' })).toBeNull()
     expect(screen.queryByRole('button', { name: '1:1' })).toBeNull()
+  })
+
+  // The theme reaches three places from here — the modal's own surface, the
+  // off-screen canvas, and the background html2canvas paints behind it. Each is
+  // a hand-written line, and a missed one shows up only in the exported PNG.
+  it('follows the theme it is given, and passes it to the canvas', () => {
+    const { container } = renderModal({ theme: 'light' })
+    expect(screen.getByRole('dialog').firstChild.style.background)
+      .toBe(rgb(PALETTE.light.surface))
+    // The off-screen capture target is the modal's last child.
+    const canvasSheet = container.querySelector('[style*="-9999px"]').firstChild
+    expect(canvasSheet.style.background).toBe(rgb(PALETTE.light.ground))
+  })
+
+  it('defaults to the dark theme when given none', () => {
+    const { container } = renderModal()
+    expect(container.querySelector('[style*="-9999px"]').firstChild.style.background)
+      .toBe(rgb(PALETTE.dark.ground))
+  })
+
+  it('captures on the active theme rather than a fixed background', async () => {
+    // A dark background behind a light card frames the image in the theme the
+    // visitor is not using — which is invisible until the PNG is posted.
+    vi.mocked(html2canvas).mockClear()
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    try {
+      renderModal({ theme: 'light' })
+      fireEvent.click(screen.getByRole('button', { name: /download/i }))
+      await waitFor(() => expect(html2canvas).toHaveBeenCalled())
+      expect(html2canvas.mock.calls[0][1].backgroundColor).toBe(PALETTE.light.ground)
+    } finally {
+      createObjectURL.mockRestore()
+      revokeObjectURL.mockRestore()
+    }
   })
 
   it('renders the v1.4 signal card checkboxes checked by default', () => {

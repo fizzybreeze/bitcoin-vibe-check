@@ -98,15 +98,20 @@ test.describe('Bitcoin Dashboard', () => {
 
   // ── Currency toggle ─────────────────────────────────────────────────────────
 
+  // Both of these waited on `[class*="text-orange"]` until the Afterglow
+  // redesign — a colour class standing in for "the price has painted". That is
+  // a brittle proxy for a precondition that can be stated directly, and it
+  // broke on a re-skin that changed nothing these tests are about. Waiting for
+  // the dollar price is the actual precondition and survives the next one.
   test('switching currency to GBP updates the price card', async ({ page }) => {
-    await page.waitForSelector('[class*="text-orange"]', { timeout: TIMEOUT })
+    await expect(page.getByText(/\$[\d,]+/).first()).toBeVisible({ timeout: TIMEOUT })
     await page.selectOption('select', 'gbp')
     // GBP fixture price is 82,000 → "£82,000"
     await expect(page.getByText(/£[\d,]+/).first()).toBeVisible({ timeout: TIMEOUT })
   })
 
   test('switching back from GBP to USD shows a USD price', async ({ page }) => {
-    await page.waitForSelector('[class*="text-orange"]', { timeout: TIMEOUT })
+    await expect(page.getByText(/\$[\d,]+/).first()).toBeVisible({ timeout: TIMEOUT })
     await page.selectOption('select', 'gbp')
     await page.selectOption('select', 'usd')
     await expect(page.getByText(/\$[\d,]+/).first()).toBeVisible({ timeout: TIMEOUT })

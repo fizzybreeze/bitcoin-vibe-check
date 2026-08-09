@@ -6,22 +6,31 @@
 // output is a bitmap nobody can assert against; the model in between is plain
 // strings and colours, and that is where every formatting decision lives.
 
-import { vibeLabelHex, fngLabelHex } from '../../src/lib/vibePalette.js'
+import { PALETTE } from '../../src/lib/palette.js'
+import { vibeLabelHex, fngLabelHex, fngScoreHex } from '../../src/lib/scales.js'
 
 export const OG_WIDTH  = 1200
 export const OG_HEIGHT = 630
 
-// Shared with ShareCanvas, which is the visual language this image is meant to
-// echo when the two appear in the same feed.
-const BG      = '#030712'
-const ORANGE  = '#f97316'
-const WHITE   = '#ffffff'
-const MUTED   = '#6b7280'
-const DIM     = '#9ca3af'
-const GREEN   = '#4ade80'
-const RED     = '#f87171'
-const PANEL   = '#111827'
-const HAIRLINE = 'rgba(255,255,255,0.08)'
+// **Always the dark theme, whatever the visitor has chosen.** An unfurler has
+// no visitor and no `localStorage` to read one from, and the card is drawn once
+// on the server for everybody who sees the link. Dark is the product's default
+// and the identity people recognise in a feed, so it is what gets rendered —
+// this is a deliberate choice rather than an oversight about light mode.
+//
+// Read from the palette rather than restated: this file used to carry its own
+// constant block, which is how `#f97316` came to be the brand colour here while
+// `#fb923c` was the brand colour in the app.
+const C = PALETTE.dark
+const BG       = C.ground
+const ACCENT   = C.accent
+const WHITE    = C.ink
+const MUTED    = C.quiet
+const DIM      = C.muted
+const GREEN    = C.up
+const RED      = C.down
+const PANEL    = C.surface
+const HAIRLINE = C.line
 
 // Satori ships one font: Geist Regular. It has no ₿ (U+20BF) — the wordmark on
 // the live site uses that character and it would rasterise as a tofu box in
@@ -56,20 +65,17 @@ export function fmtOgTimestamp(now) {
 /**
  * Colour the Fear & Greed line by the classification alternative.me sent.
  *
- * The numeric bands below are a fallback for a response that carries a value
- * but no label — they are this project's reading of the scale, not the source's,
- * and where the two disagree the source wins, because its word is the one
- * printed on the card.
+ * The numeric fallback is for a response that carries a value but no label. It
+ * is this project's reading of the scale, not the source's, and where the two
+ * disagree the source wins — its word is the one printed on the card.
+ *
+ * Both halves now come from `scales.js`, which is the point: this file's own
+ * ladder used slightly different cut-offs from the app's (`< 45` against
+ * `<= 46`, `<= 55` against `<= 54`), so a score of 45 could be drawn in one
+ * colour on the card and another in the preview of the same card.
  */
 function fngHex(score, label) {
-  const byLabel = fngLabelHex(label)
-  if (byLabel) return byLabel
-  if (!isNum(score)) return MUTED
-  if (score < 25) return RED
-  if (score < 45) return '#fbbf24'
-  if (score <= 55) return '#facc15'
-  if (score < 75) return '#a3e635'
-  return GREEN
+  return fngLabelHex(label, 'dark') ?? fngScoreHex(score, 'dark') ?? MUTED
 }
 
 /**
@@ -107,7 +113,7 @@ export function buildOgModel({
       : { text: atAth ? 'AT ALL-TIME HIGH' : `${athPct.toFixed(1)}% from ATH`,
           color: atAth ? GREEN : MUTED },
     vibe: vibe?.score != null
-      ? { score: String(vibe.score), label: vibe.label ?? '', color: vibeLabelHex(vibe.label) }
+      ? { score: String(vibe.score), label: vibe.label ?? '', color: vibeLabelHex(vibe.label, 'dark') }
       : null,
     // The score can be null while its inputs are not — a composite needs 3 of 5
     // dimensions, the sentence needs one — so the summary is read independently
@@ -172,7 +178,7 @@ export function ogElement(model) {
     fontFamily: 'Geist',
     color: WHITE,
   }, [
-    h('div', { style: { display: 'flex', height: 10, background: ORANGE } }),
+    h('div', { style: { display: 'flex', height: 10, background: ACCENT } }),
 
     col({ flex: 1, padding: '40px 56px 36px', justifyContent: 'space-between' }, [
 

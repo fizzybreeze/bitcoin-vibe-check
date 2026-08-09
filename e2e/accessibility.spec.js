@@ -58,19 +58,20 @@ test.describe('Accessibility', () => {
   })
 
   test('emits the custom muted token rather than dropping it silently', async ({ page }) => {
-    // `text-gray-450` is not part of Tailwind's palette — it exists only
-    // because `@theme` declares it. A typo there produces no build error and no
-    // failing unit test: the class is simply never generated, and every label
-    // that uses it falls back to inheriting its parent's colour.
+    // `text-quiet` is not part of Tailwind's palette — it exists only because
+    // `@theme` declares `--color-quiet`. A typo there produces no build error
+    // and no failing unit test: the class is simply never generated, and every
+    // label that uses it falls back to inheriting its parent's colour. It is
+    // the app's most-used text tone, so that failure is close to invisible.
     await mockApis(page)
     await page.goto('/')
     await expect(page.getByRole('heading', { name: /bitcoin vibe check/i }).first())
       .toBeVisible({ timeout: 15000 })
 
     const resolved = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--color-gray-450').trim()
+      getComputedStyle(document.documentElement).getPropertyValue('--color-quiet').trim()
     )
-    expect(resolved, '--color-gray-450 never reached the browser').not.toBe('')
+    expect(resolved, '--color-quiet never reached the browser').not.toBe('')
 
     // And a element that uses it is actually painted in it, rather than
     // inheriting from its parent because the class did not exist.

@@ -40,12 +40,12 @@ describe('MarketSentimentCard', () => {
     // put the live card and the link preview on different scales — the
     // disagreement v1.6.0 fixed twice. Their bands are theirs to move.
     render(<MarketSentimentCard fng={{ value: '25', value_classification: 'Extreme Fear' }} loading={false} />)
-    expect(screen.getByText('Extreme Fear')).toHaveClass('text-red-400')
+    expect(screen.getByText('Extreme Fear')).toHaveClass('text-fng-extreme-fear')
   })
 
   it('falls back to grey for a classification it does not know', () => {
     render(<MarketSentimentCard fng={{ value: '50', value_classification: 'Sideways' }} loading={false} />)
-    expect(screen.getByText('Sideways')).toHaveClass('text-gray-450')
+    expect(screen.getByText('Sideways')).toHaveClass('text-quiet')
   })
 
   it('shows a dash rather than a stale value once loading has finished with no data', () => {
@@ -81,13 +81,13 @@ describe('NetworkFeesCard', () => {
 
   it('reads the congestion bands off mempool vsize', () => {
     const { rerender } = renderCard({ mempool: { vsize: 4_999_999, count: 1 } })
-    expect(screen.getByText('Low')).toHaveClass('text-green-400')
+    expect(screen.getByText('Low')).toHaveClass('text-up')
 
     rerender(<NetworkFeesCard fees={fees} mempool={{ vsize: 5_000_000, count: 1 }} loading={false} price={0} />)
-    expect(screen.getByText('Moderate')).toHaveClass('text-orange-400')
+    expect(screen.getByText('Moderate')).toHaveClass('text-warn')
 
     rerender(<NetworkFeesCard fees={fees} mempool={{ vsize: 50_000_001, count: 1 }} loading={false} price={0} />)
-    expect(screen.getByText('High')).toHaveClass('text-red-400')
+    expect(screen.getByText('High')).toHaveClass('text-down')
   })
 
   it('hides the congestion indicator rather than the card when mempool is missing', () => {

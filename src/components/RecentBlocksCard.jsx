@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
-import { blockTimeColors } from './blockTime.js'
+import { blockTimeBand } from '../lib/scales.js'
 
 const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
@@ -45,7 +45,7 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
   }
 
   const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
-  const colors = blockTimeColors(avgBlockMins)
+  const colors = blockTimeBand(avgBlockMins)
   // Derived from the ticking `now` state (same source as timeAgo) rather than
   // Date.now(), so this stays pure and updates on the same 1s cadence.
   const lastBlockMinsAgo = lastBlockTs != null
@@ -53,25 +53,25 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
     : null
 
   return (
-    <div data-testid="card-recent-blocks" className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
+    <div data-testid="card-recent-blocks" className="rounded-2xl bg-surface p-6 h-full">
+      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
         <div className="mt-3 flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Block Height</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Block Height</p>
             <div className="mt-1">
               {loading || blockHeight == null
                 ? <Skeleton className="h-7 w-16" />
-                : <p className="text-sm font-bold text-orange-400 tabular-nums md:text-2xl">
+                : <p className="text-sm font-bold text-accent tabular-nums md:text-2xl">
                     {blockHeight.toLocaleString('en-US')}
                   </p>
               }
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Avg Block Time</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Avg Block Time</p>
             <div className="mt-1">
               {loading || avgBlockMins == null
                 ? <Skeleton className="h-7 w-12" />
@@ -89,14 +89,14 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
               <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
             </span>
           )}
-          <p className="text-xs text-gray-450">
+          <p className="text-xs text-quiet">
             {lastBlockMinsAgo != null
               ? `Last block: ${lastBlockMinsAgo} min ago`
               : 'Last block: unknown'
             }
           </p>
         </div>
-        <div className="mt-3 border-t border-gray-700" />
+        <div className="mt-3 border-t border-line" />
       </div>
 
       {blocks == null ? (
@@ -107,20 +107,20 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
         <div className="mt-3">
           {blocks.map((block, i) => (
             <div key={block.id}>
-              {i > 0 && <div className="border-t border-gray-700" />}
+              {i > 0 && <div className="border-t border-line" />}
               <div className="flex items-start justify-between gap-2 py-2.5">
                 <div className="min-w-0">
                   <a
                     href={`https://mempool.space/block/${block.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-base font-bold text-orange-400 hover:text-orange-300 transition-colors"
+                    className="text-base font-bold text-accent hover:text-accent-hover transition-colors"
                   >
                     {block.height.toLocaleString('en-US')}
                   </a>
-                  <p className="mt-0.5 text-xs text-gray-450 flex flex-wrap items-center gap-x-1">
+                  <p className="mt-0.5 text-xs text-quiet flex flex-wrap items-center gap-x-1">
                     <span>{block.tx_count.toLocaleString('en-US')} txs</span>
-                    <span className="text-gray-450">·</span>
+                    <span className="text-quiet">·</span>
                     <span>
                       {block.extras?.totalFees != null
                         ? `${(block.extras.totalFees / 1e8).toFixed(3)} BTC in fees`
@@ -128,13 +128,13 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
                     </span>
                     {block.extras?.avgFeeRate > 0 && (
                       <>
-                        <span className="text-gray-450">·</span>
+                        <span className="text-quiet">·</span>
                         <span>avg {block.extras.avgFeeRate} sat/vB</span>
                       </>
                     )}
                   </p>
                 </div>
-                <p className="text-xs text-gray-450 shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
+                <p className="text-xs text-quiet shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
               </div>
             </div>
           ))}

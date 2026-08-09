@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Skeleton from './Skeleton.jsx'
-import { blockTimeColors } from './blockTime.js'
+import { blockTimeBand } from '../lib/scales.js'
 
 export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBlockTs, loading }) {
   // Tick once a minute so "N min ago" stays current without a re-fetch.
@@ -11,25 +11,25 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
   }, [])
 
   const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
-  const colors = blockTimeColors(avgBlockMins)
+  const colors = blockTimeBand(avgBlockMins)
   const lastBlockMinsAgo = lastBlockTs != null
     ? Math.max(0, Math.floor((now / 1000 - lastBlockTs) / 60))
     : null
 
   return (
-    <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Network Heartbeat</p>
+    <div className="rounded-2xl bg-surface p-6 h-full">
+      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Heartbeat</p>
 
       {/* Two-column interior */}
       <div className="mt-3 flex gap-3">
 
         {/* Block height */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Block Height</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Block Height</p>
           <div className="mt-1">
             {loading || blockHeight == null
               ? <Skeleton className="h-7 w-16" />
-              : <p className="text-sm font-bold text-orange-400 tabular-nums md:text-2xl">
+              : <p className="text-sm font-bold text-accent tabular-nums md:text-2xl">
                   {blockHeight.toLocaleString('en-US')}
                 </p>
             }
@@ -38,7 +38,7 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
 
         {/* Avg block time */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Avg Block Time</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Avg Block Time</p>
           <div className="mt-1">
             {loading || avgBlockMins == null
               ? <Skeleton className="h-7 w-12" />
@@ -59,7 +59,7 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
             <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
           </span>
         )}
-        <p className="text-xs text-gray-450">
+        <p className="text-xs text-quiet">
           {lastBlockMinsAgo != null
             ? `Last block: ${lastBlockMinsAgo} min ago`
             : 'Last block: unknown'

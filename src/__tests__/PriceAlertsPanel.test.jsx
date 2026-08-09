@@ -254,7 +254,7 @@ describe('PriceAlertsPanel metric picker', () => {
 
   it('tints the arrow for a price rule and leaves a fee rule neutral', () => {
     const priceRow = render(<PriceAlertsPanel {...baseProps} alerts={[makeAlert({ direction: 'below' })]} />)
-    expect(screen.getByText('↓')).toHaveClass('text-red-400')
+    expect(screen.getByText('↓')).toHaveClass('text-down')
     priceRow.unmount()
 
     render(
@@ -263,7 +263,7 @@ describe('PriceAlertsPanel metric picker', () => {
         alerts={[createAlertRule(5, { metric: 'fee', metrics: { fee: 12 }, id: 'f1' })]}
       />
     )
-    expect(screen.getByText('↓')).not.toHaveClass('text-red-400')
+    expect(screen.getByText('↓')).not.toHaveClass('text-down')
   })
 })
 

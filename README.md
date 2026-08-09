@@ -2,7 +2,7 @@
 
 **Read the room.**
 
-A real-time Bitcoin dashboard that surfaces everything you need to understand the current state of the network — price, sentiment, fees, mempool, halving countdown, and more — in a single dark-themed page. Built for people who want a fast, information-dense overview without navigating multiple block explorers or exchanges.
+A real-time Bitcoin dashboard that surfaces everything you need to understand the current state of the network — price, sentiment, fees, mempool, halving countdown, and more — on a single page, in your choice of dark or light. Built for people who want a fast, information-dense overview without navigating multiple block explorers or exchanges.
 
 🔗 **Live at [bitcoinvibecheck.com](https://bitcoinvibecheck.com)** — no login, no account, no wallet connection.
 
@@ -19,6 +19,13 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - **Market capitalisation** and **BTC dominance** with market season interpretation (Bitcoin season / Altcoin season / Mixed market)
 - **Sats per fiat** — live satoshis-per-unit-of-selected-currency, updating with every price tick
 - **Live Bitcoin supply issued** — total BTC issued to date derived from block height, with no extra API call
+
+### Appearance
+- **Dark and light themes**, toggled from the header and remembered per device
+- **Follows your operating system** until you say otherwise — the toggle is a preference, not a one-off
+- **No flash on load** — the theme is applied by an inline script before the first paint, not by React
+- **Every text colour clears WCAG AA (4.5:1) in both themes**, asserted in the test suite rather than eyeballed
+- The exported share image follows whichever theme you are reading in; the link-preview card is always dark
 
 ### The Vibe Score
 - **One composite 0–100 reading** of how hot the market is running, in the BTC Price card. Not a new data source — a synthesis of what the dashboard already fetches, so it costs no extra request
@@ -183,7 +190,8 @@ src/
     pushSubscription.js      a PushSubscription as a table row, and what the insert's outcome means
     ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing,
                              and the in-flight dedupe the three daily-candle callers share
-    colors.js                the brand accent as hex, for the places that cannot use a class
+    palette.js               every colour in both themes — the source of truth index.css mirrors
+    scales.js                the band ladders (vibe, Fear & Greed, MVRV, congestion, block time)
     supabase.js              Supabase client; returns null when env vars are absent
   utils/cycleCalculations.js Power Law fair value, Mayer Multiple
   hooks/                     usePersistedState, useMetricAlerts, useShareImage
