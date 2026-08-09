@@ -1,7 +1,7 @@
 {
   "name": "bitcoin-vibe-check",
   "private": true,
-  "version": "1.7.12",
+  "version": "1.7.13",
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -24,7 +24,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.10.1",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

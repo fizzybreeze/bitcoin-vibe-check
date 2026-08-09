@@ -74,7 +74,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### Price Alerts
 - Set custom price alerts for BTC in any supported currency
 - Alerts on **price, network fees, Fear & Greed and the Mayer Multiple**, not just price
-- **Push to this device** — an optional toggle that registers the browser for Web Push, so alerts can arrive with the tab closed. Requires `VITE_VAPID_PUBLIC_KEY`; without it the panel says so rather than offering a toggle that stores nothing
+- **Push to this device** — an optional toggle that registers the browser for Web Push, so alerts arrive with the tab closed. Requires `VITE_VAPID_PUBLIC_KEY` in the browser; without it the panel says so rather than offering a toggle that stores nothing. The sending half is `api/push-evaluate.js`, which `pg_cron` calls every five minutes
 - With push off, alerts fire as in-tab notifications and **only while the tab is open** — the panel states which of the two you are getting in every state
 - Active alerts shown via an indicator on the header button; triggered alerts are tracked separately
 - Alert panel accessible from the header on any screen size
@@ -191,6 +191,8 @@ src/
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
 api/lib/mvrvFallback.js      which stored snapshot row the MVRV fallback serves, and when it refuses
+api/push-evaluate.js         the push sender — pg_cron calls it every 5 min; sends, then reaps
+api/lib/pushEvaluator.js     which rules crossed, in which currency, and what a push status means
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
@@ -265,7 +267,9 @@ Copy `.env.example` to `.env` and fill in what you need. `.env` is gitignored; t
 | `VITE_SUPABASE_URL` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
 | `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.js` | Donor submissions and supporter ticker | |
 | `VITE_VAPID_PUBLIC_KEY` | `src/lib/vapid.js` | Web Push subscriptions | Public by definition. Generate with `npx web-push generate-vapid-keys`; blank means the push toggle says unavailable |
-| `VAPID_PRIVATE_KEY` | nothing yet | Signing pushes (§4.1b) | **Server-side only.** Anyone holding it can notify every subscriber |
+| `VAPID_PRIVATE_KEY` | `api/push-evaluate.js` | Signing pushes | **Server-side only.** Anyone holding it can notify every subscriber |
+| `PUSH_EVALUATE_SECRET` | `api/push-evaluate.js` | The push evaluator | **Server-side only.** The bearer token pg_cron presents; must match the `push_evaluate_secret` Vault secret in Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | `api/push-evaluate.js` | The push evaluator | **Server-side only.** The only way to read `push_subscriptions`, which has no `SELECT` policy. Bypasses RLS everywhere — never give it a `VITE_` prefix |
 | `BGEOMETRICS_API_KEY` | `api/chain-data.js` | MVRV in Cycle Indicators | **Server-side only** — set it in Vercel, never with a `VITE_` prefix |
 | `SUPABASE_URL` · `SUPABASE_ANON_KEY` | `api/chain-data.js` | The MVRV fallback (optional) | Falls back to the `VITE_` pair, which is the same project. Anon, never service-role |
 
