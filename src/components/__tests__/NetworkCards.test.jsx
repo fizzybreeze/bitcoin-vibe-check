@@ -168,4 +168,44 @@ describe('VolumeCard', () => {
     )
     expect(screen.getByText(/50%\s+above 7d avg/)).toBeTruthy()
   })
+
+  // Resilience (roadmap §6). CoinPaprika supplies the volume, the dominance and
+  // the market cap; Kraken supplies the price. The whole card body used to sit
+  // behind one `volume != null`, so a CoinPaprika outage took sats per fiat with
+  // it — a line computed entirely from the price that v1.7.9 had just taught to
+  // survive that exact outage.
+  it('still shows sats per fiat when the volume never arrives', () => {
+    render(
+      <VolumeCard
+        volumeUsd={null} volume={null} currency="usd"
+        btcDominance={null} volHistory={null} marketCapUsd={null} price={100000}
+      />
+    )
+    expect(screen.getByText(/1,000\s+sats per \$1/)).toBeTruthy()
+  })
+
+  it('still shows the derived market cap when the volume never arrives', () => {
+    render(
+      <VolumeCard
+        volumeUsd={null} volume={null} currency="usd"
+        btcDominance={null} volHistory={null}
+        marketCapUsd={2.08e12} marketCapEstimated price={100000}
+      />
+    )
+    expect(screen.getByText(/Mkt cap \$2\.1T · est\. from issued supply/)).toBeTruthy()
+  })
+
+  it('labels the market cap only when it is derived', () => {
+    // The label is the whole reason this fallback is allowed to exist — an
+    // estimate presenting itself as CoinPaprika's own figure is the one way it
+    // is worse than the blank it replaces.
+    render(
+      <VolumeCard
+        volumeUsd={30e9} volume={30e9} currency="usd"
+        btcDominance={58.3} volHistory={null} marketCapUsd={2.1e12} price={100000}
+      />
+    )
+    expect(screen.getByText('Mkt cap $2.1T')).toBeTruthy()
+    expect(screen.queryByText(/est\. from issued supply/)).toBeNull()
+  })
 })

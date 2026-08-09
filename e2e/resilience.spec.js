@@ -32,8 +32,9 @@ test.describe('Data source resilience', () => {
   })
 
   test('blanks the CoinPaprika-only figures rather than breaking them', async ({ page }) => {
-    // Volume, market cap and dominance have no second source and correctly go
-    // blank. The risk is not that they are missing — it is that the arithmetic
+    // Volume and dominance have no second source and correctly go blank (the
+    // market cap does, and is covered below). The risk is not that they are
+    // missing — it is that the arithmetic
     // around them (every fiat volume divides by priceUsd) reaches the DOM as
     // NaN or Infinity instead. An earlier version of this spec was named for
     // volume surviving, which it cannot and does not: it asserted only the
@@ -49,6 +50,55 @@ test.describe('Data source resilience', () => {
     await expect(page.locator('body')).not.toContainText('Infinity')
     await expect(page.locator('body')).not.toContainText('undefined')
     expect(errors).toEqual([])
+  })
+
+  test('keeps sats per fiat when CoinPaprika is down', async ({ page }) => {
+    // Sats per fiat needs only the price, which Kraken now supplies — but it
+    // lived inside the VolumeCard's `volume != null` wrapper, so it vanished
+    // with the volume anyway. A unit test proves the card renders it; only the
+    // app proves the card is *reached* in that state.
+    await mockApis(page)
+    await breakSource(page, 'https://api.coinpaprika.com/**')
+    await page.goto('/')
+
+    // 104500 USD → 1e8 / 104500 ≈ 957 sats per $1.
+    await expect(page.getByText(/957\s+sats per \$1/)).toBeVisible({ timeout: 15000 })
+  })
+
+  test('derives a market cap when CoinPaprika is down, and says so', async ({ page }) => {
+    // 897,000 blocks is 19,865,628.125 BTC issued; at Kraken's 104,500 that is
+    // ~$2.1T. The label is asserted rather than the number because both sources
+    // round to $2.1T — an unlabelled figure here would be indistinguishable
+    // from CoinPaprika's having answered after all.
+    await mockApis(page)
+    await breakSource(page, 'https://api.coinpaprika.com/**')
+    await page.goto('/')
+
+    // Attached rather than visible: the line is `hidden md:block`, so it is in
+    // the DOM at both viewports and painted only on desktop. The wiring is what
+    // this spec is for, and asserting visibility would make it a desktop-only
+    // test wearing a mobile project's name.
+    await expect(page.getByText(/Mkt cap \$2\.1T · est\. from issued supply/))
+      .toBeAttached({ timeout: 15000 })
+  })
+
+  test('never caches the derived market cap, so it cannot resurface unlabelled', async ({ page }) => {
+    // `btc-cache` carries no provenance, and its whole job is to survive into a
+    // later visit — so a stored estimate would come back one day with nothing
+    // to say it was one, which is exactly the failure the label exists to
+    // prevent. Only the app can show this: the rule lives in `writeCache`,
+    // which no unit test reaches.
+    await mockApis(page)
+    await breakSource(page, 'https://api.coinpaprika.com/**')
+    await page.goto('/')
+    await expect(page.getByText(/est\. from issued supply/)).toBeAttached({ timeout: 15000 })
+
+    // Second visit, with the chain tip gone too. The estimate can no longer be
+    // recomputed, so the only way a market cap appears now is out of the cache.
+    await breakSource(page, 'https://mempool.space/api/blocks/tip/height')
+    await page.reload()
+    await expect(page.getByText(/Network Fees/i).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText(/Mkt cap/)).toHaveCount(0)
   })
 
   test('shows a BTC price when Kraken is down', async ({ page }) => {
