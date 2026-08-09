@@ -21,7 +21,8 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ from: () => ({ select: (...a) => select(...a) }) }),
 }))
 
-const { default: handler, bearerMatches } = await import('../../api/push-evaluate.js')
+const { default: handler, bearerMatches, config, VAPID_SUBJECT } =
+  await import('../../api/push-evaluate.js')
 
 const SECRET = 'a-long-enough-shared-secret'
 
@@ -56,6 +57,36 @@ beforeEach(() => {
 afterEach(() => {
   process.env = saved
   vi.restoreAllMocks()
+})
+
+// `web-push` is mocked for every test above, which is exactly why this one
+// reaches for the real library. `setVapidDetails` validates its subject and
+// *throws*, and it is called on every tick before a single send — so getting it
+// wrong does not fail one notification, it fails all of them, forever, with
+// nothing in the mocked suite able to notice. The `https:` form is legal per
+// RFC 8292 and is used here in preference to committing an address to a public
+// repo; this is the test that stops that choice being quietly wrong.
+describe('the VAPID subject the real library will be given', () => {
+  it('is accepted by web-push', async () => {
+    const { default: realWebPush } = await vi.importActual('web-push')
+    const keys = realWebPush.generateVAPIDKeys()
+    expect(() => realWebPush.setVapidDetails(VAPID_SUBJECT, keys.publicKey, keys.privateKey))
+      .not.toThrow()
+  })
+
+  it('is https, not a mailto carrying somebody real', () => {
+    expect(VAPID_SUBJECT.startsWith('https://')).toBe(true)
+  })
+})
+
+// Vercel's Node default is 10s. This route's cost scales with subscribers, and
+// being cut off mid-loop means pushes sent whose rules were never written back
+// — which the next tick sends again, as a duplicate notification.
+describe('route config', () => {
+  it('raises maxDuration above the default, within the Hobby ceiling', () => {
+    expect(config.maxDuration).toBeGreaterThan(10)
+    expect(config.maxDuration).toBeLessThanOrEqual(60)
+  })
 })
 
 describe('bearerMatches', () => {

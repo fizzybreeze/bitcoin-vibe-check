@@ -55,7 +55,21 @@ const PUSH_TTL_SECONDS = 4 * 60 * 60
 // takes a `https:` URL as readily as a `mailto:`, and a URL is the right choice
 // for a public repo — the alternative is committing somebody's address to a
 // file anyone can read, to satisfy a field no push service reads in anger.
-const VAPID_SUBJECT = 'https://bitcoinvibecheck.com'
+//
+// Exported because `web-push` validates this at call time and throws, which
+// would take out *every* tick rather than one send — and nothing else in the
+// suite would notice, because the throw is inside the one call a unit test
+// mocks away. `pushEvaluateRoute.test.js` hands it to the real library.
+export const VAPID_SUBJECT = 'https://bitcoinvibecheck.com'
+
+// Vercel's Node default is 10 seconds, and this is the only route here that
+// loops: one sequential HTTPS round-trip per notification, so the time scales
+// with subscribers rather than being one fetch like the other two. Being cut
+// off mid-loop is not merely a slow tick — it is pushes sent whose rules were
+// never written back, which the next tick sends again. 60 is the Hobby ceiling.
+// The per-subscription write is inside the loop for the same reason, so a
+// truncation can lose at most the row being processed at that instant.
+export const config = { maxDuration: 60 }
 
 const CURRENCY_SUFFIX = { usd: 'USD', gbp: 'GBP', eur: 'EUR', cad: 'CAD', chf: 'CHF' }
 

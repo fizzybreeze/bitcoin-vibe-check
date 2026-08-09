@@ -125,10 +125,12 @@ begin
                  'Authorization', 'Bearer ' || bearer
                ),
     body    := '{}'::jsonb,
-    -- Comfortably over the route's own 10s upstream timeout, so a slow push
-    -- service produces a real status code here rather than a timeout that says
-    -- nothing about which half was slow.
-    timeout_milliseconds := 30000
+    -- Matched to the route's own `maxDuration` of 60s, deliberately. A shorter
+    -- timeout here would log a timeout for a tick that actually completed —
+    -- the request would be abandoned at this end while Vercel went on sending
+    -- and writing back — and a monitoring table that lies about the thing it
+    -- exists to monitor is worse than not having one.
+    timeout_milliseconds := 60000
   ) into req_id;
 
   insert into public.push_evaluate_log (request_id) values (req_id);
