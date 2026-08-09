@@ -104,6 +104,43 @@ test.describe('bitcoinvibecheck.com', () => {
     expect(res.status()).toBe(200)
   })
 
+  // The live link preview, which until now had no production check of any kind.
+  // It fails in the one direction nothing on the page can show: `/api/og`
+  // redirects to the static `/og-image.png` on any trouble, so a broken live
+  // render looks exactly like the pre-v1.6.0 behaviour — a preview card that
+  // unfurls perfectly well and has said the same thing since 2026.
+  //
+  // `maxRedirects: 0` is what makes this an assertion rather than a formality:
+  // followed, the redirect lands on a real PNG and every check below passes.
+  test('the link preview is the live render, not the static fallback', async ({ request }) => {
+    const res = await request.get('/og-live.png', { maxRedirects: 0 })
+    expect(res.status()).toBe(200)
+    expect(res.headers()['content-type']).toBe('image/png')
+  })
+
+  // v1.7.17. Both public routes take no parameters, and a CDN cache key
+  // includes the query string — so an unrejected one is a free cache bypass:
+  // six upstream fetches and a rasterise on `/api/og`, and a call against
+  // BGeometrics' 15-a-day budget on `/api/chain-data`.
+  //
+  // Asserted against the deployed site because the unit tests call the handlers
+  // directly, and the question this answers is the one they cannot: whether the
+  // platform's own routing puts anything in `req.query` before the handler sees
+  // it. If Vercel ever did, the first test above goes red rather than this one —
+  // every unfurl would be shedding to the static image.
+  test('a cache-busting query string is refused rather than served', async ({ request }) => {
+    const og = await request.get('/og-live.png?bust=1', { maxRedirects: 0 })
+    expect(og.status()).toBe(302)
+    expect(og.headers().location).toBe('/og-image.png')
+    // A refusal cached at the shared edge would pin the generic card in front
+    // of everybody else's share.
+    expect(og.headers()['cache-control']).toBe('no-store')
+
+    const chain = await request.get('/api/chain-data?bust=1')
+    expect(chain.status()).toBe(400)
+    expect(chain.headers()['cache-control']).toBe('no-store')
+  })
+
   test('the header reads the room rather than falling back to the tagline', async ({ page }) => {
     // "Read the room." is the fallback shown when not one dimension is
     // available — on the live site that means every upstream failed at once.
