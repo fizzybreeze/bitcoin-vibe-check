@@ -128,6 +128,13 @@ test.describe('bitcoinvibecheck.com', () => {
   // platform's own routing puts anything in `req.query` before the handler sees
   // it. If Vercel ever did, the first test above goes red rather than this one —
   // every unfurl would be shedding to the static image.
+  //
+  // **Check these with a browser, which is what this file uses, and not with
+  // Vercel's own fetch tooling** — that appends `_vercel_share` to every
+  // request, which production has nothing to consume, so it lands in
+  // `req.query` and both routes correctly refuse. A healthy site answers that
+  // tool with 400 and a shed OG image, which looks exactly like an outage and
+  // is not one. See the header of `api/lib/abuseGuard.js`.
   test('a cache-busting query string is refused rather than served', async ({ request }) => {
     const og = await request.get('/og-live.png?bust=1', { maxRedirects: 0 })
     expect(og.status()).toBe(302)
