@@ -1,6 +1,9 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { PALETTE } from '../lib/palette.js'
+import useTheme from '../hooks/useTheme.js'
 
 export default function CardTooltip({ text }) {
+  const { theme } = useTheme()
   const [visible, setVisible] = useState(false)
   const [above, setAbove]     = useState(false)
   const [offset, setOffset]   = useState(0)
@@ -51,7 +54,7 @@ export default function CardTooltip({ text }) {
         onClick={toggle}
         aria-label="More information"
         className={`flex items-center justify-center w-3.5 h-3.5 ml-1 rounded-full transition-colors focus:outline-none ${
-          visible ? 'text-gray-400' : 'text-gray-450 hover:text-gray-400'
+          visible ? 'text-muted' : 'text-quiet hover:text-muted'
         }`}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -65,11 +68,11 @@ export default function CardTooltip({ text }) {
           ref={tooltipRef}
           data-testid="tooltip-content"
           style={{
-            background: '#0f172a',
+            background: PALETTE[theme].raised,
             left: `calc(50% + ${offset}px)`,
             transform: 'translateX(-50%)',
           }}
-          className={`absolute z-50 w-56 rounded-xl border border-gray-700 px-3 py-2.5 text-xs leading-relaxed text-gray-300 shadow-2xl normal-case tracking-normal font-normal ${
+          className={`absolute z-50 w-56 rounded-xl border border-line px-3 py-2.5 text-xs leading-relaxed text-ink-dim shadow-2xl normal-case tracking-normal font-normal ${
             above ? 'bottom-full mb-2' : 'top-full mt-2'
           }`}
         >

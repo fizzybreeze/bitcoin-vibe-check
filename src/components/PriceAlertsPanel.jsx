@@ -78,15 +78,15 @@ export default function PriceAlertsPanel({
       role="dialog"
       aria-label="Alerts"
     >
-      <div className="rounded-2xl bg-gray-900 border border-gray-800 p-4 shadow-2xl">
+      <div className="rounded-2xl bg-surface border border-line-soft p-4 shadow-2xl">
 
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-white">Alerts</p>
+          <p className="text-sm font-semibold text-ink">Alerts</p>
           <button
             onClick={onClose}
             aria-label="Close alerts"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-gray-450 hover:text-gray-300 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-quiet hover:text-ink-dim transition-colors"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <line x1="1" y1="1" x2="11" y2="11" />
@@ -97,8 +97,8 @@ export default function PriceAlertsPanel({
 
         {/* Notification blocked warning */}
         {notificationPermission === 'denied' && (
-          <div className="mb-4 rounded-xl bg-gray-800 px-3 py-2.5">
-            <p className="text-xs text-amber-400">
+          <div className="mb-4 rounded-xl bg-raised px-3 py-2.5">
+            <p className="text-xs text-warn">
               Notifications are blocked in your browser. Enable them in browser settings to receive alerts.
             </p>
           </div>
@@ -117,8 +117,8 @@ export default function PriceAlertsPanel({
                 aria-pressed={id === meta.id}
                 className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
                   id === meta.id
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                    ? 'bg-accent-fill text-accent-ink'
+                    : 'bg-raised text-muted hover:text-ink-dim'
                 }`}
               >
                 {ALERT_METRICS[id].shortName}
@@ -136,28 +136,28 @@ export default function PriceAlertsPanel({
                 onChange={e => { setInputValue(e.target.value); setInputError('') }}
                 placeholder={meta.placeholder}
                 aria-label={`${meta.name} alert level`}
-                className="w-full rounded-xl bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:ring-1 focus:ring-orange-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-full rounded-xl bg-raised px-3 py-2 text-sm text-ink placeholder-quiet outline-none focus:ring-1 focus:ring-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
             {unitLabel && (
-              <span className="flex items-center text-xs font-semibold uppercase text-gray-450">{unitLabel}</span>
+              <span className="flex items-center text-xs font-semibold uppercase text-quiet">{unitLabel}</span>
             )}
             <button
               type="submit"
-              className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-400"
+              className="rounded-xl bg-accent-fill px-3 py-2 text-xs font-semibold text-accent-ink transition-colors hover:bg-accent-fill-hover"
             >
               Set
             </button>
           </div>
-          {inputError && <p className="mt-1.5 text-xs text-red-400">{inputError}</p>}
-          <p className="mt-1.5 text-xs text-gray-450">e.g. {example}</p>
+          {inputError && <p className="mt-1.5 text-xs text-down">{inputError}</p>}
+          <p className="mt-1.5 text-xs text-quiet">e.g. {example}</p>
         </form>
 
         {/* Alert list */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-450">Active alerts</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-quiet">Active alerts</p>
           {alerts.length === 0 ? (
-            <p className="text-xs text-gray-450">No alerts set. Pick a metric and add a level above.</p>
+            <p className="text-xs text-quiet">No alerts set. Pick a metric and add a level above.</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {alerts.map(alert => {
@@ -169,35 +169,35 @@ export default function PriceAlertsPanel({
                 return (
                   <li
                     key={alert.id}
-                    className={`flex items-center justify-between rounded-xl px-3 py-2 ${alert.triggered ? 'bg-gray-800/50' : 'bg-gray-800'}`}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2 ${alert.triggered ? 'bg-raised/50' : 'bg-raised'}`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`text-sm ${
                         alert.triggered
-                          ? 'text-gray-450'
+                          ? 'text-quiet'
                           : tinted
-                            ? alert.direction === 'above' ? 'text-green-400' : 'text-red-400'
-                            : 'text-gray-400'
+                            ? alert.direction === 'above' ? 'text-up' : 'text-down'
+                            : 'text-muted'
                       }`}>
                         {alert.direction === 'above' ? '↑' : '↓'}
                       </span>
                       {/* Named on every row, not only the non-price ones: "20"
                           beside "$80,000" is ambiguous, and a prefix that only
                           appears sometimes is worse than one that always does */}
-                      <span className={`text-xs shrink-0 ${alert.triggered ? 'text-gray-450' : 'text-gray-450'}`}>
+                      <span className={`text-xs shrink-0 ${alert.triggered ? 'text-quiet' : 'text-quiet'}`}>
                         {rowMeta?.shortName ?? alert.metric}
                       </span>
-                      <span className={`text-sm font-medium truncate ${alert.triggered ? 'text-gray-450' : 'text-white'}`}>
+                      <span className={`text-sm font-medium truncate ${alert.triggered ? 'text-quiet' : 'text-ink'}`}>
                         {alert.label}
                       </span>
                       {alert.triggered && (
-                        <span className="text-xs text-gray-450 shrink-0">✓ Triggered</span>
+                        <span className="text-xs text-quiet shrink-0">✓ Triggered</span>
                       )}
                     </div>
                     <button
                       onClick={() => onRemove(alert.id)}
                       aria-label={`Remove alert for ${rowMeta?.shortName ?? alert.metric} ${alert.label}`}
-                      className="ml-2 shrink-0 flex h-5 w-5 items-center justify-center rounded-full text-gray-450 hover:text-gray-400 transition-colors"
+                      className="ml-2 shrink-0 flex h-5 w-5 items-center justify-center rounded-full text-quiet hover:text-muted transition-colors"
                     >
                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                         <line x1="1" y1="1" x2="9" y2="9" />
@@ -213,7 +213,7 @@ export default function PriceAlertsPanel({
           {hasTriggered && (
             <button
               onClick={onClearTriggered}
-              className="mt-3 text-xs text-gray-450 underline underline-offset-2 hover:text-gray-300 transition-colors"
+              className="mt-3 text-xs text-quiet underline underline-offset-2 hover:text-ink-dim transition-colors"
             >
               Clear triggered
             </button>
@@ -223,7 +223,7 @@ export default function PriceAlertsPanel({
         {/* Push toggle, and the disclaimer it replaces once push is on. The
             sentence is deliberately explicit in every state rather than merely
             accurate — see PUSH_COPY. */}
-        <div className="mt-4 border-t border-gray-800 pt-3">
+        <div className="mt-4 border-t border-line-soft pt-3">
           {/* PUSH_FAILED keeps the toggle on screen. A failed attempt that
               hides the control leaves the visitor with advice they cannot act
               on — the copy below tells them to change a setting and try again,
@@ -234,24 +234,29 @@ export default function PriceAlertsPanel({
               onClick={pushStatus === PUSH_ON ? onDisablePush : onEnablePush}
               disabled={pushBusy}
               aria-pressed={pushStatus === PUSH_ON}
-              className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl bg-gray-800 px-3 py-2 text-left transition-colors hover:bg-gray-700 disabled:opacity-50"
+              className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl bg-raised px-3 py-2 text-left transition-colors hover:bg-hover disabled:opacity-50"
             >
-              <span className="text-xs font-semibold text-white">Push to this device</span>
+              <span className="text-xs font-semibold text-ink">Push to this device</span>
               <span
                 aria-hidden="true"
                 className={`flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-                  pushStatus === PUSH_ON ? 'bg-orange-500' : 'bg-gray-600'
+                  pushStatus === PUSH_ON ? 'bg-accent-fill' : 'bg-line-strong'
                 }`}
               >
+                {/* The knob changes colour with the track, not just position.
+                    A white knob on the bright accent fill is 2.46:1, which
+                    fails even the non-text minimum — so the on-state knob is
+                    `accent-ink`, the fill's own label colour, and only the
+                    off-state (against `line-strong`) stays white. */}
                 <span
-                  className={`h-4 w-4 rounded-full bg-white transition-transform ${
-                    pushStatus === PUSH_ON ? 'translate-x-4' : 'translate-x-0'
+                  className={`h-4 w-4 rounded-full transition-transform ${
+                    pushStatus === PUSH_ON ? 'bg-accent-ink translate-x-4' : 'bg-knob translate-x-0'
                   }`}
                 />
               </span>
             </button>
           )}
-          <p className="text-xs text-gray-450">
+          <p className="text-xs text-quiet">
             {pushFooterCopy(pushStatus, pushFailReason)}
           </p>
         </div>

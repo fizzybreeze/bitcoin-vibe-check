@@ -1,5 +1,5 @@
 // Render tests for the five cards extracted out of App.jsx in #22, and the
-// blockTimeColors helper two of them share. They had no unit coverage while
+// block-time band two of them share. They had no unit coverage while
 // they lived in App.jsx — nothing there is importable without the whole file —
 // so making them cheap to exercise is most of what the extraction buys.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -9,7 +9,7 @@ import NetworkHeartbeatCard from '../NetworkHeartbeatCard.jsx'
 import RecentBlocksCard from '../RecentBlocksCard.jsx'
 import HalvingCountdown from '../HalvingCountdown.jsx'
 import VolumeCard from '../VolumeCard.jsx'
-import { blockTimeColors } from '../blockTime.js'
+import { blockTimeBand } from '../../lib/scales.js'
 
 // Both block-fetching cards call mempool.space on mount. Stub it so the tests
 // stay hermetic; the resolved shape is per-test where it matters.
@@ -23,25 +23,25 @@ beforeEach(() => stubFetch({}))
 // these cards abort an in-flight fetch on unmount.
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-describe('blockTimeColors', () => {
-  it('reads on-target (9–11 min) as orange', () => {
-    expect(blockTimeColors(10).text).toBe('text-orange-400')
-    expect(blockTimeColors(9).text).toBe('text-orange-400')
-    expect(blockTimeColors(11).text).toBe('text-orange-400')
+describe('blockTimeBand', () => {
+  it('reads on-target (9–11 min) as the accent', () => {
+    expect(blockTimeBand(10).text).toBe('text-accent')
+    expect(blockTimeBand(9).text).toBe('text-accent')
+    expect(blockTimeBand(11).text).toBe('text-accent')
   })
 
-  it('reads faster than target as green and slower as red', () => {
-    expect(blockTimeColors(8.9).text).toBe('text-green-400')
-    expect(blockTimeColors(11.1).text).toBe('text-red-400')
+  it('reads faster than target as the up signal and slower as the down signal', () => {
+    expect(blockTimeBand(8.9).text).toBe('text-up')
+    expect(blockTimeBand(11.1).text).toBe('text-down')
   })
 
-  it('falls back to orange when the average is unknown', () => {
-    expect(blockTimeColors(null).text).toBe('text-orange-400')
+  it('falls back to the accent when the average is unknown', () => {
+    expect(blockTimeBand(null).text).toBe('text-accent')
   })
 
   it('keeps text and bg on the same colour', () => {
     for (const mins of [null, 5, 10, 20]) {
-      const { text, bg } = blockTimeColors(mins)
+      const { text, bg } = blockTimeBand(mins)
       expect(text.replace('text-', '')).toBe(bg.replace('bg-', ''))
     }
   })
@@ -90,7 +90,7 @@ describe('NetworkPulseCard', () => {
     stubFetch({ currentHashrate: 812e18 })
     render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={-4.25} />)
     const trend = await screen.findByText(/▼.*-4\.3% \(30d\)/)
-    expect(trend.className).toContain('text-red-400')
+    expect(trend.className).toContain('text-down')
   })
 })
 

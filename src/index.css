@@ -2,32 +2,127 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Afterglow — the semantic token set.
+ *
+ * **These values mirror `src/lib/palette.js`, which is the source of truth.**
+ * `palette.test.js` parses this file and fails if any token here disagrees with
+ * it. The duplication is not avoidable: Tailwind can only read a stylesheet and
+ * `ShareCanvas`, `api/lib/ogView.js` and `scripts/generate-icons.mjs` can only
+ * read JavaScript, so the choice is one mirrored pair with a test across it, or
+ * six hand-maintained constant blocks — which is what this replaces.
+ *
+ * Every name here is a *role*, not a colour. `bg-surface` says what the element
+ * is; `bg-gray-900` said what it looked like in one theme, which is why the app
+ * could not have a second one. Nothing outside this file should name a hue.
+ *
+ * The light values are the base and `.dark` overrides them below, which is the
+ * ecosystem convention and what the boot script in `index.html` already
+ * assumed. Tailwind emits `@theme` into `@layer theme`; the `.dark` block is
+ * unlayered, so it wins regardless of specificity.
+ */
+@theme {
+  --color-ground: #faf7fc;
+  --color-surface: #ffffff;
+  --color-raised: #f3eefa;
+  --color-hover: #ebe3f5;
+  --color-line: #e6dcf2;
+  --color-line-soft: #efe8f7;
+  --color-line-strong: #8a7fa3;
+
+  --color-ink: #241f38;
+  --color-ink-dim: #3b3552;
+  --color-muted: #4a4463;
+  --color-quiet: #6a6384;
+
+  --color-accent: #a21caf;
+  --color-accent-hover: #86198f;
+  --color-accent-fill: #a21caf;
+  --color-accent-fill-hover: #86198f;
+  --color-accent-ink: #ffffff;
+  --color-support: #0e7490;
+
+  --color-up: #047857;
+  --color-down: #c5211f;
+  --color-warn: #9a4708;
+
+  --color-knob: #ffffff;
+  --color-scrim: #241f38;
+
+  --color-vibe-ice: #0369a1;
+  --color-vibe-cold: #0e7490;
+  --color-vibe-cool: #0f766e;
+  --color-vibe-warm: #9a4708;
+  --color-vibe-hot: #be123c;
+  --color-vibe-overheated: #a21caf;
+
+  --color-fng-extreme-fear: #be123c;
+  --color-fng-fear: #9a4708;
+  --color-fng-neutral: #8a5406;
+  --color-fng-greed: #41680d;
+  --color-fng-extreme-greed: #047857;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-ground: #12101c;
+  --color-surface: #1a1727;
+  --color-raised: #262138;
+  --color-hover: #2f2947;
+  --color-line: #2e2947;
+  --color-line-soft: #241f36;
+  --color-line-strong: #453d63;
+
+  --color-ink: #ffffff;
+  --color-ink-dim: #d8d3e8;
+  --color-muted: #b3accd;
+  --color-quiet: #948cb0;
+
+  --color-accent: #e879f9;
+  --color-accent-hover: #f2a8ff;
+  --color-accent-fill: #e879f9;
+  --color-accent-fill-hover: #f2a8ff;
+  --color-accent-ink: #12101c;
+  --color-support: #22d3ee;
+
+  --color-up: #34d399;
+  --color-down: #f87171;
+  --color-warn: #fbbf24;
+
+  --color-knob: #ffffff;
+  --color-scrim: #0a0812;
+
+  --color-vibe-ice: #38bdf8;
+  --color-vibe-cold: #22d3ee;
+  --color-vibe-cool: #2dd4bf;
+  --color-vibe-warm: #fbbf24;
+  --color-vibe-hot: #fb7185;
+  --color-vibe-overheated: #e879f9;
+
+  --color-fng-extreme-fear: #fb7185;
+  --color-fng-fear: #fbbf24;
+  --color-fng-neutral: #facc15;
+  --color-fng-greed: #a3e635;
+  --color-fng-extreme-greed: #34d399;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
+/* The ground is painted here rather than only on the root component, so the
+ * area outside it — overscroll rubber-banding on iOS, the space under a short
+ * page — is the theme's colour and not the browser's default white. */
 body {
   margin: 0;
+  background-color: var(--color-ground);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* The one muted grey for quiet text on `bg-gray-900`.
- *
- * Tailwind's own ramp does not have a tone that works here: measured against
- * gray-900, gray-500 is 3.67:1, gray-600 is 2.35:1 and gray-700 is 1.72:1 —
- * all three fail WCAG AA for normal text (4.5:1), and gray-700 was being used
- * for the difficulty bar's "Slower"/"Faster" labels, which made them
- * effectively invisible. The next tone up, gray-400, is 6.82:1 and is already
- * the app's *bright* muted tier, so promoting everything to it would have
- * flattened the two tiers into one.
- *
- * 61% lightness measures 4.69:1 — clear of the threshold with enough headroom
- * that rounding cannot drag it under. `contrast.test.js` computes that number
- * from this value rather than trusting this comment.
- */
-@theme {
-  --color-gray-450: oklch(61% 0.025 262);
 }
 
 @keyframes ticker-scroll {

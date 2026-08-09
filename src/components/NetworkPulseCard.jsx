@@ -13,24 +13,24 @@ function DifficultyBar({ change }) {
   return (
     <div className="mt-3">
       <div
-        className="relative h-1.5 w-full overflow-hidden rounded-full bg-gray-800"
+        className="relative h-1.5 w-full overflow-hidden rounded-full bg-raised"
         role="img"
         aria-label={describeDifficulty(change)}
       >
         {change != null && (
           <div
-            className={`absolute top-0 h-full ${isPositive ? 'left-1/2' : 'right-1/2'} bg-orange-400`}
+            className={`absolute top-0 h-full ${isPositive ? 'left-1/2' : 'right-1/2'} bg-accent`}
             style={{ width: `${pct}%` }}
           />
         )}
-        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-px bg-gray-600" />
+        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-px bg-line-strong" />
       </div>
       {/* The bar's axis. `aria-hidden` because `describeDifficulty` already
           names both ends inside the label above — announcing them again would
           read as two stray words after a sentence that just said them. */}
       <div className="mt-1 flex justify-between" aria-hidden="true">
-        <span className="text-xs text-gray-450">Slower</span>
-        <span className="text-xs text-gray-450">Faster</span>
+        <span className="text-xs text-quiet">Slower</span>
+        <span className="text-xs text-quiet">Faster</span>
       </div>
     </div>
   )
@@ -38,11 +38,11 @@ function DifficultyBar({ change }) {
 
 function diffInterpretation(change) {
   if (change == null) return null
-  if (change < -4)  return { text: 'Miners Slowing Fast',   cls: 'text-gray-450' }
-  if (change < -1)  return { text: 'Miners Slowing',        cls: 'text-gray-450' }
-  if (change <= 1)  return { text: 'Stable',                cls: 'text-gray-450' }
-  if (change <= 4)  return { text: 'Miners Speeding Up',    cls: 'text-gray-450' }
-  return                   { text: 'Miners Speeding Up Fast', cls: 'text-gray-450' }
+  if (change < -4)  return { text: 'Miners Slowing Fast',   cls: 'text-quiet' }
+  if (change < -1)  return { text: 'Miners Slowing',        cls: 'text-quiet' }
+  if (change <= 1)  return { text: 'Stable',                cls: 'text-quiet' }
+  if (change <= 4)  return { text: 'Miners Speeding Up',    cls: 'text-quiet' }
+  return                   { text: 'Miners Speeding Up Fast', cls: 'text-quiet' }
 }
 
 export default function NetworkPulseCard({ difficulty, loading, hashRateTrend }) {
@@ -66,40 +66,40 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
   }, [])
 
   return (
-    <div data-testid="card-network-pulse" className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Network Health</p>
+    <div data-testid="card-network-pulse" className="rounded-2xl bg-surface p-6 h-full">
+      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Health</p>
 
       {/* Row 1: Hash Rate | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
             {hashRate != null
-              ? <p className="text-2xl font-bold text-orange-400">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
+              ? <p className="text-2xl font-bold text-accent">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
               : <Skeleton className="h-8 w-20" />
             }
             {hashRate != null && hashRateTrend != null && (
-              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-up' : 'text-down'}`}>
                 {hashRateTrend >= 0 ? '▲' : '▼'}&nbsp;{hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
               </p>
             )}
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
           <div className="mt-2">
             {loading
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
-                ? <p className="text-2xl font-bold text-gray-450">—</p>
-                : <p className="text-2xl font-bold text-orange-400">
+                ? <p className="text-2xl font-bold text-quiet">—</p>
+                : <p className="text-2xl font-bold text-accent">
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
-            <p className={`mt-1 text-sm ${diffInterp ? diffInterp.cls : 'text-gray-450'}`}>
+            <p className={`mt-1 text-sm ${diffInterp ? diffInterp.cls : 'text-quiet'}`}>
               {loading ? ' ' : diffInterp ? diffInterp.text : (diffChange == null ? 'Unavailable' : ' ')}
             </p>
-            <p className="mt-1 text-xs text-gray-450">
+            <p className="mt-1 text-xs text-quiet">
               {loading
                 ? ' '
                 : remainingBlocks != null
@@ -112,11 +112,11 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
       </div>
 
       {/* Divider */}
-      <div className="mt-4 border-t border-gray-700" />
+      <div className="mt-4 border-t border-line" />
 
       {/* Difficulty Adjustment bar (full width) */}
       <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Difficulty Adjustment</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Difficulty Adjustment</p>
         <DifficultyBar change={loading ? null : diffChange} />
       </div>
     </div>

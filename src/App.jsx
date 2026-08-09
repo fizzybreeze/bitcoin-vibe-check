@@ -10,6 +10,8 @@ import { useMetricAlerts } from './hooks/useMetricAlerts.js'
 import { usePushSubscription, PUSH_ON } from './hooks/usePushSubscription.js'
 import { syncableRules } from './lib/pushRules.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
+import useTheme from './hooks/useTheme.js'
+import ThemeToggle from './components/ThemeToggle.jsx'
 import { supabase } from './lib/supabase.js'
 import { createChartCache } from './lib/chartCache.js'
 import { mergeMarketData, krakenTickerUpdates } from './lib/marketData.js'
@@ -250,6 +252,10 @@ export default function App() {
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isPriceAlertsOpen, setIsPriceAlertsOpen] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem(SOUND_KEY) === 'true')
+  // The theme the page is painted in. Owned here rather than by the toggle,
+  // because `ShareCanvas` rasterises outside the stylesheet and has to be told
+  // which palette to draw with.
+  const { theme, toggleTheme } = useTheme()
   const audioCtxRef       = useRef(null)
   const prevBlockHtRef    = useRef(null)
   const prevPriceUsdRef   = useRef(null)
@@ -685,20 +691,21 @@ export default function App() {
   const vibeHistory = useVibeHistory()
 
   return (
-    <div className="min-h-screen bg-gray-950 p-4 md:p-8 text-white">
+    <div className="min-h-screen bg-ground p-4 md:p-8 text-ink">
 
       {/* Header */}
       {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
       <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
-          <p className="mt-0.5 text-xs text-gray-450">{vibeSummary ?? 'Read the room.'}</p>
+          <p className="mt-0.5 text-xs text-quiet">{vibeSummary ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4 self-end md:self-auto">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
-            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-orange-400' : 'text-gray-450 hover:text-gray-400'}`}
+            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-accent' : 'text-quiet hover:text-muted'}`}
           >
             {soundEnabled ? (
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -722,18 +729,18 @@ export default function App() {
             <select
               value={currency}
               onChange={e => setCurrency(e.target.value)}
-              className="appearance-none cursor-pointer rounded-full bg-gray-800 pl-3 pr-7 py-1 text-xs font-semibold uppercase text-orange-400 outline-none"
+              className="appearance-none cursor-pointer rounded-full bg-raised pl-3 pr-7 py-1 text-xs font-semibold uppercase text-accent outline-none"
             >
               {['usd', 'gbp', 'eur', 'cad', 'chf'].map(c => (
                 <option key={c} value={c}>{c.toUpperCase()}</option>
               ))}
             </select>
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-orange-400 text-xs">▾</span>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-accent text-xs">▾</span>
           </div>
-          <p className="flex items-center gap-1.5 text-sm text-gray-450">
+          <p className="flex items-center gap-1.5 text-sm text-quiet">
             {wsLive ? (
               <>
-                <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-up animate-pulse" />
                 Live
               </>
             ) : lastUpdated
@@ -850,13 +857,13 @@ export default function App() {
       <NewsletterCard />
 
       {/* Privacy note */}
-      <p className="mt-2 text-center text-xs text-gray-450">
+      <p className="mt-2 text-center text-xs text-quiet">
         By subscribing you agree to our{' '}
         <a
           href="https://www.beehiiv.com/privacy?utm_source=satoshi%27s_weekly_brief"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-orange-400 hover:text-orange-300"
+          className="text-accent hover:text-accent-hover"
         >
           Privacy Policy
         </a>
@@ -867,7 +874,7 @@ export default function App() {
 
       <SatoshiQuote />
 
-      <p className="py-4 text-center text-xs text-gray-450">© 2026 Bitcoin Vibe Check · MIT Licence</p>
+      <p className="py-4 text-center text-xs text-quiet">© 2026 Bitcoin Vibe Check · MIT Licence</p>
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />
@@ -896,6 +903,7 @@ export default function App() {
         cardData={{ ...(data ?? {}), chainData, ma200, vibe }}
         sentimentSummary={vibeSummary}
         currency={currency}
+        theme={theme}
       />
 
       <Analytics />

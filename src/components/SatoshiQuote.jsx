@@ -45,8 +45,8 @@ export default function SatoshiQuote() {
   return (
     <footer className="py-10 text-center">
       <div className={`transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
-        <p className="text-sm italic text-white">"{quote.text}"</p>
-        <p className="mt-2 text-xs text-orange-400">— {quote.attribution}</p>
+        <p className="text-sm italic text-ink">"{quote.text}"</p>
+        <p className="mt-2 text-xs text-accent">— {quote.attribution}</p>
         {showGenesis && (
           // `break-all` is load-bearing: this is one 64-character unbroken
           // string, and without it the whole dashboard scrolls sideways on a
@@ -55,7 +55,7 @@ export default function SatoshiQuote() {
             href="https://bitcoin.org/bitcoin.pdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 block font-mono text-xs text-gray-450 hover:text-gray-400 transition-colors max-w-full px-4 break-all overflow-x-auto"
+            className="mt-3 block font-mono text-xs text-quiet hover:text-muted transition-colors max-w-full px-4 break-all overflow-x-auto"
           >
             {GENESIS_HASH}
           </a>

@@ -2,23 +2,52 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      (function() {
-        var stored = localStorage.getItem('btc-theme');
-        if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        }
-      })();
-    </script>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <!-- iOS ignores the manifest's icons entirely. Without this, adding the
          site to the home screen uses a screenshot of the page. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <meta name="theme-color" content="#0a0a0f" />
+    <!-- The dark ground. Rewritten to the light one by the boot script below
+         when that is the active theme, and kept in step by `useTheme`. -->
+    <meta name="theme-color" content="#12101c" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+    <!--
+      Theme, applied before the first paint.
+
+      This has to be an inline blocking script rather than anything React does:
+      the stylesheet's light values are the base and `.dark` overrides them, so
+      a dark-theme visitor whose class arrives with the bundle would see a white
+      page flash first. That flash is the most obvious way a themed site looks
+      broken, and this is the only place it can be prevented.
+
+      It sits *after* the `theme-color` meta on purpose — it rewrites that tag,
+      and an element that has not been parsed yet cannot be selected. Being
+      lower in `<head>` costs nothing: any blocking script here still runs
+      before the first paint.
+
+      No stored preference means follow the operating system. `localStorage`
+      throws in Safari's private mode, so the read is guarded — an uncaught
+      exception here would abort the script and take the theme with it.
+
+      `useTheme` re-applies all of this on mount and owns it from then on. The
+      two agree because both read `btc-theme`, both treat anything unrecognised
+      as no preference, and `palette.test.js` pins the two colours below to the
+      palette so this copy cannot drift from it.
+    -->
+    <script>
+      (function () {
+        var stored = null;
+        try { stored = localStorage.getItem('btc-theme'); } catch (e) { /* storage disabled */ }
+        var dark = stored === 'dark' ||
+          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', dark ? '#12101c' : '#faf7fc');
+      })();
+    </script>
     <meta name="description" content="Bitcoin's mood, money, and mempool. Read the room." />
 
     <!-- Open Graph -->

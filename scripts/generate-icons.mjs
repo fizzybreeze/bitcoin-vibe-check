@@ -19,14 +19,23 @@
 //      a tofu box as the app icon — the same trap v1.6.0 hit with Satori.
 //      Rasterising once, here, ends that dependency for every consumer.
 //
-// public/favicon.svg is deliberately untouched: it is path-based already, so
-// the browser tab never depended on a font.
+// The favicon is generated here too, as of the Afterglow redesign. It used to
+// be public/favicon.svg — a lightning bolt inherited from the Vite starter, in
+// a purple that belonged to no part of this product. Rasterising it alongside
+// the rest means the tab, the home screen and the notification all show the
+// same mark, which they never have before.
+//
+// The colours come from src/lib/palette.js rather than being restated here.
+// An app icon is one artefact for both themes — an OS has no idea which one
+// the visitor picked — so it is always the dark ground with the accent on it,
+// the same call api/lib/ogView.js makes for the link preview.
 
 import { chromium } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { PALETTE } from '../src/lib/palette.js'
 
-const BACKGROUND = '#0a0a0f'
-const ORANGE = '#f97316'
+const BACKGROUND = PALETTE.dark.ground
+const ACCENT = PALETTE.dark.accent
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI Symbol', system-ui, sans-serif"
 
 /**
@@ -44,7 +53,7 @@ function iconSvg(size, maskable = false, glyph, baseline) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   <rect width="${size}" height="${size}" rx="${radius}" fill="${BACKGROUND}"/>
   <text x="${size / 2}" y="${baselineY}" font-family="${FONT}" font-size="${fontSize}"
-        font-weight="700" text-anchor="middle" fill="${ORANGE}">₿</text>
+        font-weight="700" text-anchor="middle" fill="${ACCENT}">₿</text>
 </svg>`
 }
 
@@ -57,6 +66,11 @@ const TARGETS = [
   // mask and does not honour transparency — rounded corners of our own would
   // be either double-masked or filled in with black.
   { file: 'public/apple-touch-icon.png', size: 180, maskable: true, glyph: 0.58, baseline: 0.72 },
+  // The browser tab. Rounded like the 192/512 rather than full-bleed, because
+  // nothing masks a favicon and a bare square reads as heavier than the tab
+  // strip wants. 64 rather than 32: browsers downscale, and a 32 upscales badly
+  // on the high-DPI displays where the tab strip is actually rendered at 2x.
+  { file: 'public/favicon.png', size: 64 },
 ]
 
 const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH })

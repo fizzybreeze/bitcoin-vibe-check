@@ -238,15 +238,7 @@ currently subscribed, and the marginal cost per pair is close to zero.
 relay, optional NIP-07. The audience overlap with an opinionated no-login
 Bitcoin dashboard is about as high as it gets.
 
-**Light mode.** The accessibility pass this was bundled with **shipped in
-v1.7.12** — contrast, reduced motion and text alternatives for the sparklines
-and the difficulty bar; see the version-history row. Light mode itself is
-untouched and is the larger half: it needs a second palette that holds the same
-contrast floor, and every hard-coded hex outside the stylesheet (`ShareCanvas`,
-`api/lib/ogView.js`, the recharts colours in `src/lib/colors.js`) has to be
-answered for, since none of them can read a CSS variable.
-
-**What the pass deliberately did not cover**, so nobody reads v1.7.12 as
+**What the v1.7.12 accessibility pass deliberately did not cover**, so nobody reads v1.7.12 as
 "accessible, done": focus indicators and visible focus order, keyboard
 operability of the alerts panel and share modal, heading structure, and any
 audit by an actual screen reader rather than by assertion. Contrast was fixed

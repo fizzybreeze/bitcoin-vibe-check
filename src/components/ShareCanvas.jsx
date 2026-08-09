@@ -4,41 +4,43 @@ import {
   computeAthDistance, computeSatsPerFiat, computeIssuedSupply, calcFiatFee,
 } from '../lib/calculations.js'
 import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculations.js'
-// Shared with api/og.js — the exported card and the link preview show the same
-// two labelled scales, so they cannot be allowed to colour them differently.
-import { vibeLabelHex, fngLabelHex } from '../lib/vibePalette.js'
-// Same accent the live chart and its tooltip use — an exported card that is a
-// different orange from the card it was exported from is the whole failure.
-import { ORANGE } from '../lib/colors.js'
+// html2canvas rasterises this tree, so nothing here can read a CSS variable —
+// every colour is an inline hex, and the palette is where those hexes come from.
+// The image follows the theme the visitor is actually looking at: a light-mode
+// reader sharing a card gets a light card.
+import { PALETTE, resolveTheme } from '../lib/palette.js'
+// Shared with api/og.js and with the live cards — the exported card, the link
+// preview and the dashboard show the same labelled scales, so they cannot be
+// allowed to colour them differently. This file carried its own copies of the
+// congestion and MVRV ladders until the Afterglow pass; the MVRV one had
+// disagreed with the live card's for the same five bands.
+import { congestionBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
 
-const CARD_BG = '#111827'
-const MUTED = '#6b7280'
-const WHITE = '#ffffff'
-const GREEN = '#4ade80'
-const RED = '#f87171'
-
-const LABEL_STYLE = {
-  fontSize: 10,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.1em',
-  color: MUTED,
-  margin: 0,
-}
-
-const VALUE_STYLE = {
-  fontSize: 22,
-  fontWeight: 700,
-  color: ORANGE,
-  margin: '6px 0 0',
-  lineHeight: 1.2,
-}
-
-const SUB_STYLE = {
-  fontSize: 11,
-  color: '#9ca3af',
-  margin: '4px 0 0',
-  lineHeight: 1.4,
+/** The three text styles every share card is built from, at one theme. */
+function shareStyles(p) {
+  return {
+    label: {
+      fontSize: 10,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.1em',
+      color: p.quiet,
+      margin: 0,
+    },
+    value: {
+      fontSize: 22,
+      fontWeight: 700,
+      color: p.accent,
+      margin: '6px 0 0',
+      lineHeight: 1.2,
+    },
+    sub: {
+      fontSize: 11,
+      color: p.muted,
+      margin: '4px 0 0',
+      lineHeight: 1.4,
+    },
+  }
 }
 
 function formatTimestamp() {
@@ -48,22 +50,16 @@ function formatTimestamp() {
   return `As of ${time} UTC · ${date}`
 }
 
-function congestionInfo(vsize) {
-  if (vsize == null) return null
-  if (vsize < 5_000_000)   return { label: 'Low',      color: GREEN  }
-  if (vsize <= 50_000_000) return { label: 'Moderate', color: ORANGE }
-  return                           { label: 'High',     color: RED    }
+function fngColorHex(classification, theme) {
+  return fngLabelHex(classification, theme) ?? PALETTE[theme].accent
 }
 
-function fngColorHex(classification) {
-  return fngLabelHex(classification) ?? ORANGE
-}
-
-function CardWrapper({ children, style }) {
+function CardWrapper({ children, style, theme }) {
+  const p = PALETTE[theme]
   return (
     <div style={{
-      background: CARD_BG,
-      border: '1px solid rgba(255,255,255,0.08)',
+      background: p.surface,
+      border: `1px solid ${p.line}`,
       borderRadius: 12,
       padding: 16,
       overflow: 'hidden',
@@ -84,7 +80,9 @@ const VIBE_SHARE_DIMENSIONS = [
   ['network',    'Network'],
 ]
 
-function BtcPriceShareCard({ cardData, currency }) {
+function BtcPriceShareCard({ cardData, currency, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf, priceChange24h, athUsd, vibe } = cardData
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
   const athPct = computeAthDistance(priceUsd, athUsd)
@@ -92,15 +90,15 @@ function BtcPriceShareCard({ cardData, currency }) {
   const changePos = priceChange24h != null && priceChange24h >= 0
   return (
     <>
-      <p style={LABEL_STYLE}>BTC Price</p>
-      <p style={VALUE_STYLE}>{price != null ? fmtCurrency(price, currency) : '—'}</p>
+      <p style={S.label}>BTC Price</p>
+      <p style={S.value}>{price != null ? fmtCurrency(price, currency) : '—'}</p>
       {athPct != null && (
-        <p style={{ ...SUB_STYLE, color: isAtATH ? GREEN : MUTED }}>
+        <p style={{ ...S.sub, color: isAtATH ? p.up : p.quiet }}>
           {isAtATH ? 'AT ALL-TIME HIGH' : `${athPct.toFixed(1)}% from ATH`}
         </p>
       )}
       {priceChange24h != null && (
-        <p style={{ ...SUB_STYLE, color: changePos ? GREEN : RED }}>
+        <p style={{ ...S.sub, color: changePos ? p.up : p.down }}>
           {changePos ? '▲' : '▼'} {changePos ? '+' : ''}{priceChange24h.toFixed(2)}% (24h)
         </p>
       )}
@@ -110,11 +108,11 @@ function BtcPriceShareCard({ cardData, currency }) {
           sentimentSummary, and printing it twice in one exported image is the
           duplication the live card was restructured to avoid. */}
       {vibe && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <p style={LABEL_STYLE}>Vibe Score</p>
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${p.line}` }}>
+          <p style={S.label}>Vibe Score</p>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 26, fontWeight: 700, color: ORANGE, lineHeight: 1.1 }}>{vibe.score}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: vibeLabelHex(vibe.label) }}>
+            <span style={{ fontSize: 26, fontWeight: 700, color: p.accent, lineHeight: 1.1 }}>{vibe.score}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: vibeLabelHex(vibe.label, theme) }}>
               {vibe.label}
             </span>
           </div>
@@ -123,8 +121,8 @@ function BtcPriceShareCard({ cardData, currency }) {
               const value = vibe.dimensions?.[key]
               return (
                 <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: MUTED }}>{label}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: value == null ? '#4b5563' : '#d1d5db' }}>
+                  <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: p.quiet }}>{label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: value == null ? p['line-strong'] : p['ink-dim'] }}>
                     {value == null ? '—' : Math.round(value)}
                   </span>
                 </div>
@@ -137,7 +135,9 @@ function BtcPriceShareCard({ cardData, currency }) {
   )
 }
 
-function NetworkPulseShareCard({ cardData }) {
+function NetworkPulseShareCard({ cardData, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const diffChange      = cardData.difficulty?.difficultyChange ?? null
   const remainingBlocks = cardData.difficulty?.remainingBlocks ?? null
   const diffPos = diffChange != null && diffChange >= 0
@@ -152,18 +152,18 @@ function NetworkPulseShareCard({ cardData }) {
     : 'Miners Slowing Fast'
   return (
     <>
-      <p style={LABEL_STYLE}>Network Health</p>
-      <p style={{ ...LABEL_STYLE, marginTop: 8, marginBottom: 4 }}>Difficulty Adjustment</p>
-      <p style={VALUE_STYLE}>
+      <p style={S.label}>Network Health</p>
+      <p style={{ ...S.label, marginTop: 8, marginBottom: 4 }}>Difficulty Adjustment</p>
+      <p style={S.value}>
         {diffChange != null ? `${diffChange >= 0 ? '+' : ''}${diffChange.toFixed(1)}%` : '—'}
       </p>
       {interpText && (
-        <p style={{ ...SUB_STYLE, color: diffPos ? GREEN : '#9ca3af', fontWeight: 600, marginTop: 4 }}>
+        <p style={{ ...S.sub, color: diffPos ? p.up : p.muted, fontWeight: 600, marginTop: 4 }}>
           {interpText}
         </p>
       )}
       {diffDays != null && (
-        <p style={{ ...SUB_STYLE, marginTop: 4 }}>
+        <p style={{ ...S.sub, marginTop: 4 }}>
           Next adjustment in ~{diffDays}d
         </p>
       )}
@@ -171,21 +171,24 @@ function NetworkPulseShareCard({ cardData }) {
   )
 }
 
-function MarketSentimentShareCard({ cardData }) {
+function MarketSentimentShareCard({ cardData, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const fngScore = cardData.fng?.value != null ? parseInt(cardData.fng.value, 10) : null
   const fngClass = cardData.fng?.value_classification ?? null
-  const color    = fngScore != null ? fngColorHex(fngClass) : MUTED
+  const color    = fngScore != null ? fngColorHex(fngClass, theme) : p.quiet
   return (
     <>
-      <p style={LABEL_STYLE}>Market Sentiment</p>
-      <p style={{ ...LABEL_STYLE, marginTop: 8, marginBottom: 4 }}>Fear &amp; Greed</p>
-      <p style={{ ...VALUE_STYLE, color }}>{fngScore ?? '—'}</p>
-      <p style={{ ...SUB_STYLE, color, fontWeight: 600, marginTop: 4 }}>{fngClass ?? '—'}</p>
+      <p style={S.label}>Market Sentiment</p>
+      <p style={{ ...S.label, marginTop: 8, marginBottom: 4 }}>Fear &amp; Greed</p>
+      <p style={{ ...S.value, color }}>{fngScore ?? '—'}</p>
+      <p style={{ ...S.sub, color, fontWeight: 600, marginTop: 4 }}>{fngClass ?? '—'}</p>
     </>
   )
 }
 
-function VolumeShareCard({ cardData, currency }) {
+function VolumeShareCard({ cardData, currency, theme }) {
+  const S = shareStyles(PALETTE[theme])
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
           btcDominance, blockHeight } = cardData
@@ -196,45 +199,48 @@ function VolumeShareCard({ cardData, currency }) {
   const supply = computeIssuedSupply(blockHeight)
   return (
     <>
-      <p style={LABEL_STYLE}>24h Volume</p>
-      <p style={VALUE_STYLE}>{volume != null ? fmtVolume(volume, currency) : '—'}</p>
+      <p style={S.label}>24h Volume</p>
+      <p style={S.value}>{volume != null ? fmtVolume(volume, currency) : '—'}</p>
       {btcDominance != null && (
-        <p style={SUB_STYLE}>BTC dominance {btcDominance.toFixed(1)}%</p>
+        <p style={S.sub}>BTC dominance {btcDominance.toFixed(1)}%</p>
       )}
       {satsPerFiat != null && (
-        <p style={SUB_STYLE}>{satsPerFiat.toLocaleString('en-GB')} sats per {currSym}1</p>
+        <p style={S.sub}>{satsPerFiat.toLocaleString('en-GB')} sats per {currSym}1</p>
       )}
       {supply != null && (
-        <p style={SUB_STYLE}>{supply.toLocaleString('en-GB', { maximumFractionDigits: 0 })} BTC issued</p>
+        <p style={S.sub}>{supply.toLocaleString('en-GB', { maximumFractionDigits: 0 })} BTC issued</p>
       )}
     </>
   )
 }
 
-function HalvingShareCard({ cardData }) {
+function HalvingShareCard({ cardData, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const { blockHeight } = cardData
   const blocksLeft = blockHeight != null ? Math.max(0, blocksToNextHalving(blockHeight)) : null
   const epochPct = blockHeight != null ? epochPercentage(blockHeight) : null
   const daysLeft = blocksLeft != null ? Math.round(blocksLeft * 10 / 60 / 24) : null
   return (
     <>
-      <p style={LABEL_STYLE}>Next Halving</p>
-      <p style={VALUE_STYLE}>{blocksLeft != null ? blocksLeft.toLocaleString('en-US') : '—'}</p>
-      <p style={SUB_STYLE}>blocks remaining</p>
-      {daysLeft != null && <p style={SUB_STYLE}>≈ {daysLeft} days</p>}
+      <p style={S.label}>Next Halving</p>
+      <p style={S.value}>{blocksLeft != null ? blocksLeft.toLocaleString('en-US') : '—'}</p>
+      <p style={S.sub}>blocks remaining</p>
+      {daysLeft != null && <p style={S.sub}>≈ {daysLeft} days</p>}
       {epochPct != null && (
         <>
-          <div style={{ marginTop: 8, height: 4, background: '#1f2937', borderRadius: 9999, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: ORANGE, width: `${epochPct}%`, borderRadius: 9999 }} />
+          <div style={{ marginTop: 8, height: 4, background: p.raised, borderRadius: 9999, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: p.accent, width: `${epochPct}%`, borderRadius: 9999 }} />
           </div>
-          <p style={{ ...SUB_STYLE, marginTop: 4 }}>{epochPct.toFixed(1)}% of epoch complete</p>
+          <p style={{ ...S.sub, marginTop: 4 }}>{epochPct.toFixed(1)}% of epoch complete</p>
         </>
       )}
     </>
   )
 }
 
-function RecentBlocksShareCard({ cardData }) {
+function RecentBlocksShareCard({ cardData, theme }) {
+  const S = shareStyles(PALETTE[theme])
   const { blockHeight, lastBlockTs, difficulty } = cardData
   // Frozen at mount: this card is rendered off-screen purely to be captured as
   // a static image, so the timestamp must not change between render and capture.
@@ -245,27 +251,29 @@ function RecentBlocksShareCard({ cardData }) {
     : null
   return (
     <>
-      <p style={LABEL_STYLE}>Network Heartbeat</p>
-      <p style={VALUE_STYLE}>{blockHeight != null ? blockHeight.toLocaleString('en-US') : '—'}</p>
-      <p style={SUB_STYLE}>block height</p>
+      <p style={S.label}>Network Heartbeat</p>
+      <p style={S.value}>{blockHeight != null ? blockHeight.toLocaleString('en-US') : '—'}</p>
+      <p style={S.sub}>block height</p>
       {avgBlockMins != null && (
-        <p style={{ ...SUB_STYLE, marginTop: 6 }}>
+        <p style={{ ...S.sub, marginTop: 6 }}>
           Avg block time: {avgBlockMins.toFixed(1)} min
         </p>
       )}
       {lastBlockMinsAgo != null && (
-        <p style={SUB_STYLE}>Last block: {lastBlockMinsAgo} min ago</p>
+        <p style={S.sub}>Last block: {lastBlockMinsAgo} min ago</p>
       )}
     </>
   )
 }
 
-function FeesShareCard({ cardData, currency }) {
+function FeesShareCard({ cardData, currency, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const { fees, mempool,
     priceUsd, priceGbp, priceEur, priceCad, priceChf } = cardData
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
   const currSym = CURRENCY_META[currency]?.sym ?? '$'
-  const cg = mempool?.vsize != null ? congestionInfo(mempool.vsize) : null
+  const cg = mempool?.vsize != null ? congestionBand(mempool.vsize) : null
 
   function fmtFiatFee(feeRate) {
     if (!(price > 0)) return null
@@ -275,7 +283,7 @@ function FeesShareCard({ cardData, currency }) {
 
   return (
     <>
-      <p style={LABEL_STYLE}>Network Fees</p>
+      <p style={S.label}>Network Fees</p>
       {fees ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           {[
@@ -286,38 +294,29 @@ function FeesShareCard({ cardData, currency }) {
             const fiatStr = fmtFiatFee(value)
             return (
               <div key={label} style={{
-                flex: 1, background: '#0f172a', borderRadius: 8, padding: '8px 6px',
-                border: '1px solid rgba(255,255,255,0.06)',
+                flex: 1, background: p.raised, borderRadius: 8, padding: '8px 6px',
+                border: `1px solid ${p['line-soft']}`,
               }}>
-                <p style={{ ...LABEL_STYLE, fontSize: 9 }}>{label}</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: ORANGE, margin: '4px 0 0' }}>{value}</p>
-                <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>sat/vB</p>
-                <p style={{ fontSize: 9, color: MUTED, margin: '2px 0 0' }}>{time}</p>
-                {fiatStr && <p style={{ fontSize: 9, color: '#9ca3af', margin: '3px 0 0' }}>{fiatStr}</p>}
+                <p style={{ ...S.label, fontSize: 9 }}>{label}</p>
+                <p style={{ fontSize: 16, fontWeight: 700, color: p.accent, margin: '4px 0 0' }}>{value}</p>
+                <p style={{ fontSize: 9, color: p.quiet, margin: '2px 0 0' }}>sat/vB</p>
+                <p style={{ fontSize: 9, color: p.quiet, margin: '2px 0 0' }}>{time}</p>
+                {fiatStr && <p style={{ fontSize: 9, color: p.muted, margin: '3px 0 0' }}>{fiatStr}</p>}
               </div>
             )
           })}
         </div>
       ) : (
-        <p style={{ ...VALUE_STYLE, fontSize: 18 }}>—</p>
+        <p style={{ ...S.value, fontSize: 18 }}>—</p>
       )}
       {cg && (
-        <p style={{ ...SUB_STYLE, marginTop: 8 }}>
-          Mempool: <span style={{ color: cg.color }}>{cg.label}</span>
+        <p style={{ ...S.sub, marginTop: 8 }}>
+          Mempool: <span style={{ color: p[cg.token] }}>{cg.label}</span>
           {mempool?.count != null && ` · ${mempool.count.toLocaleString('en-US')} unconfirmed`}
         </p>
       )}
     </>
   )
-}
-
-function mvrvLabel(mvrv) {
-  if (mvrv == null) return null
-  if (mvrv < 1)    return { text: 'Deeply Undervalued',   color: '#4ade80'  }
-  if (mvrv < 1.5)  return { text: 'Undervalued',          color: '#a3e635'  }
-  if (mvrv < 2.4)  return { text: 'Fair Value',           color: '#facc15'  }
-  if (mvrv < 3.7)  return { text: 'Overvalued',           color: '#fbbf24'  }
-  return                   { text: 'Extremely Overvalued', color: '#f87171'  }
 }
 
 function mayerLabel(multiple) {
@@ -329,7 +328,9 @@ function mayerLabel(multiple) {
   return                     { text: 'Overheated'         }
 }
 
-function CycleIndicatorsShareCard({ cardData }) {
+function CycleIndicatorsShareCard({ cardData, theme }) {
+  const p = PALETTE[theme]
+  const S = shareStyles(p)
   const mvrv      = cardData.chainData?.mvrv?.value ?? null
   // `/api/chain-data` serves the last stored MVRV when the BGeometrics budget
   // is exhausted. This image gets posted publicly and outlives the moment it
@@ -342,78 +343,83 @@ function CycleIndicatorsShareCard({ cardData }) {
   const price     = cardData.priceUsd ?? null
   const fairValue = calcPowerLawFairValue()
   const mayer     = calcMayerMultiple(price, ma200)
-  const mvrvLbl   = mvrvLabel(mvrv)
+  const mvrvLbl   = mvrvBand(mvrv)
   const mayerLbl  = mayerLabel(mayer)
 
-  const SMALL_VAL = { ...VALUE_STYLE, fontSize: 17 }
+  const SMALL_VAL = { ...S.value, fontSize: 17 }
 
   return (
     <>
-      <p style={LABEL_STYLE}>Cycle Indicators</p>
+      <p style={S.label}>Cycle Indicators</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', marginTop: 10 }}>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>MVRV Ratio</p>
-          <p style={{ ...SMALL_VAL, color: mvrvLbl?.color ?? ORANGE }}>
+          <p style={{ ...S.label, marginBottom: 4 }}>MVRV Ratio</p>
+          <p style={{ ...SMALL_VAL, color: mvrvLbl ? p[mvrvLbl.token] : p.accent }}>
             {mvrv != null ? mvrv.toFixed(2) : '—'}
           </p>
-          {mvrvLbl && <p style={{ ...SUB_STYLE, color: mvrvLbl.color, fontWeight: 600 }}>{mvrvLbl.text}</p>}
+          {mvrvLbl && <p style={{ ...S.sub, color: p[mvrvLbl.token], fontWeight: 600 }}>{mvrvLbl.label}</p>}
           {mvrvStored && (
-            <p style={{ ...SUB_STYLE, color: MUTED, fontSize: 10 }}>
+            <p style={{ ...S.sub, color: p.quiet, fontSize: 10 }}>
               {mvrvStored} · from daily snapshot
             </p>
           )}
         </div>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Power Law Fair Value</p>
+          <p style={{ ...S.label, marginBottom: 4 }}>Power Law Fair Value</p>
           <p style={SMALL_VAL}>
             {fairValue != null ? fmtCurrency(fairValue, 'usd') : '—'}
           </p>
         </div>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>200-Day MA</p>
+          <p style={{ ...S.label, marginBottom: 4 }}>200-Day MA</p>
           <p style={SMALL_VAL}>
             {ma200 != null ? fmtCurrency(ma200, 'usd') : '—'}
           </p>
         </div>
         <div>
-          <p style={{ ...LABEL_STYLE, marginBottom: 4 }}>Mayer Multiple</p>
+          <p style={{ ...S.label, marginBottom: 4 }}>Mayer Multiple</p>
           <p style={SMALL_VAL}>
             {mayer != null ? mayer.toFixed(2) : '—'}
           </p>
-          {mayerLbl && <p style={{ ...SUB_STYLE, color: MUTED }}>{mayerLbl.text}</p>}
+          {mayerLbl && <p style={{ ...S.sub, color: p.quiet }}>{mayerLbl.text}</p>}
         </div>
       </div>
     </>
   )
 }
 
-function renderShareCard(key, cardData, currency) {
+function renderShareCard(key, cardData, currency, theme) {
   switch (key) {
-    case 'btcPrice':        return <BtcPriceShareCard cardData={cardData} currency={currency} />
-    case 'marketSentiment': return <MarketSentimentShareCard cardData={cardData} />
-    case 'volume':          return <VolumeShareCard cardData={cardData} currency={currency} />
-    case 'networkPulse':    return <NetworkPulseShareCard cardData={cardData} />
-    case 'halving':         return <HalvingShareCard cardData={cardData} />
-    case 'recentBlocks':    return <RecentBlocksShareCard cardData={cardData} />
-    case 'fees':            return <FeesShareCard cardData={cardData} currency={currency} />
-    case 'cycleIndicators': return <CycleIndicatorsShareCard cardData={cardData} />
+    case 'btcPrice':        return <BtcPriceShareCard cardData={cardData} currency={currency} theme={theme} />
+    case 'marketSentiment': return <MarketSentimentShareCard cardData={cardData} theme={theme} />
+    case 'volume':          return <VolumeShareCard cardData={cardData} currency={currency} theme={theme} />
+    case 'networkPulse':    return <NetworkPulseShareCard cardData={cardData} theme={theme} />
+    case 'halving':         return <HalvingShareCard cardData={cardData} theme={theme} />
+    case 'recentBlocks':    return <RecentBlocksShareCard cardData={cardData} theme={theme} />
+    case 'fees':            return <FeesShareCard cardData={cardData} currency={currency} theme={theme} />
+    case 'cycleIndicators': return <CycleIndicatorsShareCard cardData={cardData} theme={theme} />
     default:                return null
   }
 }
 
-export default function ShareCanvas({ selectedCards, sentimentSummary, cardData, currency, forwardedRef }) {
+export default function ShareCanvas({ selectedCards, sentimentSummary, cardData, currency, forwardedRef, theme }) {
+  // Anything unrecognised — including no prop at all — is the product's own
+  // default rather than a colour, so a caller that forgets to pass one still
+  // exports the card people expect.
+  const t = resolveTheme(theme)
+  const p = PALETTE[t]
   return (
     <div style={{ position: 'absolute', left: '-9999px', top: 0, width: 1080 }} ref={forwardedRef}>
       <div style={{
         width: '100%',
-        background: '#030712',
+        background: p.ground,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}>
-        {/* Top orange border */}
-        <div style={{ height: 4, background: '#f97316', flexShrink: 0 }} />
+        {/* Top accent border */}
+        <div style={{ height: 4, background: p.accent, flexShrink: 0 }} />
 
         {/* Main content area */}
         <div style={{ display: 'flex', flexDirection: 'column', padding: '20px 28px 24px' }}>
@@ -421,14 +427,14 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 28, color: ORANGE, lineHeight: 1 }}>₿</span>
+              <span style={{ fontSize: 28, color: p.accent, lineHeight: 1 }}>₿</span>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: WHITE, lineHeight: 1.2 }}>Bitcoin Vibe Check</div>
-                <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>Read the room.</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: p.ink, lineHeight: 1.2 }}>Bitcoin Vibe Check</div>
+                <div style={{ fontSize: 11, color: p.quiet, marginTop: 2 }}>Read the room.</div>
               </div>
             </div>
             {sentimentSummary && (
-              <span style={{ fontSize: 12, color: MUTED, maxWidth: 360, textAlign: 'right', lineHeight: 1.4, paddingTop: 2 }}>
+              <span style={{ fontSize: 12, color: p.quiet, maxWidth: 360, textAlign: 'right', lineHeight: 1.4, paddingTop: 2 }}>
                 {sentimentSummary}
               </span>
             )}
@@ -443,8 +449,8 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
             {selectedCards.map((key, index) => {
               const isLastOdd = selectedCards.length % 2 !== 0 && index === selectedCards.length - 1
               return (
-                <CardWrapper key={key} style={isLastOdd ? { gridColumn: '1 / -1' } : {}}>
-                  {renderShareCard(key, cardData, currency)}
+                <CardWrapper key={key} theme={t} style={isLastOdd ? { gridColumn: '1 / -1' } : {}}>
+                  {renderShareCard(key, cardData, currency, t)}
                 </CardWrapper>
               )
             })}
@@ -452,8 +458,8 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
 
           {/* Footer */}
           <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: MUTED, margin: 0 }}>
-              <span style={{ color: '#9ca3af' }}>bitcoinvibecheck.com</span>
+            <p style={{ fontSize: 11, color: p.quiet, margin: 0 }}>
+              <span style={{ color: p.muted }}>bitcoinvibecheck.com</span>
               {' · '}
               {formatTimestamp()}
             </p>

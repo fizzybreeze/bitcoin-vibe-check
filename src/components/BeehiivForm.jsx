@@ -14,11 +14,11 @@ export default function BeehiivForm() {
         name="email"
         required
         placeholder="your@email.com"
-        className="w-full rounded-xl bg-gray-800 border border-gray-700 px-4 py-2.5 text-base text-white placeholder-gray-600 outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        className="w-full rounded-xl bg-raised border border-line px-4 py-2.5 text-base text-ink placeholder-quiet outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
       />
       <button
         type="submit"
-        className="rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 md:shrink-0"
+        className="rounded-full bg-accent-fill px-5 py-2.5 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-fill-hover md:shrink-0"
       >
         Subscribe
       </button>
