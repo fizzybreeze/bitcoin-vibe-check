@@ -5,8 +5,13 @@ export function computeAthDistance(priceUsd, athUsd) {
   return ((priceUsd - athUsd) / athUsd) * 100
 }
 
+// Returns a number or `null` — never a third answer. It used to have one:
+// `price === 0` was screened but `NaN` was not, so `computeSatsPerFiat(NaN)`
+// came back as `NaN`, which passes a `!= null` guard and reaches the DOM as the
+// string "NaN". A negative price is refused for the same reason rather than
+// producing negative sats.
 export function computeSatsPerFiat(price) {
-  if (price == null || price === 0) return null
+  if (!Number.isFinite(price) || price <= 0) return null
   return Math.round(1e8 / price)
 }
 

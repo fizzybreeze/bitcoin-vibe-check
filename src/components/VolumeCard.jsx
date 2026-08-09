@@ -11,6 +11,13 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
     ? ((volumeUsd - vol7dAvg) / vol7dAvg) * 100
     : null
   const domLabel = btcDominanceLabel(btcDominance)
+  // Gated on the computed value, not on the price that produced it — which is
+  // how `ShareCanvas` has always done it, and the two call sites disagreeing
+  // was the bug. `computeSatsPerFiat` answers `null` for a price it cannot
+  // use, so testing the input instead let `price === 0` through to
+  // `null.toLocaleString()`. There is no error boundary in this app, so that
+  // threw during render and blanked the entire dashboard.
+  const satsPerFiat = computeSatsPerFiat(price)
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
@@ -54,12 +61,12 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
           </p>
         )}
         {/* Sats per fiat */}
-        {price != null && (
+        {satsPerFiat != null && (
           <>
             <div className="mt-3 border-t border-gray-700" />
             <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Sats per fiat</p>
             <p className="mt-1 text-lg font-bold text-white">
-              {computeSatsPerFiat(price).toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
+              {satsPerFiat.toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
             </p>
           </>
         )}

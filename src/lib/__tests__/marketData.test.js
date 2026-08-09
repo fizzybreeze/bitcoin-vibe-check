@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { krakenPrice, mergeMarketData, estimateMarketCapUsd } from '../marketData.js'
+import { krakenPrice, mergeMarketData, estimateMarketCapUsd, krakenTickerUpdates } from '../marketData.js'
 
 // `Promise.allSettled` already means the page survives an outage. It does not
 // mean the cards do — and until this module existed, "what does the dashboard
@@ -252,5 +252,70 @@ describe('the non-price sources', () => {
 
   it('survives an empty block list', () => {
     expect(mergeMarketData({ ...ALL, blocks: [] }).lastBlockTs).toBeNull()
+  })
+})
+
+describe('krakenTickerUpdates', () => {
+  // The WebSocket was the one upstream whose values reached state unscreened,
+  // and unlike a failed fetch it *replaces* a price already on screen.
+  const MAP = { 'BTC/USD': 'priceUsd', 'BTC/GBP': 'priceGbp' }
+  const frame = (...data) => ({ channel: 'ticker', data })
+
+  it('publishes a rounded price per mapped symbol', () => {
+    expect(krakenTickerUpdates(frame(
+      { symbol: 'BTC/USD', last: 104500.4, change_pct: -1.25 },
+      { symbol: 'BTC/GBP', last: 82000.6 },
+    ), MAP)).toEqual({ priceUsd: 104500, priceGbp: 82001, priceChange24h: -1.25 })
+  })
+
+  it('drops a zero price instead of publishing it', () => {
+    // The crash. `computeSatsPerFiat(0)` is null, `VolumeCard` dereferenced it,
+    // and with no error boundary the whole dashboard went blank. A zero would
+    // also fire every pending `below` alert at once quoting "Now $0".
+    expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last: 0 }), MAP)).toBeNull()
+  })
+
+  it('drops a price that is not a number', () => {
+    for (const last of ['unavailable', NaN, {}, Infinity, undefined, null, '']) {
+      expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last }), MAP), String(last)).toBeNull()
+    }
+  })
+
+  it('screens the value it stores, not the one it was handed', () => {
+    // Rounding happens before the check, so a price that is positive but
+    // rounds to zero cannot be admitted and then spoiled on the way in.
+    expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last: 0.4 }), MAP)).toBeNull()
+  })
+
+  it('keeps the good symbols in a frame when one of them is broken', () => {
+    // A partial frame is still worth something — dropping the whole update
+    // would stall every other pair on one bad tick.
+    expect(krakenTickerUpdates(frame(
+      { symbol: 'BTC/USD', last: 0 },
+      { symbol: 'BTC/GBP', last: 82000 },
+    ), MAP)).toEqual({ priceGbp: 82000 })
+  })
+
+  it('accepts a zero or negative 24h change, which are real readings', () => {
+    // `positive` would be the wrong predicate here, which is why there are two.
+    expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last: 1, change_pct: 0 }), MAP))
+      .toEqual({ priceUsd: 1, priceChange24h: 0 })
+  })
+
+  it('drops a 24h change that is missing or unusable rather than calling it 0%', () => {
+    // `Number('')` and `Number(null)` are both 0, so a blank would otherwise be
+    // published as a flat day — the same trap as v1.6.5 and v1.6.7.
+    for (const change_pct of [null, undefined, '', 'flat', NaN]) {
+      expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last: 104500, change_pct }), MAP), String(change_pct))
+        .toEqual({ priceUsd: 104500 })
+    }
+  })
+
+  it('ignores anything that is not a ticker frame with data', () => {
+    expect(krakenTickerUpdates({ channel: 'heartbeat', data: [] }, MAP)).toBeNull()
+    expect(krakenTickerUpdates(frame(), MAP)).toBeNull()
+    expect(krakenTickerUpdates({ channel: 'ticker' }, MAP)).toBeNull()
+    expect(krakenTickerUpdates(null, MAP)).toBeNull()
+    expect(krakenTickerUpdates(frame({ symbol: 'ETH/USD', last: 4000 }), MAP)).toBeNull()
   })
 })
