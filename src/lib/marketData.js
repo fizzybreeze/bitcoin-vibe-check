@@ -11,6 +11,8 @@
 // source's response, which is the case for the one value the whole dashboard
 // hangs on.
 
+import { computeIssuedSupply } from './calculations.js'
+
 /**
  * A BTC price from a Kraken ticker payload, by currency suffix.
  *
@@ -29,6 +31,43 @@ export function krakenPrice(krakenResult, suffix) {
 function positive(value) {
   const n = typeof value === 'number' ? value : parseFloat(value)
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Market cap from a price and a block height, or `null` if either is missing.
+ *
+ * v1.7.9 wrote this off — "price × issued supply is close but not the same as
+ * circulating supply, and this is a headline figure people compare against
+ * other sites" — and that was two objections wearing one coat. The accuracy
+ * half does not survive checking: what every aggregator publishes as Bitcoin's
+ * circulating supply *is* the mined supply, which is what `computeIssuedSupply`
+ * sums. The two disagree only over coins that were never claimed — the handful
+ * of underpaid coinbases, some 28 BTC in total — which is a rounding error
+ * seven orders of magnitude below the figure and vanishes long before the one
+ * decimal place `fmtVolume` prints.
+ *
+ * The comparability half was the real objection, and the answer to it is the
+ * label rather than the blank: the card says `· est. from issued supply` when
+ * this is what it is showing, on the v1.6.5 precedent, so a reader who does
+ * compare it against another site can see why it might differ by a hair. A
+ * derived figure that announces itself is strictly better than an empty slot,
+ * which is the trade that decides this the other way round.
+ */
+export function estimateMarketCapUsd(priceUsd, blockHeight) {
+  if (!positive(priceUsd)) return null
+  // `Number.isFinite` rather than a null check: mempool.space answers this
+  // endpoint with a bare integer, so a failed parse or an HTML error page
+  // arrives as a string or an object rather than as null — and
+  // `computeIssuedSupply` would happily do arithmetic on either.
+  if (!Number.isFinite(blockHeight) || blockHeight < 0) return null
+  const supply = computeIssuedSupply(blockHeight)
+  // `positive` is unreachable today and stays anyway: the guard above already
+  // excludes the only input `computeIssuedSupply` returns null for, and the
+  // genesis block alone is 50 BTC, so the sum is never zero. No test can pin
+  // it — which is worth saying outright rather than leaving a reader to work
+  // out why a mutation to it survives. What it buys is that a future change to
+  // the epoch table degrades to a blank rather than to a headline "$0".
+  return positive(supply) ? priceUsd * supply : null
 }
 
 /**
@@ -97,6 +136,19 @@ export function mergeMarketData({
 
   const fngSeries = Array.isArray(fng?.data) ? fng.data : null
 
+  // The second fallback, and the last one this burst can honestly support.
+  // CoinPaprika's market cap is preferred whenever it answers; when it does
+  // not, the two numbers this is made of come from sources that are already
+  // here and are not each other — the price (CoinPaprika *or* Kraken, per the
+  // fallback above) and mempool.space's chain tip. Two independent outages have
+  // to coincide before the figure goes blank, which is a materially different
+  // proposition from one.
+  //
+  // `positive()` rather than `??`, for the same reason as the price above: a
+  // market cap of 0 is a broken body, not an answer.
+  const paprikaMarketCap = positive(paprika.market_cap)
+  const derivedMarketCap = paprikaMarketCap ? null : estimateMarketCapUsd(priceUsd, blockHeight)
+
   return {
     priceUsd,
     priceGbp,
@@ -112,10 +164,11 @@ export function mergeMarketData({
     // "since yesterday's close", not a rolling 24 hours — a different number
     // that would quietly disagree with the price beside it.
     priceChange24h: paprika.percent_change_24h ?? null,
-    // No fallback. Price × issued supply is close but not the same as
-    // circulating supply, and this is a headline figure people compare against
-    // other sites.
-    marketCapUsd: paprika.market_cap ?? null,
+    marketCapUsd: paprikaMarketCap ?? derivedMarketCap,
+    // Travels with the value rather than being re-derived by whoever renders
+    // it: the card has to say which of the two it is showing, and a consumer
+    // that has to work that out for itself is a consumer that can get it wrong.
+    marketCapEstimated: paprikaMarketCap == null && derivedMarketCap != null,
     fees,
     blockHeight,
     fng: fngSeries?.[0] ?? null,

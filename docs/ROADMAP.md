@@ -345,11 +345,23 @@ lives in `src/lib/marketData.js` where each source failing is a unit test, and
 left with. Which sources deliberately have *no* fallback — 24h volume, 24h
 change, market cap, dominance — is written down in that module with the reason.
 
-What is left is the smaller half: volume, market cap and dominance still blank
-together when CoinPaprika is down, and the honest options there are a second
-aggregator (a new dependency, against §1's keyless preference) or deriving
-market cap from price × issued supply, which the dashboard already computes
-from block height. Neither is urgent now that the price survives.
+**The remaining half shipped in v1.7.10.** Market cap took the second of the
+two options this file offered — price × issued supply, from the chain tip the
+dashboard already fetches — and answered the "headline figure people compare
+against other sites" objection with a label rather than a blank, on the v1.6.5
+precedent. The same change found that `VolumeCard` gated its whole body on the
+volume, so a CoinPaprika outage had been blanking **sats per fiat** too, which
+needs only the price v1.7.9 had already rescued.
+
+**What is left is a genuine dead end, recorded as one.** 24h volume, 24h change
+and BTC dominance have no second source in this stack and cannot be honestly
+derived from one: Kraken's `v[1]` is one pair on one exchange against a figure
+advertised as global, a candle-derived change is "since yesterday's close"
+rather than a rolling 24 hours, and nothing else the app fetches knows altcoins
+exist. The only remaining option is a second aggregator, which is a new
+dependency against §1's keyless preference for three secondary numbers that
+already fail visibly rather than wrongly. Not worth it today; revisit only if
+CoinPaprika's reliability becomes a real complaint rather than a hypothetical.
 
 **Rate-limit and abuse posture.** Required before §4.2. §3.3 shipped the first
 unauthenticated compute endpoint anyone can hammer, and its only defence is the

@@ -129,7 +129,11 @@ function writeCache(data) {
   if (data.volumeCad      != null) patch.volumeCad      = data.volumeCad
   if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
   if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
-  if (data.marketCapUsd   != null) patch.marketCapUsd   = data.marketCapUsd
+  // Deliberately never caches the derived market cap. The cache is a
+  // repeat-visit fallback with no provenance attached, so a stored estimate
+  // would resurface later with nothing to label it — and it needs no caching
+  // anyway, being recomputed from a live price and block height every load.
+  if (data.marketCapUsd != null && !data.marketCapEstimated) patch.marketCapUsd = data.marketCapUsd
   if (data.fng            != null) patch.fng            = data.fng
   if (data.fngHistory     != null) patch.fngHistory     = data.fngHistory
   if (data.difficulty     != null) patch.difficulty     = data.difficulty
@@ -318,7 +322,12 @@ export default function App() {
         if (result.fees          != null) patch.fees          = result.fees
         if (result.blockHeight   != null) patch.blockHeight   = result.blockHeight
         if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
-        if (result.marketCapUsd   != null) patch.marketCapUsd   = result.marketCapUsd
+        // Paired: a refresh that recovers CoinPaprika must clear the estimate
+        // label at the same moment it replaces the estimated number.
+        if (result.marketCapUsd   != null) {
+          patch.marketCapUsd       = result.marketCapUsd
+          patch.marketCapEstimated = result.marketCapEstimated
+        }
         if (result.btcDominance  != null) patch.btcDominance  = result.btcDominance
         if (result.mempool       != null) patch.mempool       = result.mempool
         if (result.lastBlockTs   != null) patch.lastBlockTs   = result.lastBlockTs
@@ -590,7 +599,7 @@ export default function App() {
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
           priceChange24h, fees, blockHeight, fng, fngHistory, difficulty, btcDominance, mempool, lastBlockTs,
-          marketCapUsd, lightning, athUsd } = data ?? {}
+          marketCapUsd, marketCapEstimated, lightning, athUsd } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
@@ -777,6 +786,7 @@ export default function App() {
           btcDominance={btcDominance}
           volHistory={volHistory}
           marketCapUsd={marketCapUsd}
+          marketCapEstimated={marketCapEstimated}
           price={price}
         />
         <MarketSentimentCard fng={fng} fngHistory={fngHistory} loading={loading} />
