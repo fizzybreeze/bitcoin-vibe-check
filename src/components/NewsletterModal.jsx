@@ -40,7 +40,7 @@ export default function NewsletterModal() {
         <button
           onClick={dismiss}
           aria-label="Close"
-          className="absolute top-4 right-4 text-sm text-gray-500 hover:text-gray-300"
+          className="absolute top-4 right-4 text-sm text-gray-450 hover:text-gray-300"
         >
           ✕
         </button>
@@ -51,7 +51,7 @@ export default function NewsletterModal() {
         </div>
         <button
           onClick={dismiss}
-          className="mt-4 text-xs text-gray-500 underline hover:text-gray-400"
+          className="mt-4 text-xs text-gray-450 underline hover:text-gray-400"
         >
           No thanks, I'll stick to the dashboard
         </button>

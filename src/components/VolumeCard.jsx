@@ -20,7 +20,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
   const satsPerFiat = computeSatsPerFiat(price)
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
@@ -56,7 +56,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
             precedent: a fallback that presents itself as the primary source is
             the one way it could be worse than the blank it replaces. */}
         {marketCapUsd != null && (
-          <p className="hidden md:block mt-0.5 text-xs text-gray-500">
+          <p className="hidden md:block mt-0.5 text-xs text-gray-450">
             Mkt cap {fmtVolume(marketCapUsd, 'usd')}{marketCapEstimated && ' · est. from issued supply'}
           </p>
         )}
@@ -64,7 +64,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
         {satsPerFiat != null && (
           <>
             <div className="mt-3 border-t border-gray-700" />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Sats per fiat</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-450">Sats per fiat</p>
             <p className="mt-1 text-lg font-bold text-white">
               {satsPerFiat.toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
             </p>

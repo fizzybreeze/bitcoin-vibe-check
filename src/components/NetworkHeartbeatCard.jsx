@@ -18,14 +18,14 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Network Heartbeat</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Network Heartbeat</p>
 
       {/* Two-column interior */}
       <div className="mt-3 flex gap-3">
 
         {/* Block height */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Block Height</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Block Height</p>
           <div className="mt-1">
             {loading || blockHeight == null
               ? <Skeleton className="h-7 w-16" />
@@ -38,7 +38,7 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
 
         {/* Avg block time */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Avg Block Time</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Avg Block Time</p>
           <div className="mt-1">
             {loading || avgBlockMins == null
               ? <Skeleton className="h-7 w-12" />
@@ -59,7 +59,7 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
             <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
           </span>
         )}
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-450">
           {lastBlockMinsAgo != null
             ? `Last block: ${lastBlockMinsAgo} min ago`
             : 'Last block: unknown'

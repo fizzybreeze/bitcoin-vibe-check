@@ -20,6 +20,15 @@ afterEach(cleanup)
 describe('MarketSentimentCard', () => {
   const fng = { value: '72', value_classification: 'Greed' }
 
+  it('labels the 30-day sparkline with the readings it draws', () => {
+    // The chart is an SVG with no text. The label carries the information —
+    // first, last and direction — rather than describing the picture.
+    render(<MarketSentimentCard fng={fng} fngHistory={[{ v: 45 }, { v: 30 }, { v: 72 }]} loading={false} />)
+    const chart = screen.getByRole('img', { name: /Fear and Greed/ })
+    expect(chart.getAttribute('aria-label'))
+      .toBe('Fear and Greed over 30 days: 45 to 72, rising. Low 30, high 72.')
+  })
+
   it('renders the score and its classification', () => {
     render(<MarketSentimentCard fng={fng} fngHistory={null} loading={false} />)
     expect(screen.getByText('72')).toBeInTheDocument()
@@ -36,7 +45,7 @@ describe('MarketSentimentCard', () => {
 
   it('falls back to grey for a classification it does not know', () => {
     render(<MarketSentimentCard fng={{ value: '50', value_classification: 'Sideways' }} loading={false} />)
-    expect(screen.getByText('Sideways')).toHaveClass('text-gray-500')
+    expect(screen.getByText('Sideways')).toHaveClass('text-gray-450')
   })
 
   it('shows a dash rather than a stale value once loading has finished with no data', () => {

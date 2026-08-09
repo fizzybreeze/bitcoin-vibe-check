@@ -105,7 +105,7 @@ export default function PriceAlertsPanel({
           <button
             onClick={onClose}
             aria-label="Close alerts"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-gray-450 hover:text-gray-300 transition-colors"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <line x1="1" y1="1" x2="11" y2="11" />
@@ -159,7 +159,7 @@ export default function PriceAlertsPanel({
               />
             </div>
             {unitLabel && (
-              <span className="flex items-center text-xs font-semibold uppercase text-gray-500">{unitLabel}</span>
+              <span className="flex items-center text-xs font-semibold uppercase text-gray-450">{unitLabel}</span>
             )}
             <button
               type="submit"
@@ -169,14 +169,14 @@ export default function PriceAlertsPanel({
             </button>
           </div>
           {inputError && <p className="mt-1.5 text-xs text-red-400">{inputError}</p>}
-          <p className="mt-1.5 text-xs text-gray-600">e.g. {example}</p>
+          <p className="mt-1.5 text-xs text-gray-450">e.g. {example}</p>
         </form>
 
         {/* Alert list */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Active alerts</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-450">Active alerts</p>
           {alerts.length === 0 ? (
-            <p className="text-xs text-gray-600">No alerts set. Pick a metric and add a level above.</p>
+            <p className="text-xs text-gray-450">No alerts set. Pick a metric and add a level above.</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {alerts.map(alert => {
@@ -193,7 +193,7 @@ export default function PriceAlertsPanel({
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`text-sm ${
                         alert.triggered
-                          ? 'text-gray-600'
+                          ? 'text-gray-450'
                           : tinted
                             ? alert.direction === 'above' ? 'text-green-400' : 'text-red-400'
                             : 'text-gray-400'
@@ -203,20 +203,20 @@ export default function PriceAlertsPanel({
                       {/* Named on every row, not only the non-price ones: "20"
                           beside "$80,000" is ambiguous, and a prefix that only
                           appears sometimes is worse than one that always does */}
-                      <span className={`text-xs shrink-0 ${alert.triggered ? 'text-gray-700' : 'text-gray-500'}`}>
+                      <span className={`text-xs shrink-0 ${alert.triggered ? 'text-gray-450' : 'text-gray-450'}`}>
                         {rowMeta?.shortName ?? alert.metric}
                       </span>
-                      <span className={`text-sm font-medium truncate ${alert.triggered ? 'text-gray-600' : 'text-white'}`}>
+                      <span className={`text-sm font-medium truncate ${alert.triggered ? 'text-gray-450' : 'text-white'}`}>
                         {alert.label}
                       </span>
                       {alert.triggered && (
-                        <span className="text-xs text-gray-600 shrink-0">✓ Triggered</span>
+                        <span className="text-xs text-gray-450 shrink-0">✓ Triggered</span>
                       )}
                     </div>
                     <button
                       onClick={() => onRemove(alert.id)}
                       aria-label={`Remove alert for ${rowMeta?.shortName ?? alert.metric} ${alert.label}`}
-                      className="ml-2 shrink-0 flex h-5 w-5 items-center justify-center rounded-full text-gray-600 hover:text-gray-400 transition-colors"
+                      className="ml-2 shrink-0 flex h-5 w-5 items-center justify-center rounded-full text-gray-450 hover:text-gray-400 transition-colors"
                     >
                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                         <line x1="1" y1="1" x2="9" y2="9" />
@@ -232,7 +232,7 @@ export default function PriceAlertsPanel({
           {hasTriggered && (
             <button
               onClick={onClearTriggered}
-              className="mt-3 text-xs text-gray-500 underline underline-offset-2 hover:text-gray-300 transition-colors"
+              className="mt-3 text-xs text-gray-450 underline underline-offset-2 hover:text-gray-300 transition-colors"
             >
               Clear triggered
             </button>
@@ -266,7 +266,7 @@ export default function PriceAlertsPanel({
               </span>
             </button>
           )}
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-450">
             {PUSH_COPY[pushStatus] ?? PUSH_COPY[PUSH_UNCONFIGURED]}
           </p>
         </div>

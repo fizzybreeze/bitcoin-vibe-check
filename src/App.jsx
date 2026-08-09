@@ -692,13 +692,13 @@ export default function App() {
       <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
-          <p className="mt-0.5 text-xs text-gray-500">{vibeSummary ?? 'Read the room.'}</p>
+          <p className="mt-0.5 text-xs text-gray-450">{vibeSummary ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4 self-end md:self-auto">
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
-            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-orange-400' : 'text-gray-600 hover:text-gray-400'}`}
+            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-orange-400' : 'text-gray-450 hover:text-gray-400'}`}
           >
             {soundEnabled ? (
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -730,7 +730,7 @@ export default function App() {
             </select>
             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-orange-400 text-xs">▾</span>
           </div>
-          <p className="flex items-center gap-1.5 text-sm text-gray-500">
+          <p className="flex items-center gap-1.5 text-sm text-gray-450">
             {wsLive ? (
               <>
                 <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -850,7 +850,7 @@ export default function App() {
       <NewsletterCard />
 
       {/* Privacy note */}
-      <p className="mt-2 text-center text-xs text-gray-600">
+      <p className="mt-2 text-center text-xs text-gray-450">
         By subscribing you agree to our{' '}
         <a
           href="https://www.beehiiv.com/privacy?utm_source=satoshi%27s_weekly_brief"
@@ -867,7 +867,7 @@ export default function App() {
 
       <SatoshiQuote />
 
-      <p className="py-4 text-center text-xs text-gray-700">© 2026 Bitcoin Vibe Check · MIT Licence</p>
+      <p className="py-4 text-center text-xs text-gray-450">© 2026 Bitcoin Vibe Check · MIT Licence</p>
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />

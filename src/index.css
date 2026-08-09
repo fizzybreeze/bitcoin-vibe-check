@@ -12,7 +12,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* The one muted grey for quiet text on `bg-gray-900`.
+ *
+ * Tailwind's own ramp does not have a tone that works here: measured against
+ * gray-900, gray-500 is 3.67:1, gray-600 is 2.35:1 and gray-700 is 1.72:1 —
+ * all three fail WCAG AA for normal text (4.5:1), and gray-700 was being used
+ * for the difficulty bar's "Slower"/"Faster" labels, which made them
+ * effectively invisible. The next tone up, gray-400, is 6.82:1 and is already
+ * the app's *bright* muted tier, so promoting everything to it would have
+ * flattened the two tiers into one.
+ *
+ * 61% lightness measures 4.69:1 — clear of the threshold with enough headroom
+ * that rounding cannot drag it under. `contrast.test.js` computes that number
+ * from this value rather than trusting this comment.
+ */
+@theme {
+  --color-gray-450: oklch(61% 0.025 262);
+}
+
 @keyframes ticker-scroll {
   from { transform: translateX(100%); }
   to   { transform: translateX(-100%); }
+}
+
+/* Motion is a request, not a decoration.
+ *
+ * This dashboard runs a 30-second scrolling supporter ticker and a pinging
+ * "breathing dot" per block, both indefinitely — exactly the sustained motion
+ * that triggers nausea and migraine for people with vestibular disorders, and
+ * both on a page someone may leave open all day.
+ *
+ * Blanket rather than per-component on purpose: the failure mode is a new
+ * animation added later by someone who did not think about this, and a rule
+ * that has to be remembered is a rule that will not be. Nothing here conveys
+ * information by moving — the ticker's names, the dot's colour and the
+ * skeletons' shape all still read when still — so stopping the motion costs no
+ * meaning.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

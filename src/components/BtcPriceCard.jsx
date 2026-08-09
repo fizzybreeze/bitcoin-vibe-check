@@ -2,6 +2,7 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
 import { hasEnoughVibeHistory, vibeHistoryLabel } from '../lib/vibeHistory.js'
+import { describeTrend } from './seriesLabel.js'
 
 const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
 
@@ -36,8 +37,8 @@ function VibeBreakdown({ dimensions }) {
         const value = dimensions?.[key]
         return (
           <div key={key} className="flex items-baseline justify-between gap-2">
-            <span className="text-[10px] uppercase tracking-wider text-gray-600">{label}</span>
-            <span className={`text-xs font-semibold tabular-nums ${value == null ? 'text-gray-700' : 'text-gray-300'}`}>
+            <span className="text-[10px] uppercase tracking-wider text-gray-450">{label}</span>
+            <span className={`text-xs font-semibold tabular-nums ${value == null ? 'text-gray-450' : 'text-gray-300'}`}>
               {value == null ? '—' : Math.round(value)}
             </span>
           </div>
@@ -57,7 +58,11 @@ function VibeHistorySparkline({ points }) {
 
   return (
     <div data-testid="vibe-sparkline" className="mt-3">
-      <div className="h-10">
+      <div
+        className="h-10"
+        role="img"
+        aria-label={describeTrend('Vibe Score', points.map(p => p.score), { period: vibeHistoryLabel(points) })}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
             <Line
@@ -74,7 +79,7 @@ function VibeHistorySparkline({ points }) {
       </div>
       {/* Labelled by what the line actually covers, never by the window it was
           asked for. Until 30 points exist this names the first day on it. */}
-      <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-600">
+      <p className="mt-1 text-[10px] uppercase tracking-wider text-gray-450">
         Vibe trend ({vibeHistoryLabel(points)})
       </p>
     </div>
@@ -86,7 +91,7 @@ function VibeScoreSection({ vibe, loading, history }) {
     // md:mt-auto pins this to the bottom of the card on desktop, where the row
     // height is set by the taller chart card beside it. That space was empty.
     <div className="mt-4 border-t border-gray-800 pt-4 md:mt-auto md:pt-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">
         Vibe Score<CardTooltip text={VIBE_TOOLTIP} />
       </p>
 
@@ -95,8 +100,8 @@ function VibeScoreSection({ vibe, loading, history }) {
           ? <Skeleton className="mt-2 h-10 w-28" />
           : (
             <>
-              <p className="mt-2 text-3xl font-bold text-gray-600 md:text-4xl">—</p>
-              <p className="mt-1.5 text-xs text-gray-500">Not enough live data to score</p>
+              <p className="mt-2 text-3xl font-bold text-gray-450 md:text-4xl">—</p>
+              <p className="mt-1.5 text-xs text-gray-450">Not enough live data to score</p>
             </>
           )
       ) : (
@@ -117,7 +122,7 @@ function VibeScoreSection({ vibe, loading, history }) {
               off Mayer alone is still a degraded reading, and MVRV is the input
               that actually goes missing. */}
           {vibe.inputsUsed < vibe.inputsTotal && (
-            <p className="mt-2 text-[10px] text-gray-600">
+            <p className="mt-2 text-[10px] text-gray-450">
               Scored on {vibe.inputsUsed} of {vibe.inputsTotal} inputs
             </p>
           )}
@@ -133,7 +138,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
   const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div data-testid="card-btc-price" className="rounded-2xl bg-gray-900 p-6 h-full flex flex-col">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
@@ -145,7 +150,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
           {athPct != null && value != null && (
             isAtATH
               ? <p className="mt-1 text-xs font-medium text-green-400 md:mt-1.5 md:text-sm">AT ATH</p>
-              : <p className="mt-1 text-xs text-gray-500 md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
+              : <p className="mt-1 text-xs text-gray-450 md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
           )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (

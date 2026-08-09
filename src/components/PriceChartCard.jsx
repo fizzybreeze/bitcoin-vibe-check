@@ -33,7 +33,7 @@ export default function PriceChartCard({
     <div className="rounded-2xl bg-gray-900 p-6 h-full">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">
             Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
           </p>
           {chartChange != null && !chartLoading && (
@@ -64,7 +64,7 @@ export default function PriceChartCard({
             onClick={refreshChart}
             disabled={chartLoading}
             aria-label="Refresh chart"
-            className="ml-1 rounded-full p-1 text-gray-600 transition-colors hover:text-gray-300 disabled:opacity-30"
+            className="ml-1 rounded-full p-1 text-gray-450 transition-colors hover:text-gray-300 disabled:opacity-30"
           >
             <svg
               width="13" height="13" viewBox="0 0 13 13"
@@ -78,7 +78,7 @@ export default function PriceChartCard({
             </svg>
           </button>
         </div>
-        <p className="text-xs text-gray-500">Chart in USD</p>
+        <p className="text-xs text-gray-450">Chart in USD</p>
         </div>
       </div>
 
@@ -91,7 +91,7 @@ export default function PriceChartCard({
           <button
             onClick={refreshChart}
             aria-label="Retry chart"
-            className="text-gray-600 transition-colors hover:text-gray-400"
+            className="text-gray-450 transition-colors hover:text-gray-400"
           >
             <svg
               width="13" height="13" viewBox="0 0 13 13"
@@ -174,7 +174,7 @@ export default function PriceChartCard({
             </div>
             {chartLoading && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <p className="text-xs text-gray-500">Loading...</p>
+                <p className="text-xs text-gray-450">Loading...</p>
               </div>
             )}
           </div>

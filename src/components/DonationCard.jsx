@@ -33,9 +33,9 @@ export default function DonationCard() {
 
   return (
     <div className="rounded-2xl bg-gray-900 p-6 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Support Bitcoin Vibe Check</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Support Bitcoin Vibe Check</p>
       <div className="mt-3 space-y-1">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-450">
           1. Send any amount to Strike:{' '}
           <a
             href="https://strike.me/fizzybreeze"
@@ -46,8 +46,8 @@ export default function DonationCard() {
             Open Strike to pay ⚡₿
           </a>
         </p>
-        <p className="text-sm text-gray-500">2. Enter your name or handle below and click Submit.</p>
-        <p className="text-sm text-gray-600">We'll add you to the list once we see your payment come through.</p>
+        <p className="text-sm text-gray-450">2. Enter your name or handle below and click Submit.</p>
+        <p className="text-sm text-gray-450">We'll add you to the list once we see your payment come through.</p>
       </div>
       <div className="mt-4">
         <input

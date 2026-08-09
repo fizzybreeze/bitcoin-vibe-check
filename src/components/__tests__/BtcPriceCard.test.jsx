@@ -56,6 +56,12 @@ describe('BtcPriceCard vibe history', () => {
   it('draws the line at exactly the minimum, labelled with its first day', () => {
     renderCard(points(MIN_HISTORY_POINTS))
     expect(screen.getByTestId('vibe-sparkline')).toBeInTheDocument()
+
+    // Accessibility (roadmap §5): recharts renders an SVG with no text in it,
+    // so without this the sparkline is silent — a reader is not told the score
+    // has a history at all.
+    const chart = screen.getByRole('img', { name: /Vibe Score/ })
+    expect(chart.getAttribute('aria-label')).toMatch(/\d+ to \d+, (rising|falling|unchanged)/)
     expect(screen.getByText(/Vibe trend \(since 4 Sep\)/)).toBeInTheDocument()
   })
 

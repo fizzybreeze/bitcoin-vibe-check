@@ -51,7 +51,7 @@ export default function CardTooltip({ text }) {
         onClick={toggle}
         aria-label="More information"
         className={`flex items-center justify-center w-3.5 h-3.5 ml-1 rounded-full transition-colors focus:outline-none ${
-          visible ? 'text-gray-400' : 'text-gray-600 hover:text-gray-400'
+          visible ? 'text-gray-400' : 'text-gray-450 hover:text-gray-400'
         }`}
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
