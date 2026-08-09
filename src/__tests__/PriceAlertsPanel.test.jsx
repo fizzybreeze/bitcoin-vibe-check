@@ -327,7 +327,7 @@ describe('PriceAlertsPanel push toggle', () => {
     // Every state but "on" says it, in the same words, including the two that
     // mean "we could not find out" — loading and a worker that never
     // registered. A caveat that is only usually present is not a caveat.
-    for (const status of ['off', 'unsupported', 'unconfigured', 'blocked', 'loading']) {
+    for (const status of ['off', 'unsupported', 'unconfigured', 'blocked', 'loading', 'failed']) {
       const { unmount } = render(<PriceAlertsPanel {...baseProps} pushStatus={status} />)
       expect(screen.getByText(/only fire while this tab is open/i)).toBeInTheDocument()
       expect(screen.queryByText(/even with the tab closed/i)).not.toBeInTheDocument()
@@ -349,5 +349,58 @@ describe('PriceAlertsPanel push toggle', () => {
   it('disables the toggle while a subscribe is in flight', () => {
     render(<PriceAlertsPanel {...baseProps} pushStatus="off" pushBusy />)
     expect(toggle()).toBeDisabled()
+  })
+})
+
+// The reported bug: permission granted in Brave, and the toggle simply sprang
+// back to off with no explanation anywhere — not on screen and not in the
+// console. `subscribe()` swallowed the rejection in a bare `catch {}`, so a
+// browser refusing to register was indistinguishable from never having pressed
+// the toggle.
+describe('PriceAlertsPanel when turning push on did not work', () => {
+  const toggle = () => screen.queryByRole('button', { name: /push to this device/i })
+
+  it('does not read as "you have not tried yet"', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="failed" pushFailReason="push-service" />)
+    expect(screen.getByText(/refused to register for push/i)).toBeInTheDocument()
+  })
+
+  it('names the browser setting that actually causes this', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="failed" pushFailReason="push-service" />)
+    expect(screen.getByText(/Use Google services for push messaging/i)).toBeInTheDocument()
+    expect(screen.getByText(/Brave/i)).toBeInTheDocument()
+  })
+
+  // Advice you cannot act on is not advice. The copy says "try again", so the
+  // control has to still be there to try again with.
+  it('leaves the toggle on screen so the visitor can retry', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="failed" pushFailReason="push-service" />)
+    expect(toggle()).toBeInTheDocument()
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('retries through onEnablePush, not onDisablePush', () => {
+    const onEnablePush = vi.fn()
+    const onDisablePush = vi.fn()
+    render(
+      <PriceAlertsPanel {...baseProps} pushStatus="failed" pushFailReason="push-service"
+        onEnablePush={onEnablePush} onDisablePush={onDisablePush} />
+    )
+    fireEvent.click(toggle())
+    expect(onEnablePush).toHaveBeenCalledTimes(1)
+    expect(onDisablePush).not.toHaveBeenCalled()
+  })
+
+  // A storage failure is our fault, not the visitor's browser's. Telling them
+  // to go changing browser settings over it would send them somewhere useless.
+  it('does not blame the browser when the failure was ours', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="failed" pushFailReason="storage" />)
+    expect(screen.getByText(/could not be saved/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Use Google services for push messaging/i)).not.toBeInTheDocument()
+  })
+
+  it('still explains itself when the reason went missing', () => {
+    render(<PriceAlertsPanel {...baseProps} pushStatus="failed" />)
+    expect(screen.getByText(/refused to register for push/i)).toBeInTheDocument()
   })
 })

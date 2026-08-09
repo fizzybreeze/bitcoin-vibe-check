@@ -16,6 +16,18 @@ export const PUSH_UNCONFIGURED = 'unconfigured' // no VAPID key or no Supabase
 export const PUSH_BLOCKED = 'blocked'           // notifications denied
 export const PUSH_OFF = 'off'
 export const PUSH_ON = 'on'
+// Turning it on was attempted and did not work. A seventh state rather than a
+// return to `off`, because those two look identical on a toggle and mean
+// opposite things to the person looking at it: `off` says "you have not tried",
+// and this says "you tried and the browser refused".
+export const PUSH_FAILED = 'failed'
+
+// Why it failed, for the panel's copy. Two reasons rather than one string,
+// because the remedies have nothing in common — one is a browser setting the
+// visitor can change, the other is this site's problem and retrying is all they
+// can usefully do.
+export const PUSH_FAIL_SERVICE = 'push-service' // the browser refused to subscribe
+export const PUSH_FAIL_STORAGE = 'storage'     // subscribed, but the row would not store
 
 // `navigator.serviceWorker.ready` never settles when no worker is registered.
 // Measured in Chromium rather than assumed: on a page with no registration it
@@ -65,6 +77,7 @@ export function usePushSubscription() {
   // push" would flash a claim that is usually false.
   const [status, setStatus] = useState(PUSH_LOADING)
   const [busy, setBusy] = useState(false)
+  const [failReason, setFailReason] = useState(null)
 
   const vapidKey = readVapidPublicKey(import.meta.env)
   // A push nobody can store is not a subscription, it is a notification
@@ -109,9 +122,17 @@ export function usePushSubscription() {
     }
 
     setBusy(true)
+    // Clear any previous failure, so a retry that works does not leave the
+    // panel explaining a problem that is over.
+    setFailReason(null)
     try {
       const registration = await activeRegistration()
-      if (!registration) return false
+      if (!registration) {
+        // Was `return false` with the status untouched, which left the toggle
+        // sitting at `off` as though nothing had been asked of it.
+        setStatus(PUSH_UNSUPPORTED)
+        return false
+      }
       const subscription =
         (await registration.pushManager.getSubscription()) ??
         (await registration.pushManager.subscribe({
@@ -134,6 +155,9 @@ export function usePushSubscription() {
         // rather than leave the browser holding something that will never
         // deliver. Same reasoning as the insert-failed path below.
         await subscription.unsubscribe().catch(() => {})
+        console.warn('[push] subscription could not be shaped into a row — not storing')
+        setStatus(PUSH_FAILED)
+        setFailReason(PUSH_FAIL_STORAGE)
         return false
       }
 
@@ -147,12 +171,25 @@ export function usePushSubscription() {
         // Leave no subscription the server does not know about: it would
         // report "on" forever and never receive anything.
         await subscription.unsubscribe().catch(() => {})
+        console.warn(`[push] could not store subscription: ${error?.message ?? 'unknown error'}`)
+        setStatus(PUSH_FAILED)
+        setFailReason(PUSH_FAIL_STORAGE)
         return false
       }
 
       setStatus(PUSH_ON)
       return true
-    } catch {
+    } catch (err) {
+      // The bare `catch {}` this replaces is the whole defect behind "I granted
+      // permission and the toggle just stayed off". `pushManager.subscribe()`
+      // rejecting is not exotic — it is the ordinary outcome in any browser
+      // whose push service is unavailable, which includes Brave with its
+      // default "Use Google services for push messaging" setting off. Swallowed
+      // silently, that is indistinguishable from never having pressed the
+      // toggle, and there was nothing in the console either.
+      console.warn(`[push] subscribe failed: ${err?.name ?? 'Error'} — ${err?.message ?? ''}`)
+      setStatus(PUSH_FAILED)
+      setFailReason(PUSH_FAIL_SERVICE)
       return false
     } finally {
       setBusy(false)
@@ -162,6 +199,7 @@ export function usePushSubscription() {
   const unsubscribe = useCallback(async () => {
     if (!browserSupportsPush()) return false
     setBusy(true)
+    setFailReason(null)
     try {
       const registration = await activeRegistration()
       const existing = registration ? await registration.pushManager.getSubscription() : null
@@ -212,6 +250,7 @@ export function usePushSubscription() {
   return {
     pushStatus: status,
     pushBusy: busy,
+    pushFailReason: failReason,
     subscribePush: subscribe,
     unsubscribePush: unsubscribe,
     syncPushRules: syncRules,

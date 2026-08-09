@@ -17,7 +17,7 @@ vi.mock('../../lib/supabase.js', () => ({
 
 const {
   usePushSubscription, PUSH_LOADING, PUSH_UNSUPPORTED, PUSH_UNCONFIGURED,
-  PUSH_BLOCKED, PUSH_OFF, PUSH_ON,
+  PUSH_BLOCKED, PUSH_OFF, PUSH_ON, PUSH_FAILED, PUSH_FAIL_SERVICE, PUSH_FAIL_STORAGE,
 } = await import('../usePushSubscription.js')
 
 // A real key: 65 bytes, 0x04 prefix, base64url.
@@ -163,7 +163,12 @@ describe('usePushSubscription', () => {
     expect(ok).toBe(false)
     expect(insert).not.toHaveBeenCalled()
     expect(malformed.unsubscribe).toHaveBeenCalled()
-    expect(result.current.pushStatus).toBe(PUSH_OFF)
+    // Was PUSH_OFF until v1.7.15, and that was the reported bug in miniature:
+    // dropping the subscription is right, but reporting the attempt as though
+    // it never happened leaves the visitor pressing a toggle that keeps
+    // springing back. It failed, so it says so.
+    expect(result.current.pushStatus).toBe(PUSH_FAILED)
+    expect(result.current.pushFailReason).toBe(PUSH_FAIL_STORAGE)
   })
 
   it('stores the hash of a secret, never the secret', async () => {
@@ -224,6 +229,94 @@ describe('usePushSubscription', () => {
     await act(async () => { ok = await result.current.syncPushRules([]) })
     expect(ok).toBe(false)
     expect(update).not.toHaveBeenCalled()
+  })
+
+  // The v1.7.15 report: permission granted in Brave, toggle pressed, switch
+  // springs back to off with nothing on screen and nothing in the console.
+  // `subscribe()` ended in a bare `catch {}`, so a browser *refusing* to
+  // register was indistinguishable from never having pressed the toggle.
+  describe('when the browser refuses to register', () => {
+    // Exactly what Brave does with "Use Google services for push messaging"
+    // off: permission is granted, and the registration is refused afterwards.
+    const refuse = () => Object.assign(
+      new Error('Registration failed - push service not available'), { name: 'AbortError' }
+    )
+
+    async function refusedSubscribe() {
+      const { pushManager } = stubBrowser()
+      pushManager.subscribe = vi.fn(async () => { throw refuse() })
+      stubBrowser({ ready: Promise.resolve({ pushManager }) })
+      const view = renderHook(() => usePushSubscription())
+      await waitFor(() => expect(view.result.current.pushStatus).toBe(PUSH_OFF))
+      view.pushManager = pushManager
+      return view
+    }
+
+    it('reports the failure instead of falling back to off', async () => {
+      const { result } = await refusedSubscribe()
+      await act(async () => { await result.current.subscribePush() })
+
+      expect(result.current.pushStatus).toBe(PUSH_FAILED)
+      expect(result.current.pushFailReason).toBe(PUSH_FAIL_SERVICE)
+    })
+
+    it('leaves a trail in the console, which it previously did not', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { result } = await refusedSubscribe()
+      await act(async () => { await result.current.subscribePush() })
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('AbortError'))
+    })
+
+    it('does not leave the toggle disabled afterwards', async () => {
+      const { result } = await refusedSubscribe()
+      await act(async () => { await result.current.subscribePush() })
+
+      expect(result.current.pushBusy).toBe(false)
+    })
+
+    it('clears the failure once a retry works', async () => {
+      const view = await refusedSubscribe()
+      await act(async () => { await view.result.current.subscribePush() })
+      expect(view.result.current.pushStatus).toBe(PUSH_FAILED)
+
+      view.pushManager.subscribe = vi.fn(async () => SUBSCRIPTION)
+      await act(async () => { await view.result.current.subscribePush() })
+
+      expect(view.result.current.pushStatus).toBe(PUSH_ON)
+      expect(view.result.current.pushFailReason).toBeNull()
+    })
+
+    // A refused registration and a refused insert need different advice — one
+    // is a browser setting the visitor can change, the other is ours.
+    it('separates a refused registration from a refused insert', async () => {
+      insert.mockResolvedValueOnce({ error: { code: '42501', message: 'permission denied' } })
+      const { pushManager } = stubBrowser()
+      stubBrowser({ ready: Promise.resolve({ pushManager }) })
+      const { result } = renderHook(() => usePushSubscription())
+      await waitFor(() => expect(result.current.pushStatus).toBe(PUSH_OFF))
+
+      await act(async () => { await result.current.subscribePush() })
+
+      expect(result.current.pushStatus).toBe(PUSH_FAILED)
+      expect(result.current.pushFailReason).toBe(PUSH_FAIL_STORAGE)
+    })
+
+    // v1.7.6's rule, which the new failure states must not have broken:
+    // re-subscribing in the same browser yields the same endpoint, so a
+    // duplicate insert means "already stored", not "failed".
+    it('still counts a duplicate endpoint as on', async () => {
+      insert.mockResolvedValueOnce({ error: { code: '23505', message: 'duplicate key' } })
+      const { pushManager } = stubBrowser()
+      stubBrowser({ ready: Promise.resolve({ pushManager }) })
+      const { result } = renderHook(() => usePushSubscription())
+      await waitFor(() => expect(result.current.pushStatus).toBe(PUSH_OFF))
+
+      await act(async () => { await result.current.subscribePush() })
+
+      expect(result.current.pushStatus).toBe(PUSH_ON)
+      expect(result.current.pushFailReason).toBeNull()
+    })
   })
 
   it('does not request notification permission itself', async () => {

@@ -626,7 +626,7 @@ export default function App() {
     mayer: mayerMultiple,
   })
 
-  const { pushStatus, pushBusy, subscribePush, unsubscribePush, syncPushRules } =
+  const { pushStatus, pushBusy, pushFailReason, subscribePush, unsubscribePush, syncPushRules } =
     usePushSubscription()
 
   // Keep the stored rules in step with the panel while push is on. Keyed by the
@@ -883,6 +883,7 @@ export default function App() {
           onRequestPermission={requestPermission}
           pushStatus={pushStatus}
           pushBusy={pushBusy}
+          pushFailReason={pushFailReason}
           onEnablePush={enablePush}
           onDisablePush={unsubscribePush}
           onClose={() => setIsPriceAlertsOpen(false)}

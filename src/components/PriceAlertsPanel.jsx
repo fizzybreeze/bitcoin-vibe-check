@@ -1,27 +1,7 @@
 import { useState } from 'react'
 import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/alertRules.js'
-import {
-  PUSH_BLOCKED, PUSH_LOADING, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED, PUSH_UNSUPPORTED,
-} from '../hooks/usePushSubscription.js'
-
-// What the footer says, per push state. Kept as data next to the component
-// rather than as a chain of ternaries in the JSX, because the honest sentence
-// differs in every state and the wrong one is worse than none: telling someone
-// their alerts survive a closed tab when they do not is the single most
-// misleading thing this panel could say. Exactly one state says the tab may be
-// closed, and it is the one where that is true.
-//
-// `unsupported` does not blame the browser. It is also what a service worker
-// that failed to register looks like, and "your browser can't do this" is a
-// dead end where "not available here" is merely accurate.
-const PUSH_COPY = {
-  [PUSH_ON]:           'Alerts are pushed to this device, even with the tab closed. Your alert list is stored on the server so it can be checked while you are away.',
-  [PUSH_OFF]:          'Alerts only fire while this tab is open. Turning on push stores your alert list on the server so it can be checked with the tab closed.',
-  [PUSH_BLOCKED]:      'Alerts only fire while this tab is open, and push needs notification permission — currently blocked.',
-  [PUSH_UNSUPPORTED]:  'Alerts only fire while this tab is open — push notifications are not available here.',
-  [PUSH_UNCONFIGURED]: 'Alerts only fire while this tab is open — they are not push notifications.',
-  [PUSH_LOADING]:      'Alerts only fire while this tab is open — they are not push notifications.',
-}
+import { PUSH_FAILED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED } from '../hooks/usePushSubscription.js'
+import { pushFooterCopy } from './pushCopy.js'
 
 export default function PriceAlertsPanel({
   alerts,
@@ -33,6 +13,7 @@ export default function PriceAlertsPanel({
   onRequestPermission,
   pushStatus = PUSH_UNCONFIGURED,
   pushBusy = false,
+  pushFailReason = null,
   onEnablePush,
   onDisablePush,
   onClose,
@@ -243,7 +224,11 @@ export default function PriceAlertsPanel({
             sentence is deliberately explicit in every state rather than merely
             accurate — see PUSH_COPY. */}
         <div className="mt-4 border-t border-gray-800 pt-3">
-          {(pushStatus === PUSH_ON || pushStatus === PUSH_OFF) && (
+          {/* PUSH_FAILED keeps the toggle on screen. A failed attempt that
+              hides the control leaves the visitor with advice they cannot act
+              on — the copy below tells them to change a setting and try again,
+              so there has to be something left to try again with. */}
+          {(pushStatus === PUSH_ON || pushStatus === PUSH_OFF || pushStatus === PUSH_FAILED) && (
             <button
               type="button"
               onClick={pushStatus === PUSH_ON ? onDisablePush : onEnablePush}
@@ -267,7 +252,7 @@ export default function PriceAlertsPanel({
             </button>
           )}
           <p className="text-xs text-gray-450">
-            {PUSH_COPY[pushStatus] ?? PUSH_COPY[PUSH_UNCONFIGURED]}
+            {pushFooterCopy(pushStatus, pushFailReason)}
           </p>
         </div>
 

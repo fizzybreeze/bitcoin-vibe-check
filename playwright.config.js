@@ -66,5 +66,21 @@ export default defineConfig({
     // Reusing a server in CI masks port conflicts and produces confusing
     // failures; always start a clean one there.
     reuseExistingServer: !process.env.CI,
+    env: {
+      ...process.env,
+      // A throwaway VAPID **public** key — the private half was discarded at
+      // generation and nothing here signs anything. It exists so the push
+      // toggle is reachable at all: without a key the panel correctly reports
+      // itself unconfigured and never renders the control, which makes every
+      // push assertion pass vacuously on a developer machine and fail outright
+      // in CI, where no `.env` exists. That is exactly how the first draft of
+      // `alerts.spec.js`'s push block went green locally and red on the runner.
+      //
+      // Real values stay out of the suite deliberately: pinning the key here
+      // means the tests do not depend on whichever project the developer last
+      // pointed their `.env` at.
+      VITE_VAPID_PUBLIC_KEY:
+        'BCHIb2Jdw6QExyZ6ND0x7BJKXWUTc00hyrNNliPLrspiMjWGJsKoGKfOBo2HU7a41Gkcu6W0nsLZP1YWP1Pk4BE',
+    },
   },
 })
