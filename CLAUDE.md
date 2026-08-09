@@ -347,7 +347,10 @@ Three rules that are load-bearing:
   on a laptop fails on the runner over font antialiasing alone, and a check that
   cries wolf is a check people learn to ignore. Add the
   `update-visual-baselines` label to a PR and `visual-baselines.yml` commits the
-  new baselines for you.
+  new baselines for you — **or, if that label does not exist in the repository
+  (it did not as of v1.8.0), run the same workflow from the Actions tab with
+  *Run workflow* against your branch.** The job handles both triggers and
+  pushes to the same place; the label is the convenience, not the mechanism.
 - **`updateSnapshots: 'none'`.** Playwright's default is `'missing'`, which
   *writes* an absent baseline and passes. Since CI never commits what it writes,
   the baseline would be regenerated on every run and compared against itself —
@@ -594,7 +597,7 @@ Donor notifications do **not** depend on it. They come from the
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium, desktop + mobile projects. Uploads `playwright-report` and, separately, a `mobile-screenshot` artifact of the dashboard at 390×844. Required check: `Playwright (chromium)` |
-| `visual-baselines.yml` | `update-visual-baselines` label on a PR + manual | regenerates the visual baselines **on the runner** and commits them to the PR branch, then removes the label. The only sanctioned way to update them |
+| `visual-baselines.yml` | `update-visual-baselines` label on a PR + `workflow_dispatch` | regenerates the visual baselines **on the runner** and commits them to the PR branch, then removes the label. Either trigger works and both push to the branch — **the label does not currently exist in the repository**, so *Run workflow* from the Actions tab is the path that works today. Regenerating them any other way is not sanctioned: a baseline made off this runner fails on font antialiasing alone |
 | `snapshot.yml` | daily cron + manual | daily metrics → `metric_snapshots` |
 | `smoke.yml` | daily cron + manual | Playwright against the **deployed** site, real upstreams. Not a required check — it verifies production, which by definition exists only after merge |
 | `dependabot-auto-merge.yml` | `pull_request_target` | merges Dependabot **patch and minor** PRs once the two required checks are green. Majors are left alone. Does not use GitHub's auto-merge feature — see the rule above |
