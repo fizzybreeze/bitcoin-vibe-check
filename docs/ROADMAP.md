@@ -163,7 +163,13 @@ a source other people cite. Backlinks, distribution, and a moat that compounds:
 the composite is only available from here.
 
 **Prerequisites, in order.** Rate limiting and a caching posture first — an
-unauthenticated public endpoint on a free tier is an invitation. Serve from
+unauthenticated public endpoint on a free tier is an invitation. **The first
+half of that shipped in v1.7.17** and is deliberately not enough for this item:
+`api/lib/abuseGuard.js` bounds a single-client flood in a *per-instance* map,
+which is right for two routes nobody is supposed to call directly and wrong for
+an endpoint whose whole purpose is to be called by other people's servers. A
+public API needs shared state — the limit has to mean the same thing on every
+instance — and that is the piece nobody has designed yet. Serve from
 `metric_snapshots` (own data, no upstream cost) rather than proxying live sources,
 and cache hard at the edge. A stale-by-an-hour public API is fine; a serverless
 bill is not.
@@ -278,11 +284,25 @@ dependency against §1's keyless preference for three secondary numbers that
 already fail visibly rather than wrongly. Not worth it today; revisit only if
 CoinPaprika's reliability becomes a real complaint rather than a hypothetical.
 
-**Rate-limit and abuse posture.** Required before §4.2. §3.3 shipped the first
-unauthenticated compute endpoint anyone can hammer, and its only defence is the
-edge cache: `s-maxage=300` collapses a burst into one render per five minutes per
-region, which is adequate for one endpoint and is not a rate-limiting story. A
-second such endpoint, or any of §4.2, needs the real thing.
+**Rate-limit and abuse posture. The first pass shipped in v1.7.17.** The premise
+was that the edge cache was an adequate-if-thin defence; it turned out not to be
+a defence at all against anyone who thought about it for a second, because a CDN
+cache key includes the query string and neither public route took a parameter or
+rejected one. `?1`, `?2`, `?3` on `/api/chain-data` is fifteen requests from
+spending the whole day's BGeometrics quota. Both routes now refuse a query
+string outright — which protects the *upstreams* — and count requests per client
+address, which protects the *invocation count*; see the version-history row for
+why those are two defences rather than one.
+
+**What is left is the part that needs shared state.** The limiter is per
+serverless instance and in memory, so the real ceiling is the limit times
+however many are warm, and a cold start begins at zero. That bounds one client
+holding a key down, which is the shape this was for. It does not bound a
+distributed flood, and it cannot be the answer for §4.2, whose endpoints are
+*meant* to be called by other people's servers — that needs a counter every
+instance can see (Supabase, or a KV store) and a documented quota, and neither
+has been designed. Revisit with §4.2, not before: a rate limiter with no
+endpoint to protect is a guess about the shape of traffic that does not exist.
 
 ---
 
