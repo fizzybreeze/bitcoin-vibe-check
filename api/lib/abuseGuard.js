@@ -26,6 +26,32 @@
 // on a keyboard takes; a distributed one is a WAF's job and this is not one.
 // §4.2's public API needs the real thing before it ships, and this module is
 // not it.
+//
+// ─── Verifying this against production, and the trap in doing so ─────────────
+//
+// **Vercel's own fetch tooling appends `_vercel_share` to every request**, and
+// a *protected* deployment consumes that parameter at the edge while production
+// has nothing to consume it — so it arrives in `req.query` and is refused.
+// Fetching `https://www.bitcoinvibecheck.com/api/chain-data` through that
+// tooling therefore returns **400**, and `/og-live.png` sheds to the static
+// image, on a site that is working perfectly. Measured, and misread once before
+// it was measured properly: the giveaway is the response headers, because
+// Vercel strips `s-maxage` from what it sends the client, so the live render
+// arrives as `public, max-age=0` and the static file as
+// `public, max-age=0, must-revalidate`.
+//
+// Verify with a plain browser instead — `smoke/production.spec.js` does, which
+// is why those assertions live there rather than here.
+//
+// **The platform's parameters are deliberately not allowlisted**, tempting as
+// it is after being caught by this. The CDN cache key includes the query string
+// whatever this function decides, so exempting a key by name would make
+// `?_vercel_share=<random>` a working cache-buster again — against the one
+// route in the stack with a hard 15-a-day upstream budget, bounded then by
+// nothing but the rate limit above. No visitor and no unfurler sends these
+// parameters; only a developer holding Vercel's tooling does. Protecting the
+// quota beats making that one tool convenient, so the trap is written down
+// rather than engineered around.
 
 const first = (value) => {
   const raw = Array.isArray(value) ? value[0] : value
