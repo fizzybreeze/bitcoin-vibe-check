@@ -222,27 +222,51 @@ export function usePushSubscription() {
   /**
    * Replace this subscription's stored rules.
    *
-   * The update is deliberately **unfiltered**, which looks alarming and is the
-   * point of the design: `.eq('endpoint', …)` would need SELECT on that column,
-   * which anon does not have and must not get — a readable endpoint column is
-   * an enumeration oracle. Instead RLS scopes the statement, matching only the
-   * row whose `secret_hash` equals the hash of the header this client carries.
-   * Measured against the real table: an unfiltered update presenting one
-   * browser's secret affected 1 row, not 2.
+   * **Filtered on `secret_hash`, and it has to be.** v1.7.8 sent this update
+   * with no filter at all, on the reasoning that RLS already scopes it — the
+   * policy matches only the row whose `secret_hash` equals the hash of the
+   * `x-push-secret` header, so "update everything" and "update mine" are the
+   * same statement. The security reasoning was sound. The transport rejects it:
    *
-   * No `.select()`, for the same reason as the insert — there is no SELECT
-   * policy, so asking for the changed row back would 403 a successful write.
+   *   PATCH /rest/v1/push_subscriptions  (no filter)
+   *   → 400 {"code":"21000","message":"UPDATE requires a WHERE clause"}
+   *
+   * PostgREST refuses before Postgres sees the request, so no policy of ours
+   * was ever consulted and every sync failed. It was never noticed because this
+   * function returned `!error` into a void — nothing awaited it and nothing
+   * logged it, so a subscription sat there with `rules: []` and the sender had
+   * nothing to send. Hence the `console.warn`: this is the one write in the app
+   * whose failure has no visible consequence until an alert does not arrive.
+   *
+   * The filter is the hash rather than the endpoint, deliberately. `.eq(
+   * 'endpoint', …)` would need SELECT on a column that must never be readable —
+   * an endpoint is a capability and a durable browser identifier. The hash is
+   * something this browser can recompute from the secret it already holds, and
+   * `20260809170000` grants SELECT on that column alone, behind a SELECT policy
+   * scoped to the very same secret. Both gates still have to agree.
+   *
+   * Still no `.select()`: the policy would return the row, but the column grant
+   * would refuse every field the client asked for.
    */
   const syncRules = useCallback(async (alerts) => {
     if (status !== PUSH_ON) return false
-    const client = pushRulesClientFor(readPushSecret())
+    const secret = readPushSecret()
+    const client = pushRulesClientFor(secret)
     if (!client) return false
     try {
+      const secretHash = await hashPushSecret(secret)
+      if (!secretHash) return false
       const { error } = await client
         .from('push_subscriptions')
         .update({ rules: syncableRules(alerts) })
-      return !error
-    } catch {
+        .eq('secret_hash', secretHash)
+      if (error) {
+        console.warn(`[push] rules sync failed: ${error.message ?? 'unknown error'}`)
+        return false
+      }
+      return true
+    } catch (err) {
+      console.warn(`[push] rules sync threw: ${err?.message ?? 'unknown error'}`)
       return false
     }
   }, [status])
