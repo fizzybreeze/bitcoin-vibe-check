@@ -208,4 +208,26 @@ describe('VolumeCard', () => {
     expect(screen.getByText('Mkt cap $2.1T')).toBeTruthy()
     expect(screen.queryByText(/est\. from issued supply/)).toBeNull()
   })
+
+  // A price of 0 reached this card from the Kraken WebSocket, which published
+  // `Math.round(ticker.last)` behind a bare `!= null`. `computeSatsPerFiat(0)`
+  // is null, the card gated on the price rather than on that result, and there
+  // is no error boundary in the app — so the throw blanked the whole dashboard.
+  // The source is screened now; this pins the card so it cannot be the second
+  // half of that failure again.
+  it.each([
+    ['zero', 0],
+    ['NaN', NaN],
+    ['negative', -105000],
+  ])('renders without throwing when the price is %s', (_label, price) => {
+    expect(() => render(
+      <VolumeCard
+        volumeUsd={30e9} volume={30e9} currency="usd"
+        btcDominance={58.3} volHistory={null} marketCapUsd={2.1e12} price={price}
+      />
+    )).not.toThrow()
+    // And says nothing rather than saying something wrong.
+    expect(screen.queryByText(/sats per/)).toBeNull()
+    expect(screen.queryByText(/NaN/)).toBeNull()
+  })
 })

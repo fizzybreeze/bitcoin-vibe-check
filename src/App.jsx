@@ -12,7 +12,7 @@ import { syncableRules } from './lib/pushRules.js'
 import useVibeHistory from './hooks/useVibeHistory.js'
 import { supabase } from './lib/supabase.js'
 import { createChartCache } from './lib/chartCache.js'
-import { mergeMarketData } from './lib/marketData.js'
+import { mergeMarketData, krakenTickerUpdates } from './lib/marketData.js'
 import {
   CURRENCY_META, fmtCurrency, computeChartChange,
 } from './utils.js'
@@ -358,16 +358,11 @@ export default function App() {
       }
 
       ws.onmessage = ({ data }) => {
-        const msg = JSON.parse(data)
-        if (msg.channel !== 'ticker' || !msg.data?.length) return
-        const updates = {}
-        for (const ticker of msg.data) {
-          const key = WS_SYMBOL_MAP[ticker.symbol]
-          if (key && ticker.last != null) updates[key] = Math.round(ticker.last)
-        }
-        const usdTicker = msg.data.find(t => t.symbol === 'BTC/USD')
-        if (usdTicker?.change_pct != null) updates.priceChange24h = usdTicker.change_pct
-        if (Object.keys(updates).length) setData(prev => prev ? { ...prev, ...updates } : prev)
+        // Every decision about which fields a frame may overwrite — and what
+        // counts as a usable value — lives in `krakenTickerUpdates`, where a
+        // zero or non-numeric tick is a unit test rather than a blank page.
+        const updates = krakenTickerUpdates(JSON.parse(data), WS_SYMBOL_MAP)
+        if (updates) setData(prev => prev ? { ...prev, ...updates } : prev)
       }
 
       ws.onclose = () => {

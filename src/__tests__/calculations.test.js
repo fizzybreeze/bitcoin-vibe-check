@@ -78,6 +78,20 @@ describe('computeSatsPerFiat', () => {
   it('returns null for a zero price', () => {
     expect(computeSatsPerFiat(0)).toBeNull()
   })
+
+  it('answers null rather than NaN for a price that is not a number', () => {
+    // The contract is "a number or null" — never a third answer. NaN passes a
+    // `!= null` guard and reaches the DOM as the string "NaN", which is how a
+    // correct-looking call site still renders "NaN sats per $1".
+    expect(computeSatsPerFiat(NaN)).toBeNull()
+    expect(computeSatsPerFiat(Infinity)).toBeNull()
+    expect(computeSatsPerFiat('105000')).toBeNull()
+    expect(computeSatsPerFiat(undefined)).toBeNull()
+  })
+
+  it('refuses a negative price rather than producing negative sats', () => {
+    expect(computeSatsPerFiat(-105000)).toBeNull()
+  })
 })
 
 // ─── Supply issued ────────────────────────────────────────────────────────────

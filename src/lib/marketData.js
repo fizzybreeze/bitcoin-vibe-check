@@ -34,6 +34,61 @@ function positive(value) {
 }
 
 /**
+ * A finite number, or `null` for anything that is not one.
+ *
+ * A second numeric predicate beside `positive`, which is normally a smell — two
+ * predicates for one fact are two places to disagree. These are two different
+ * facts: a price must be above zero, while a percentage change is legitimately
+ * zero or negative and only has to be a number. Blank counts as absent, because
+ * `Number('')` is `0` and a missing change would otherwise be published as "0%".
+ */
+function finite(value) {
+  if (value == null || value === '') return null
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * A Kraken WebSocket ticker frame → the fields it may overwrite in state, or
+ * `null` when it has nothing usable to say.
+ *
+ * The socket is an upstream like any other, and it was the *only* one whose
+ * values reached state unscreened: `if (ticker.last != null) updates[key] =
+ * Math.round(ticker.last)` publishes a `last` of `0` as a price of 0 and a
+ * non-numeric `last` as `NaN`. Both are worse than a dropped frame, because a
+ * price already on screen is replaced by a broken one:
+ *
+ *   - `0` crashed the dashboard outright. `computeSatsPerFiat(0)` is `null`,
+ *     `VolumeCard` dereferenced it, and there is no error boundary in this app,
+ *     so the whole page went blank.
+ *   - `0` would also fire every pending `below` alert at once, quoting
+ *     "Now $0" — the exact hazard v1.7.1 recorded when it made `isValidValue`
+ *     screen live readings as well as thresholds.
+ *   - A non-numeric `change_pct` reaches `change.toFixed(2)` in `BtcPriceCard`,
+ *     which throws on a string.
+ *
+ * The screen is applied to the value that is actually stored — after the
+ * rounding, not before — so nothing can be admitted and then spoiled on its way
+ * into state.
+ */
+export function krakenTickerUpdates(msg, symbolMap) {
+  if (msg?.channel !== 'ticker' || !Array.isArray(msg.data) || !msg.data.length) return null
+
+  const updates = {}
+  for (const ticker of msg.data) {
+    const key = symbolMap?.[ticker?.symbol]
+    if (!key) continue
+    const last = positive(Math.round(Number(ticker?.last)))
+    if (last != null) updates[key] = last
+  }
+
+  const change = finite(msg.data.find(t => t?.symbol === 'BTC/USD')?.change_pct)
+  if (change != null) updates.priceChange24h = change
+
+  return Object.keys(updates).length ? updates : null
+}
+
+/**
  * Market cap from a price and a block height, or `null` if either is missing.
  *
  * v1.7.9 wrote this off — "price × issued supply is close but not the same as
