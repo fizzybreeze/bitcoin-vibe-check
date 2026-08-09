@@ -54,13 +54,13 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
 
   return (
     <div data-testid="card-recent-blocks" className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
         <div className="mt-3 flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Block Height</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Block Height</p>
             <div className="mt-1">
               {loading || blockHeight == null
                 ? <Skeleton className="h-7 w-16" />
@@ -71,7 +71,7 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-600">Avg Block Time</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Avg Block Time</p>
             <div className="mt-1">
               {loading || avgBlockMins == null
                 ? <Skeleton className="h-7 w-12" />
@@ -89,7 +89,7 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
               <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
             </span>
           )}
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-450">
             {lastBlockMinsAgo != null
               ? `Last block: ${lastBlockMinsAgo} min ago`
               : 'Last block: unknown'
@@ -118,9 +118,9 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
                   >
                     {block.height.toLocaleString('en-US')}
                   </a>
-                  <p className="mt-0.5 text-xs text-gray-600 flex flex-wrap items-center gap-x-1">
+                  <p className="mt-0.5 text-xs text-gray-450 flex flex-wrap items-center gap-x-1">
                     <span>{block.tx_count.toLocaleString('en-US')} txs</span>
-                    <span className="text-gray-700">·</span>
+                    <span className="text-gray-450">·</span>
                     <span>
                       {block.extras?.totalFees != null
                         ? `${(block.extras.totalFees / 1e8).toFixed(3)} BTC in fees`
@@ -128,13 +128,13 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
                     </span>
                     {block.extras?.avgFeeRate > 0 && (
                       <>
-                        <span className="text-gray-700">·</span>
+                        <span className="text-gray-450">·</span>
                         <span>avg {block.extras.avgFeeRate} sat/vB</span>
                       </>
                     )}
                   </p>
                 </div>
-                <p className="text-xs text-gray-600 shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
+                <p className="text-xs text-gray-450 shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
               </div>
             </div>
           ))}

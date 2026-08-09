@@ -48,6 +48,22 @@ describe('blockTimeColors', () => {
 })
 
 describe('NetworkPulseCard', () => {
+  // Accessibility (roadmap §5). The difficulty bar is two coloured divs — there
+  // is no text in it at all, so without a label a screen reader is told nothing
+  // about an adjustment the sighted reader can see at a glance.
+  it('gives the difficulty bar a label that carries the reading', () => {
+    render(<NetworkPulseCard difficulty={{ difficultyChange: 3.2, remainingBlocks: 1008 }} loading={false} hashRateTrend={null} />)
+    const bar = screen.getByRole('img', { name: /Difficulty adjustment/ })
+    expect(bar.getAttribute('aria-label')).toContain('3.2% faster')
+    expect(bar.getAttribute('aria-label')).toContain('scale from 10% slower to 10% faster')
+  })
+
+  it('hides the Slower/Faster captions from the label that already says them', () => {
+    render(<NetworkPulseCard difficulty={{ difficultyChange: 3.2, remainingBlocks: 1008 }} loading={false} hashRateTrend={null} />)
+    // Present visually, but not announced twice.
+    expect(screen.getByText('Slower').closest('[aria-hidden="true"]')).toBeTruthy()
+  })
+
   it('renders the difficulty adjustment and its interpretation', () => {
     render(<NetworkPulseCard difficulty={{ difficultyChange: 3.2, remainingBlocks: 1008 }} loading={false} hashRateTrend={null} />)
     expect(screen.getByText('+3.2%')).toBeTruthy()

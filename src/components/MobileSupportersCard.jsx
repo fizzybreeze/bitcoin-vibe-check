@@ -1,7 +1,7 @@
 export default function MobileSupportersCard({ donors }) {
   return (
     <div className="md:hidden rounded-2xl bg-gray-900 px-4 pt-4 pb-3 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 text-center">OUR SUPPORTERS ⚡</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 text-center">OUR SUPPORTERS ⚡</p>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         {donors.length > 0
           ? donors.map(d => (
@@ -9,7 +9,7 @@ export default function MobileSupportersCard({ donors }) {
                 {d.name}
               </span>
             ))
-          : <p className="text-xs text-gray-600">Be the first to support Bitcoin Vibe Check ⚡</p>
+          : <p className="text-xs text-gray-450">Be the first to support Bitcoin Vibe Check ⚡</p>
         }
       </div>
     </div>

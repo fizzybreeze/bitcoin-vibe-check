@@ -46,7 +46,7 @@ export default function HalvingCountdown({ blockHeight }) {
       </div>
       <p className="mt-1 text-xs text-gray-400">
         <span className="font-semibold text-white">{Math.round(epochPct)}%</span>
-        <span className="ml-1 text-gray-500">of current epoch complete</span>
+        <span className="ml-1 text-gray-450">of current epoch complete</span>
       </p>
     </>
   ) : <Skeleton className="h-2 w-full" />
@@ -58,7 +58,7 @@ export default function HalvingCountdown({ blockHeight }) {
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
               ? <p className="mt-1 text-xl font-bold text-orange-400 tabular-nums">
                   {blocksRemaining.toLocaleString('en-US')}
@@ -67,13 +67,13 @@ export default function HalvingCountdown({ blockHeight }) {
             }
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Estimated Time</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Estimated Time</p>
             {secsLeft != null
               ? <>
                   <p className="mt-1 text-xl font-bold text-white tabular-nums">
                     {days}d {hours}h {mins}m
                   </p>
-                  {estStr && <p className="text-xs text-gray-500">est. {estStr}</p>}
+                  {estStr && <p className="text-xs text-gray-450">est. {estStr}</p>}
                 </>
               : <Skeleton className="mt-1 h-7 w-28" />
             }
@@ -86,7 +86,7 @@ export default function HalvingCountdown({ blockHeight }) {
       <div className="hidden md:flex gap-0">
 
         <div className="flex-1 pr-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Blocks to Halving</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Blocks to Halving</p>
           {blocksRemaining != null
             ? <p className="mt-1.5 text-2xl font-bold text-orange-400 tabular-nums">
                 {blocksRemaining.toLocaleString('en-US')}
@@ -98,13 +98,13 @@ export default function HalvingCountdown({ blockHeight }) {
         <div className="w-px self-stretch bg-gray-800" />
 
         <div className="flex-1 px-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Estimated Time</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Estimated Time</p>
           {secsLeft != null
             ? <>
                 <p className="mt-1.5 text-2xl font-bold text-white tabular-nums">
                   {days}d {hours}h {mins}m
                 </p>
-                {estStr && <p className="mt-1 text-sm text-gray-500">est. {estStr}</p>}
+                {estStr && <p className="mt-1 text-sm text-gray-450">est. {estStr}</p>}
               </>
             : <Skeleton className="mt-1.5 h-8 w-40" />
           }
@@ -113,7 +113,7 @@ export default function HalvingCountdown({ blockHeight }) {
         <div className="w-px self-stretch bg-gray-800" />
 
         <div className="flex-1 pl-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Epoch Progress</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Epoch Progress</p>
           <div className="mt-2">{epochBarContent}</div>
         </div>
 

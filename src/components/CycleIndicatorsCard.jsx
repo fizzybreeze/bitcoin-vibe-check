@@ -2,7 +2,7 @@ import { fmtCurrency } from '../utils.js'
 import { calcMayerMultiple, calcPowerLawFairValue } from '../utils/cycleCalculations.js'
 import CardTooltip from './CardTooltip.jsx'
 
-const LABEL = 'text-xs font-semibold uppercase tracking-widest text-gray-500'
+const LABEL = 'text-xs font-semibold uppercase tracking-widest text-gray-450'
 
 const MVRV_TOOLTIP      = "Compares Bitcoin's market cap to the aggregate cost basis of all coins. Above 3.5 has historically marked cycle tops; below 1 has marked bottoms. Near 1 means the market is close to its collective break-even."
 const POWER_LAW_TOOLTIP = "A long-term model treating adoption as a power function of time since Bitcoin's genesis block. Shows where price sits relative to a historical fair value range. A model, not a prediction — label it accordingly."
@@ -81,7 +81,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
                   presents itself as live is the failure this fallback would
                   otherwise introduce. */}
               {dataDate && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-450">
                   {dataDate}{mvrvSource === 'snapshot' && ' · from daily snapshot'}
                 </p>
               )}
@@ -128,7 +128,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
               label="Mayer Multiple"
               value={isOhlcReady && mayer != null ? mayer.toFixed(2) : '—'}
               context={isOhlcReady ? mayerInterp?.label : undefined}
-              contextCls="text-gray-500"
+              contextCls="text-gray-450"
               tooltip={MAYER_TOOLTIP}
             />
           )}

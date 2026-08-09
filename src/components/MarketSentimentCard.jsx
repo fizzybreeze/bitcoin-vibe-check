@@ -1,4 +1,5 @@
 import { ResponsiveContainer, LineChart, Line } from 'recharts'
+import { describeTrend } from './seriesLabel.js'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
 
@@ -21,16 +22,16 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
 
   return (
     <div data-testid="card-market-sentiment" className="rounded-2xl bg-gray-900 p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Market Sentiment</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-450">Market Sentiment</p>
 
       <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-600 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-450 flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
         <div className="mt-2">
           {loading || fngScore == null
             ? <Skeleton className="h-8 w-10" />
             : <p className="text-2xl font-bold text-orange-400">{fngScore}</p>
           }
-          <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-500'}`}>
+          <p className={`mt-1 text-sm ${FNG_COLOR[fngClass] ?? 'text-gray-450'}`}>
             {fngClass ?? (loading ? ' ' : '—')}
           </p>
         </div>
@@ -38,14 +39,18 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
 
       {fngHistory && (
         <div className="mt-3">
-          <div className="h-20">
+          <div
+            className="h-20"
+            role="img"
+            aria-label={describeTrend('Fear and Greed', fngHistory.map(d => d.v), { period: '30 days' })}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
                 <Line type="monotone" dataKey="v" stroke="#f97316" dot={false} activeDot={false} strokeWidth={1.5} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-1 text-xs text-gray-600">SENTIMENT TREND (30D)</p>
+          <p className="mt-1 text-xs text-gray-450">SENTIMENT TREND (30D)</p>
         </div>
       )}
     </div>
