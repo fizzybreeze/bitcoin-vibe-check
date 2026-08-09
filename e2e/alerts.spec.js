@@ -85,3 +85,79 @@ test.describe('Metric alerts', () => {
       .toContainText(/only fire while this tab is open/i)
   })
 })
+
+// The reported bug, in the one place it actually happened: a real browser.
+//
+// Permission granted, the toggle pressed, and the switch springs back to off
+// with no explanation on screen and nothing in the console. `subscribe()` ended
+// in a bare `catch {}`, so a browser refusing to register — the ordinary
+// outcome in Brave, which ships with "Use Google services for push messaging"
+// off — was indistinguishable from never having pressed the toggle.
+//
+// This is here rather than only in unit tests because the half no unit test can
+// reach is the wiring: `pushFailReason` is a hand-written line in `App.jsx`
+// beside a hand-written prop on the panel, and `App.jsx` has no unit test.
+// Forget either and the hook reports the failure to nobody — the panel falls
+// back to the generic push-service sentence and *looks* right, which is the
+// same silent-wiring failure the fee/fng/mayer specs above exist for.
+test.describe('Push that the browser refuses', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      // A service worker that is ready and a push manager that refuses, which
+      // is what a granted permission plus a disabled push service looks like.
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => ({
+          ready: Promise.resolve({
+            pushManager: {
+              getSubscription: () => Promise.resolve(null),
+              subscribe: () => Promise.reject(Object.assign(
+                new Error('Registration failed - push service not available'),
+                { name: 'AbortError' }
+              )),
+            },
+          }),
+          register: () => Promise.resolve({}),
+          addEventListener: () => {},
+        }),
+      })
+      window.PushManager = function PushManager() {}
+      window.Notification = function Notification() {}
+      window.Notification.permission = 'granted'
+      window.Notification.requestPermission = () => Promise.resolve('granted')
+    })
+    await mockApis(page)
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Alerts' }).click()
+  })
+
+  test('explains itself instead of silently returning to off', async ({ page }) => {
+    const panel = page.getByRole('dialog', { name: 'Alerts' })
+    const toggle = panel.getByRole('button', { name: /push to this device/i })
+
+    await expect(toggle).toBeVisible()
+    await toggle.click()
+
+    await expect(panel).toContainText(/refused to register for push/i)
+    await expect(panel).toContainText(/Use Google services for push messaging/i)
+  })
+
+  test('leaves the toggle there to try again with', async ({ page }) => {
+    const panel = page.getByRole('dialog', { name: 'Alerts' })
+    const toggle = panel.getByRole('button', { name: /push to this device/i })
+
+    await toggle.click()
+    await expect(panel).toContainText(/refused to register for push/i)
+
+    await expect(toggle).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await expect(toggle).toBeEnabled()
+  })
+
+  test('never claims a closed tab is covered', async ({ page }) => {
+    const panel = page.getByRole('dialog', { name: 'Alerts' })
+    await panel.getByRole('button', { name: /push to this device/i }).click()
+    await expect(panel).toContainText(/only fire while this tab is open/i)
+    await expect(panel).not.toContainText(/even with the tab closed/i)
+  })
+})

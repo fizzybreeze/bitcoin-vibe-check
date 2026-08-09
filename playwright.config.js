@@ -66,5 +66,30 @@ export default defineConfig({
     // Reusing a server in CI masks port conflicts and produces confusing
     // failures; always start a clean one there.
     reuseExistingServer: !process.env.CI,
+    // Pinned rather than inherited, so the suite does not depend on whichever
+    // project a developer's `.env` last pointed at — and so that CI, which has
+    // no `.env` at all, renders the same app as a laptop does.
+    //
+    // The push toggle is what forced this. `usePushSubscription` reports itself
+    // *unconfigured* unless it has both a VAPID key and a Supabase client, and
+    // an unconfigured panel never renders the control — so `alerts.spec.js`'s
+    // push specs passed locally against a real `.env` and failed on the runner
+    // with "element(s) not found". Both halves are needed; supplying only the
+    // key reproduces the same red.
+    env: {
+      ...process.env,
+      // A throwaway **public** VAPID key. The private half was discarded at
+      // generation and nothing in the suite signs anything.
+      VITE_VAPID_PUBLIC_KEY:
+        'BCHIb2Jdw6QExyZ6ND0x7BJKXWUTc00hyrNNliPLrspiMjWGJsKoGKfOBo2HU7a41Gkcu6W0nsLZP1YWP1Pk4BE',
+      // A host that can never resolve, routed to empty results by `mocks.js`.
+      // `.invalid` is reserved by RFC 2606 precisely so it cannot be registered
+      // — which means a missing route fails loudly as a DNS error rather than
+      // quietly reaching somebody's real project. Before this, a developer with
+      // a populated `.env` was running the "fully mocked, no network" suite
+      // against their live Supabase on every run.
+      VITE_SUPABASE_URL: 'https://e2e.supabase.invalid',
+      VITE_SUPABASE_ANON_KEY: 'e2e-anon-key-not-a-real-credential',
+    },
   },
 })
