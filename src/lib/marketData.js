@@ -61,6 +61,12 @@ export function estimateMarketCapUsd(priceUsd, blockHeight) {
   // `computeIssuedSupply` would happily do arithmetic on either.
   if (!Number.isFinite(blockHeight) || blockHeight < 0) return null
   const supply = computeIssuedSupply(blockHeight)
+  // `positive` is unreachable today and stays anyway: the guard above already
+  // excludes the only input `computeIssuedSupply` returns null for, and the
+  // genesis block alone is 50 BTC, so the sum is never zero. No test can pin
+  // it — which is worth saying outright rather than leaving a reader to work
+  // out why a mutation to it survives. What it buys is that a future change to
+  // the epoch table degrades to a blank rather than to a headline "$0".
   return positive(supply) ? priceUsd * supply : null
 }
 
