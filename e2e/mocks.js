@@ -77,6 +77,21 @@ export async function mockApis(page, { nowMs } = {}) {
     route.fulfill({ json: krakenOhlcResponse(candles) })
   })
 
+  // Supabase, pointed at the unresolvable `.invalid` host that
+  // `playwright.config.js` pins. Two reads reach it on a normal load — the
+  // supporter ticker's `donors` and the Vibe Score sparkline's
+  // `metric_snapshots` — and both degrade to "nothing yet" on an empty array,
+  // which is the deterministic state to render.
+  //
+  // This closes a hole rather than adding a convenience: the client is built
+  // from `VITE_` variables, so before the config pinned them, a developer with
+  // a populated `.env` ran this "fully mocked, no network" suite against their
+  // live project while CI built no client at all — two different apps under
+  // one set of assertions.
+  await page.route('https://e2e.supabase.invalid/**', route =>
+    route.fulfill({ json: [] })
+  )
+
   // Third-party scripts. These are not part of the dashboard under test and are
   // unreachable on a restricted network, so stub them out rather than let the
   // suite depend on the public internet.
