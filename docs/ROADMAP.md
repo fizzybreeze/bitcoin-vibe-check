@@ -146,106 +146,11 @@ until 7 comparable rows exist, and a 365-day control over 3 weeks of data is a
 control that lies about what is behind it. Revisit when the table has a
 quarter in it.
 
-### 3.4 Alerts worth keeping
-
-**Shipped: 3.4a in v1.7.1 (the rule model), 3.4b in v1.7.2 (fees, Fear & Greed
-and Mayer in the panel).** See the version-history rows. What is left of §3.4 is
-the half it could never have fixed on its own:
-
-**They only fire when the tab is open.** `fireNotification` calls
-`new Notification(...)` from inside the running page, so an alert set at 2am
-fires only if the browser tab survived until 2am. Fixing that properly is Web
-Push, which is §4.1. Until then the panel says so outright — "Alerts only fire
-while this tab is open — they are not push notifications" — which is the copy
-half of 3.4b and the most this item can honestly do without §4.1.
-
 ---
 
 ## 4. Next — become a destination, and a source
 
 Bigger items. Each needs a design pass before anyone starts.
-
-### 4.1 Real push notifications
-
-**What.** Alerts that fire with the tab closed and the phone in a pocket.
-
-**Why.** This is the strongest retention mechanic available to a product with no
-login. An alert that arrives is a reason to open the app; an alert that requires
-the app to already be open is not an alert. It also completes a feature that is
-already advertised, which matters more than adding a new one.
-
-**How.** Web Push via the existing service worker: VAPID keys, a Supabase
-`push_subscriptions` table keyed by endpoint, and a scheduled job that evaluates
-thresholds server-side and posts to the push service.
-
-**The interesting constraint.** No login means the push endpoint *is* the
-identity. RLS must let an anonymous client insert its own subscription and manage
-only that row — the `donors` policy set is the precedent for getting this right,
-and the security advisors must come back clean. Also: an evaluation job on a
-short cadence is a different cost profile from one daily snapshot; check the
-Actions minutes before committing to a frequency, and consider a Supabase edge
-function instead.
-
-**The service worker was not ready for this, and that cost is now paid.**
-Shipped in v1.7.5: `VitePWA` is on `injectManifest` with a real `src/sw.js`,
-`runtimeCaching` has moved to `src/lib/runtimeCaching.js`, and the `push` and
-`notificationclick` listeners exist with nothing sending to them. The warning
-was accurate — the `workbox` block is *ignored* rather than rejected under
-injectManifest, so leaving the rules there would have cached nothing while
-looking configured. Nothing below needs a service-worker change any more.
-
-#### 4.1a — subscription plumbing, no sender. **Shipped: v1.7.5 + v1.7.6.**
-
-Both halves are done — see the version-history rows. A browser can subscribe,
-the row is stored, and nothing sends to it yet. The answer to "can an anonymous
-client reach a row that is not its own" was measured against the real table
-rather than argued: no read, no oracle on a guessed endpoint, no delete, no
-update. The one thing it *did* find was that RLS is only half the gate —
-`TRUNCATE` bypasses it and Supabase grants it to `anon` by default — which is
-now fixed on all three tables and written up in `CLAUDE.md`.
-
-**Before 4.1b can do anything, a human has to set the keys.** Run
-`npx web-push generate-vapid-keys`, put the public half in
-`VITE_VAPID_PUBLIC_KEY` and the private half in `VAPID_PRIVATE_KEY`. Until then
-the panel reports push as unavailable, which is the correct thing for it to say.
-
-#### 4.1b — the evaluator
-
-**Split. The rules-sync half shipped in v1.7.8; the sender is what is left.**
-That half went first because the job had nothing to read — rules lived only in
-`localStorage` — and because it is verifiable today, against a real table, while
-the sender cannot be until VAPID keys exist.
-
-**Two findings that change the sender's shape.** GitHub Actions cron is *not*
-usable here: `snapshot.yml` asks for 06:17 UTC and its scheduled runs have
-started at 09:10, nearly three hours late. Fine for a daily row, disqualifying
-for a price alert. Vercel Hobby crons are once-daily. So this wants **pg_cron
-calling a Supabase edge function** — both extensions are already installed on
-the project. Cadence is still open; every 5 minutes costs ~8.6k edge invocations
-a month against a 500k free tier, and the upstreams are keyless.
-
-The scheduled job, importing 3.4a's predicate. Its "read the current metrics"
-half is a job `scripts/snapshot.js` already does — reuse that fetch layer rather
-than inventing a second one, and note it is the *fetch* layer that is reusable,
-not `metric_snapshots`: a daily row is far too stale to fire a fee alert against.
-
-#### Sequencing
-
-**§3.4 → §4.1, one way, and they are not one PR.** §3.4 is pure client — no
-migration, no keys, no cron, no serverless, no service worker — and is verifiable
-by `npm test` plus the e2e suite. §4.1 is almost entirely infrastructure, and
-barely touches `src/`. The dependency is that §4.1's evaluator needs a *rule
-format*, and §3.4a is the change that invented one; building §4.1 first would
-have meant inventing a provisional format and then rewriting it.
-
-The overlap that tempts you to merge them is the crossing predicate, and 3.4a's
-extraction is the answer to it — `hasAlertCrossed` is what §4.1b imports, and as
-of 3.4b it arbitrates four metrics rather than one, so the evaluator inherits
-fees and Fear & Greed without a second format to invent.
-Two PRs left, in order: **4.1a → 4.1b**. They merge less
-cleanly than 3.4a and 3.4b would have. Nothing should merge across the §3/§4 boundary — the
-review questions on either side have almost nothing in common, and the whole
-point of the phone workflow is that a diff can be judged on its own terms.
 
 ### 4.2 Public data API and an embeddable badge
 
