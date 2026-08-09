@@ -101,6 +101,58 @@ test.describe('Data source resilience', () => {
     await expect(page.getByText(/Mkt cap/)).toHaveCount(0)
   })
 
+  test('survives a zero-price tick on the Kraken socket', async ({ page }) => {
+    // The socket is the one upstream that *replaces* a price already on
+    // screen, so a bad frame is worse than a failed fetch. A `last` of 0 used
+    // to reach `VolumeCard`, where `computeSatsPerFiat(0)` is null and the card
+    // dereferenced it; a non-numeric `change_pct` reaches `change.toFixed(2)`
+    // in `BtcPriceCard`, which throws on a string. With no error boundary in
+    // this app, either took the whole dashboard rather than one card.
+    //
+    // Unit tests pin both ends of that chain. Only this shows the app is wired
+    // to the screening at all — the half that was actually wrong before.
+    await mockApis(page)
+    let socket = null
+    // Registered after mockApis, so it wins over the close-immediately route.
+    // Never connects upstream: every frame below is composed here.
+    await page.routeWebSocket('wss://ws.kraken.com/**', ws => { socket = ws })
+
+    const errors = []
+    page.on('pageerror', e => errors.push(e.message))
+    await page.goto('/')
+
+    // The frame has to arrive *after* the initial load, not before: `setData`
+    // is a `prev => prev ? … : prev` updater, so anything sent while state is
+    // still null is dropped on the floor and proves nothing. The socket opens
+    // long before `loadData` resolves, which is why sending from inside the
+    // route handler made an earlier draft of this test vacuous.
+    await expect(page.getByText(/\$105,000/).first()).toBeVisible({ timeout: 15000 })
+    expect(socket, 'the page never opened the Kraken socket').not.toBeNull()
+
+    socket.send(JSON.stringify({
+      channel: 'ticker',
+      data: [{ symbol: 'BTC/USD', last: 0, change_pct: 'nonsense' }],
+    }))
+
+    // A fixed wait, deliberately, and the one case where it is the right tool:
+    // what is being asserted is the *absence* of a breakage, and a screened
+    // frame changes nothing observable, so there is no state to wait for. An
+    // earlier draft chased a good frame behind the bad one and awaited that —
+    // which proved nothing, because React batches two frames delivered in the
+    // same tick into one render and the bad intermediate state never painted.
+    // A render is ~16ms; this is two orders of magnitude of headroom.
+    await page.waitForTimeout(500)
+
+    // Everything still standing means the frame was dropped rather than
+    // applied. Under the old code `priceUsd` became 0 and `priceChange24h`
+    // became the string "nonsense", either of which throws during render and
+    // unmounts the tree — so these locators are gone, not merely wrong.
+    await expect(page.getByText(/\$105,000/).first()).toBeVisible()
+    await expect(page.getByText(/sats per \$1/)).toBeVisible()
+    await expect(page.locator('body')).not.toContainText('NaN')
+    expect(errors).toEqual([])
+  })
+
   test('shows a BTC price when Kraken is down', async ({ page }) => {
     // The other direction: CoinPaprika is still the preferred source, so the
     // fallback must not have become the only source.
