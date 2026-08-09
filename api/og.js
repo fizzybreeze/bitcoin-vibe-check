@@ -25,8 +25,15 @@ import { KRAKEN_INTERVAL, krakenOhlcUrl, extractKrakenOhlc } from '../src/lib/oh
 import { calc200DMA, calcMayerMultiple } from '../src/utils/cycleCalculations.js'
 import { computeVibeScore, computePriceChange30d, computeHashRateTrend } from '../src/lib/calculations.js'
 import { buildOgModel, ogElement, ogModelIsRenderable, OG_WIDTH, OG_HEIGHT } from './lib/ogView.js'
+import { createRateLimiter, hasQueryParams, rateLimitVerdict } from './lib/abuseGuard.js'
 
 const STATIC_FALLBACK = '/og-image.png'
+
+// An unfurl is one request per platform per paste, from that platform's own
+// address. Thirty a minute from a single address is not an unfurler. Exported
+// so a test can start from a clean window; the handler is the only production
+// caller.
+export const rateLimiter = createRateLimiter({ limit: 30, windowMs: 60_000 })
 
 // Unfurlers are impatient and the function has to finish inside the platform's
 // limit, so a slow source is dropped rather than waited on. Losing one input
@@ -124,11 +131,32 @@ function sendFallback(res) {
   return res.status(302).end()
 }
 
+// A refused request sheds to the static image rather than to a 4xx, because
+// constraint 1 above does not stop applying to a request we dislike: a 429 in
+// an unfurler is the same blank rectangle as a 500. It costs a redirect — no
+// fetches, no rasterise — which is the entire saving being claimed.
+//
+// `no-store`, not the 60-second fallback cache: this refusal is about the
+// caller, so caching it would let one bad client pin the generic card in front
+// of everyone else's share.
+function shedLoad(res) {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Location', STATIC_FALLBACK)
+  return res.status(302).end()
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.setHeader('Allow', 'GET, HEAD')
     return res.status(405).end()
   }
+
+  // The route takes no parameters, and `index.html` names `/og-live.png` bare.
+  // A query string is therefore a distinct CDN cache key for the same image —
+  // the cheapest way there is to turn one URL into unlimited renders.
+  if (hasQueryParams(req)) return shedLoad(res)
+
+  if (!rateLimitVerdict(rateLimiter, req).allowed) return shedLoad(res)
 
   try {
     // Imported here, not at module scope, so a renderer that fails to load

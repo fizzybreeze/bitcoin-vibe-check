@@ -18,6 +18,13 @@
 import {
   pickSnapshotMvrv, snapshotQuery, usableMvrvValue, usableMvrvDate,
 } from './lib/mvrvFallback.js'
+import { createRateLimiter, hasQueryParams, rateLimitVerdict } from './lib/abuseGuard.js'
+
+// Generous on purpose. The CDN serves nearly every visitor from `s-maxage`, so
+// a request that reaches the function at all is already a cache miss — a normal
+// browser produces one of those a day, not sixty a minute. Exported so a test
+// can start from a clean window; the handler is the only production caller.
+export const rateLimiter = createRateLimiter({ limit: 60, windowMs: 60_000 })
 
 // A live answer holds for a day, which is what keeps the route inside 15
 // requests. A fallback answer must not: it would outlive the outage that caused
@@ -113,6 +120,27 @@ export default async function handler(req, res) {
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
     res.setHeader('Vary', 'Origin')
+  }
+
+  // This route takes no parameters, so a query string is either a typo or a
+  // cache-buster — and a cache-buster here is a fresh call to BGeometrics, 15 of
+  // which are the whole day. Refusing costs no upstream request. `no-store`
+  // rather than a long `s-maxage`: caching the refusal would put one entry in
+  // the shared cache per invented query string and buy nothing, because the
+  // whole point of the invented string is that it is never repeated.
+  if (hasQueryParams(req)) {
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(400).json({ error: 'This endpoint takes no parameters' })
+  }
+
+  const verdict = rateLimitVerdict(rateLimiter, req)
+  if (!verdict.allowed) {
+    // `no-store` is load-bearing here, not tidiness: a 429 cached at a shared
+    // CDN is served to every visitor of that region, which turns one client's
+    // rate limit into everybody's blank MVRV card.
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('Retry-After', String(verdict.retryAfterSeconds))
+    return res.status(429).json({ error: 'Too many requests' })
   }
 
   let mvrv = await fetchLiveMvrv()
