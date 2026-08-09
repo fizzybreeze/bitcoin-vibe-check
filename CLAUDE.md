@@ -365,6 +365,20 @@ Three rules that are load-bearing:
 > baselines is a legitimate outcome — that tradeoff was made with eyes open when
 > this shipped, and #18 says so explicitly.
 
+> **After running `visual-baselines.yml`, the PR cannot turn green by itself.**
+> Its commit is pushed with the default `GITHUB_TOKEN`, and GitHub deliberately
+> refuses to let a workflow's own push start further workflows — the recursion
+> guard. The runs are still *created* against the new head, but they sit in
+> **`action_required`** waiting for an approval that nothing will give, so both
+> required checks stay pending forever and the PR looks stuck for no stated
+> reason.
+>
+> **Close the PR and reopen it.** That fires `pull_request: reopened` as a human
+> action against the current head, and CI and Playwright run normally. An empty
+> commit works too and is worse — it puts a junk commit in the history of every
+> design change. This is a property of the workflow, not of any one PR: it will
+> happen every time the baselines are regenerated.
+
 ### Sound
 
 Optional audio feedback via Web Audio API (`btc-vibe-sound-enabled` in localStorage). `playBlockThud` fires on new block; `playPriceTick` fires on price change (debounced to 1/s).
@@ -597,7 +611,7 @@ Donor notifications do **not** depend on it. They come from the
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium, desktop + mobile projects. Uploads `playwright-report` and, separately, a `mobile-screenshot` artifact of the dashboard at 390×844. Required check: `Playwright (chromium)` |
-| `visual-baselines.yml` | `update-visual-baselines` label on a PR + `workflow_dispatch` | regenerates the visual baselines **on the runner** and commits them to the PR branch, then removes the label. Either trigger works and both push to the branch — **the label does not currently exist in the repository**, so *Run workflow* from the Actions tab is the path that works today. Regenerating them any other way is not sanctioned: a baseline made off this runner fails on font antialiasing alone |
+| `visual-baselines.yml` | `update-visual-baselines` label on a PR + `workflow_dispatch` | regenerates the visual baselines **on the runner** and commits them to the PR branch, then removes the label. Either trigger works and both push to the branch — **the label does not currently exist in the repository**, so *Run workflow* from the Actions tab is the path that works today. Regenerating them any other way is not sanctioned: a baseline made off this runner fails on font antialiasing alone. **Its commit leaves the PR unable to go green on its own** — see below |
 | `snapshot.yml` | daily cron + manual | daily metrics → `metric_snapshots` |
 | `smoke.yml` | daily cron + manual | Playwright against the **deployed** site, real upstreams. Not a required check — it verifies production, which by definition exists only after merge |
 | `dependabot-auto-merge.yml` | `pull_request_target` | merges Dependabot **patch and minor** PRs once the two required checks are green. Majors are left alone. Does not use GitHub's auto-merge feature — see the rule above |
