@@ -146,6 +146,62 @@ until 7 comparable rows exist, and a 365-day control over 3 weeks of data is a
 control that lies about what is behind it. Revisit when the table has a
 quarter in it.
 
+### 3.5 The newsletter form is the last thing on the page that ignores the palette
+
+**What.** `BeehiivEmbed` appends `subscribe-forms.beehiiv.com/v3/loader.js` to an
+empty `<div>` and lets beehiiv inject its own form. That form is styled by
+beehiiv, not by us: a white panel with an orange button, sitting inside a
+`bg-surface` card on the violet ground. It was merely off-brand before v1.8.0,
+when the app's own accent was orange too. It is now the single element on the
+page that does not follow the palette — and, more to the point, the single
+element that **cannot follow the theme toggle**, because a form rendered from
+their origin has no idea which theme this document is in.
+
+**Why it is not a CSS fix.** Nothing in `src/index.css` can reach inside it. So
+`palette.test.js` is green on a page with an orange button on it — not because
+the guard is weak, but because the offending markup is out of its reach
+entirely. There are exactly three levers, and they are worth naming before
+anyone starts:
+
+1. **Restyle it in beehiiv's own form designer.** No code, and it is the obvious
+   first move — but the ceiling is one fixed appearance, and this app now has
+   two grounds. Match the dark theme and it glares in light mode; match light and
+   it is a white slab on violet, which is what the screenshot already shows.
+   Light mode is a week old, so "matches one of the two themes" is a worse
+   outcome now than it would have been in v1.7.
+2. **Render the form ourselves and keep beehiiv as the destination.** The
+   component for this **already exists and is already correct**:
+   `src/components/BeehiivForm.jsx` is a native `POST` to
+   `app.beehiiv.com/subscribe` carrying the publication id and the two `utm_*`
+   fields, written entirely in semantic tokens — v1.8.0 tokenised it in passing
+   even though nothing imports it. It has been dead since PR #1.
+3. **Drop the embed for a link.** Cheapest, and it gives up the inline signup
+   that is the whole reason the card converts. Listed for completeness, not
+   recommended.
+
+**The recommendation is (2), and the costs of it should be paid deliberately
+rather than discovered.** `BeehiivForm` uses `target="_blank"`, so the
+subscription completes on beehiiv's page in a new tab — there is no inline
+success state, and whatever beehiiv's own form does for double opt-in, captcha
+and conversion analytics is given up with it. `NewsletterModal` is the sharper
+one: it auto-dismisses on a `beehiiv:subscribe` window event that **their loader
+emits**, so a native form emits nothing and the modal would sit open behind the
+new tab. Dismissing on submit instead is a two-line change, but it is a
+behaviour change, not a swap. Two call sites — `NewsletterCard` and
+`NewsletterModal`.
+
+**The reason this shipped looking wrong is worth recording, because it will
+happen again.** `e2e/mocks.js` stubs `https://subscribe-forms.beehiiv.com/**` to
+an empty script body, and it is *right* to — the suite is hermetic and a
+third-party script on the public internet has no business in it. The
+consequence is that no e2e run and **none of the eight visual baselines has ever
+contained the real form**; they hold an empty box where production draws a white
+panel. So option (1) is invisible to every gate in the repo by construction and
+can only be checked by looking at the deployed page in both themes. Option (2)
+inverts that: the form becomes ours, renders in the baselines, and falls under
+the `visual` project and `palette.test.js` for the first time — which is a
+second argument for it, independent of how it looks.
+
 ---
 
 ## 4. Next — become a destination, and a source
