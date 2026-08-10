@@ -729,7 +729,8 @@ export default function App() {
             <select
               value={currency}
               onChange={e => setCurrency(e.target.value)}
-              className="appearance-none cursor-pointer rounded-full bg-raised pl-3 pr-7 py-1 text-xs font-semibold uppercase text-accent outline-none"
+              aria-label="Display currency"
+              className="appearance-none cursor-pointer rounded-full bg-raised pl-3 pr-7 py-1 text-xs font-semibold uppercase text-accent"
             >
               {['usd', 'gbp', 'eur', 'cad', 'chf'].map(c => (
                 <option key={c} value={c}>{c.toUpperCase()}</option>

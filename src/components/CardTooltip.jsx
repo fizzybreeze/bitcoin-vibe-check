@@ -17,11 +17,20 @@ export default function CardTooltip({ text }) {
         setVisible(false)
       }
     }
+    // Escape as well as a press outside. The button toggles, so this was
+    // already dismissible from the keyboard — but only by finding your way back
+    // to a 14px control that the tooltip you just opened may now be covering,
+    // and Escape is the key everyone reaches for anyway.
+    function handleEscape(e) {
+      if (e.key === 'Escape') setVisible(false)
+    }
     document.addEventListener('mousedown', handleOutside)
     document.addEventListener('touchstart', handleOutside)
+    document.addEventListener('keydown', handleEscape)
     return () => {
       document.removeEventListener('mousedown', handleOutside)
       document.removeEventListener('touchstart', handleOutside)
+      document.removeEventListener('keydown', handleEscape)
     }
   }, [visible])
 
@@ -53,7 +62,8 @@ export default function CardTooltip({ text }) {
         type="button"
         onClick={toggle}
         aria-label="More information"
-        className={`flex items-center justify-center w-3.5 h-3.5 ml-1 rounded-full transition-colors focus:outline-none ${
+        aria-expanded={visible}
+        className={`flex items-center justify-center w-3.5 h-3.5 ml-1 rounded-full transition-colors ${
           visible ? 'text-muted' : 'text-quiet hover:text-muted'
         }`}
       >

@@ -89,9 +89,12 @@ function VibeScoreSection({ vibe, loading, history }) {
     // md:mt-auto pins this to the bottom of the card on desktop, where the row
     // height is set by the taller chart card beside it. That space was empty.
     <div className="mt-4 border-t border-line-soft pt-4 md:mt-auto md:pt-5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
+      {/* h3, not h2 — this is a titled section *inside* the BTC Price card
+          rather than a card of its own, and skipping a level is the one way a
+          heading outline is worse than no headings at all. */}
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
         Vibe Score<CardTooltip text={VIBE_TOOLTIP} />
-      </p>
+      </h3>
 
       {vibe == null ? (
         loading
@@ -136,7 +139,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
   const isAtATH = athPct != null && athPct >= -0.1
   return (
     <div data-testid="card-btc-price" className="rounded-2xl bg-surface p-6 h-full flex flex-col">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></h2>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>

@@ -1,7 +1,7 @@
 export default function MobileSupportersCard({ donors }) {
   return (
     <div className="md:hidden rounded-2xl bg-surface px-4 pt-4 pb-3 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet text-center">OUR SUPPORTERS ⚡</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet text-center">OUR SUPPORTERS ⚡</h2>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         {donors.length > 0
           ? donors.map(d => (

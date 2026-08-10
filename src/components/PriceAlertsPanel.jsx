@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import useDialogFocus from '../hooks/useDialogFocus.js'
 import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/alertRules.js'
 import { PUSH_FAILED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED } from '../hooks/usePushSubscription.js'
 import { pushFooterCopy } from './pushCopy.js'
@@ -21,6 +22,14 @@ export default function PriceAlertsPanel({
   const [metric, setMetric] = useState(DEFAULT_ALERT_METRIC)
   const [inputValue, setInputValue] = useState('')
   const [inputError, setInputError] = useState('')
+  const panelRef = useRef(null)
+
+  // `trap: false`, and that is the design rather than an omission. This is a
+  // popover anchored to the header button, not a modal — there is no scrim, the
+  // dashboard behind it is still readable and still usable, and it carries no
+  // `aria-modal`. Holding Tab inside it would claim otherwise, and would strand
+  // anyone who tabbed in expecting to carry on down the page.
+  useDialogFocus(panelRef, { onClose })
 
   const meta = ALERT_METRICS[metric] ?? ALERT_METRICS[DEFAULT_ALERT_METRIC]
   const hasTriggered = alerts.some(a => a.triggered)
@@ -74,6 +83,7 @@ export default function PriceAlertsPanel({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-x-4 top-20 z-50 md:inset-x-auto md:right-8 md:top-16 md:w-80"
       role="dialog"
       aria-label="Alerts"
@@ -82,7 +92,7 @@ export default function PriceAlertsPanel({
 
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-ink">Alerts</p>
+          <h2 className="text-sm font-semibold text-ink">Alerts</h2>
           <button
             onClick={onClose}
             aria-label="Close alerts"
@@ -136,7 +146,7 @@ export default function PriceAlertsPanel({
                 onChange={e => { setInputValue(e.target.value); setInputError('') }}
                 placeholder={meta.placeholder}
                 aria-label={`${meta.name} alert level`}
-                className="w-full rounded-xl bg-raised px-3 py-2 text-sm text-ink placeholder-quiet outline-none focus:ring-1 focus:ring-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-full rounded-xl bg-raised px-3 py-2 text-sm text-ink placeholder-quiet [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
             {unitLabel && (
@@ -155,7 +165,7 @@ export default function PriceAlertsPanel({
 
         {/* Alert list */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-quiet">Active alerts</p>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-quiet">Active alerts</h3>
           {alerts.length === 0 ? (
             <p className="text-xs text-quiet">No alerts set. Pick a metric and add a level above.</p>
           ) : (

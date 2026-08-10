@@ -14,7 +14,10 @@ test.describe('Bitcoin Dashboard', () => {
   // ── Page structure ──────────────────────────────────────────────────────────
 
   test('page title "Bitcoin Vibe Check" is visible', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check' })).toBeVisible()
+    // `level: 1` because every card title is a heading now, and the donation
+    // card's "Support Bitcoin Vibe Check" matches this name too. Pinning the
+    // level says what this test is actually about — the page's own title.
+    await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check', level: 1 })).toBeVisible()
   })
 
   test('sentiment summary line is visible in the header within 10 seconds of load', async ({ page }) => {

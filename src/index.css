@@ -152,3 +152,44 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* A focus indicator that nothing in the app is able to remove.
+ *
+ * Blanket for the same reason the reduced-motion rule above is blanket: the
+ * failure mode is the next control someone adds without thinking about this,
+ * and a rule that has to be remembered is a rule that will not be. Before this
+ * there were five different answers across the app — two controls carrying
+ * `outline-none` with *nothing* put in its place, two inputs replacing it with
+ * a ring of their own, and everything else inheriting whatever ring the browser
+ * happened to draw, which differs between them.
+ *
+ * **Unlayered matters as much as blanket.** Tailwind emits its utilities into
+ * `@layer utilities`, and an unlayered rule beats any layered one regardless of
+ * specificity or position — the same mechanism that lets `.dark` above override
+ * `@theme`. So `outline-none` on an element cannot take the indicator away, and
+ * the five that existed are deleted rather than left looking like they do.
+ *
+ * That was measured rather than assumed, and the measurement has a trap in it.
+ * With a control carrying `outline-none`: this rule inside `@layer base` paints
+ * **nothing** — the utility wins, because base is ordered before utilities —
+ * while unlayered paints the ring. Wrapping it in `@layer utilities` *also*
+ * paints the ring, which looks like a second correct answer and is not: it
+ * works only because this block sits later in the file than the `@import`, so
+ * it wins on source order within the layer. Move it up and it stops. Unlayered
+ * is the only version that does not depend on where it happens to be written.
+ *
+ * `:focus-visible` rather than `:focus`, so a mouse press on a card control
+ * does not leave a ring sitting behind it. The browser decides when to show it,
+ * and it gets that right for the keyboard, for a text caret and for a screen
+ * reader's virtual focus in a way a hand-written rule does not.
+ *
+ * `accent` is already held to 4.5:1 against `ground`, `surface` and `raised` in
+ * both themes by `palette.test.js`, which is comfortably past the 3:1 WCAG
+ * 1.4.11 asks of a focus indicator. The offset is what keeps the ring readable
+ * on the accent-filled buttons, where an inset outline would sit on its own
+ * colour.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

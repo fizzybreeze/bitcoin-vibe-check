@@ -18,7 +18,7 @@ export default function NetworkHeartbeatCard({ blockHeight, difficulty, lastBloc
 
   return (
     <div className="rounded-2xl bg-surface p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Heartbeat</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Heartbeat</h2>
 
       {/* Two-column interior */}
       <div className="mt-3 flex gap-3">

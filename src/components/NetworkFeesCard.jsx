@@ -16,7 +16,7 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
 
   return (
     <div data-testid="card-network-fees" className="rounded-2xl bg-surface p-4 md:p-6 flex flex-col gap-4 justify-between">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Network Fees<CardTooltip text={FEES_TOOLTIP} /></p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Network Fees<CardTooltip text={FEES_TOOLTIP} /></h2>
 
       {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
       {mempool != null && (

@@ -156,4 +156,39 @@ describe('ShareModal', () => {
       expect(checkbox).toBeChecked()
     }
   })
+  // ── Keyboard operability (roadmap §5) ──────────────────────────────────────
+
+  it('moves focus into the dialog when it opens', () => {
+    renderModal()
+    // The close control, which is the one element guaranteed to be useful to
+    // someone who did not mean to open this.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+  })
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn()
+    renderModal({ onClose })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds Tab inside itself, because it is a modal over a scrim', () => {
+    renderModal()
+    const focusables = [...document.querySelector('[role="dialog"]')
+      .querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), iframe')]
+    const last = focusables[focusables.length - 1]
+    last.focus()
+    fireEvent.keyDown(last, { key: 'Tab' })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+  })
+
+  it('does not reach into the off-screen capture target when it wraps', () => {
+    // `ShareCanvas` is parked at left:-9999px for html2canvas. If it ever grew a
+    // focusable element the trap would wrap onto something invisible, and the
+    // visitor would be tabbing into a void with nothing on screen to say so.
+    renderModal()
+    const canvas = document.querySelector('[role="dialog"] div[style*="-9999px"]')
+    expect(canvas, 'the off-screen capture target moved').not.toBeNull()
+    expect(canvas.querySelectorAll('a[href], button, input, select, textarea, iframe')).toHaveLength(0)
+  })
 })

@@ -4,7 +4,7 @@ import Skeleton from './Skeleton.jsx'
 export default function SupplyIssuedCard({ blockHeight }) {
   return (
     <div data-testid="card-supply-issued" className="rounded-2xl bg-surface p-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Supply Issued</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Supply Issued</h2>
       {blockHeight != null ? (
         <>
           <p className="mt-2 text-lg font-bold text-ink">

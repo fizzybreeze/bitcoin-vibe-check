@@ -403,4 +403,35 @@ describe('PriceAlertsPanel when turning push on did not work', () => {
     render(<PriceAlertsPanel {...baseProps} pushStatus="failed" />)
     expect(screen.getByText(/refused to register for push/i)).toBeInTheDocument()
   })
+  // ── Keyboard operability (roadmap §5) ──────────────────────────────────────
+
+  it('moves focus into the panel when it opens', () => {
+    render(<PriceAlertsPanel {...baseProps} />)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close alerts' }))
+  })
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn()
+    render(<PriceAlertsPanel {...baseProps} onClose={onClose} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets Tab leave, because this is a popover and not a modal', () => {
+    // There is no scrim and the dashboard behind stays readable and usable, so
+    // trapping Tab here would strand anyone who tabbed in meaning to carry on
+    // down the page. `preventDefault` is what a trap does; the assertion is
+    // that the event was left alone.
+    render(<PriceAlertsPanel {...baseProps} />)
+    const set = screen.getByRole('button', { name: 'Set' })
+    set.focus()
+    const notHandled = fireEvent.keyDown(set, { key: 'Tab' })
+    expect(notHandled).toBe(true)
+  })
+
+  it('titles itself with a heading rather than a paragraph', () => {
+    render(<PriceAlertsPanel {...baseProps} />)
+    expect(screen.getByRole('heading', { name: 'Alerts', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Active alerts', level: 3 })).toBeInTheDocument()
+  })
 })

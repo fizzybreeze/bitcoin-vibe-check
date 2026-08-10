@@ -33,7 +33,7 @@ export default function DonationCard() {
 
   return (
     <div className="rounded-2xl bg-surface p-6 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Support Bitcoin Vibe Check</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Support Bitcoin Vibe Check</h2>
       <div className="mt-3 space-y-1">
         <p className="text-sm text-quiet">
           1. Send any amount to Strike:{' '}
@@ -57,7 +57,7 @@ export default function DonationCard() {
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           placeholder="Your name or handle…"
           maxLength={50}
-          className="w-full rounded-xl bg-raised border border-line px-4 py-2.5 text-base text-ink placeholder-quiet outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+          className="w-full rounded-xl bg-raised border border-line px-4 py-2.5 text-base text-ink placeholder-quiet"
         />
         {submitted && validErr && <p className="mt-2 text-xs text-down">{validErr}</p>}
       </div>

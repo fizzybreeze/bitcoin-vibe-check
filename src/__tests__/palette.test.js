@@ -152,6 +152,19 @@ describe.each(THEMES)('%s theme contrast', (theme) => {
       .toBeLessThan(contrastRatio(at('muted'), at('surface')))
   })
 
+  it('draws a focus ring that clears the non-text minimum on every surface', () => {
+    // The ring is `accent` and it is painted *outside* the control, so what it
+    // has to be visible against is whatever the control is sitting on. All
+    // three are covered above at the stricter text threshold — this states the
+    // claim in the place where someone retuning `accent` will read it, since a
+    // focus indicator is the one use of that token where dropping under 3:1
+    // costs a visitor the ability to tell where they are on the page.
+    for (const surface of ['ground', ...CARD_SURFACES]) {
+      expect(contrastRatio(at('accent'), at(surface)), `focus ring on ${surface}`)
+        .toBeGreaterThanOrEqual(AA_NON_TEXT)
+    }
+  })
+
   it('separates the accent from the down signal by hue, not by lightness', () => {
     // The two warmest things on screen, and one of them means "the price
     // fell". A contrast ratio is the wrong instrument here — it measures
@@ -215,6 +228,56 @@ describe('nothing outside the stylesheet names a hue', () => {
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  it('leaves the focus indicator to the stylesheet', () => {
+    // Every `outline-none` in `src/` used to be one of two things: a control
+    // taking the focus ring away with nothing put in its place, or a control
+    // reinventing it as a ring of its own. The blanket rule in `index.css` is
+    // unlayered, so a Tailwind utility can no longer win against it — which
+    // makes any of these a class that reads as if it does something and does
+    // not, and the next person to copy one would be copying a lie.
+    const offenders = []
+    for (const file of sourceFiles(SRC)) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/\b(?:focus:)?outline-none\b/g)) {
+        offenders.push(`${rel(file)}: ${m[0]}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
+describe('the focus indicator', () => {
+  // The rule itself, asserted where the file is already being parsed. That it
+  // is *emitted and wins in a browser* is `e2e/accessibility.spec.js`'s job —
+  // a text match cannot tell you Tailwind's `@layer utilities` did not beat it.
+  const css = readFileSync(INDEX_CSS, 'utf8')
+
+  it('is declared, once, for the whole app', () => {
+    expect(css).toMatch(/^:focus-visible \{/m)
+  })
+
+  it('is drawn in the accent token rather than a colour of its own', () => {
+    const rule = css.slice(css.indexOf('\n:focus-visible {'))
+    expect(rule).toMatch(/outline:\s*2px solid var\(--color-accent\)/)
+    // Offset, because an inset ring on an accent-filled button sits on its own
+    // colour and disappears.
+    expect(rule).toMatch(/outline-offset:\s*2px/)
+  })
+
+  it('is not wrapped in a layer, which is what lets it beat outline-none', () => {
+    // Tailwind emits utilities into `@layer utilities`; an unlayered rule beats
+    // any layered one whatever its specificity. Put this inside `@layer` and it
+    // still parses, still looks right in this file, and silently stops applying
+    // to every control that carries the utility.
+    //
+    // Asserted as brace depth rather than by looking for the word `@layer`,
+    // which appears in the prose above the rule and in this file's own header:
+    // depth 0 is what "unlayered" actually means, and it catches a stray `{`
+    // as well.
+    const before = css.slice(0, css.indexOf('\n:focus-visible {')).replace(/\/\*[\s\S]*?\*\//g, '')
+    const depth = (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length
+    expect(depth, 'the focus rule is nested inside another block').toBe(0)
   })
 })
 

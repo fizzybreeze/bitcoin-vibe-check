@@ -20,7 +20,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
   const satsPerFiat = computeSatsPerFiat(price)
   return (
     <div className="rounded-2xl bg-surface p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></h2>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
