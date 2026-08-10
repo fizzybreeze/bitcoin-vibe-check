@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import BeehiivEmbed from './BeehiivEmbed.jsx'
+import { useState, useEffect, useRef } from 'react'
+import BeehiivForm from './BeehiivForm.jsx'
 
 // Dismissal is remembered here rather than in component state so it survives a
 // reload. The e2e suite sets the same key to suppress the modal instead of
@@ -8,6 +8,7 @@ const PROMPTED_KEY = 'btc-vibe-newsletter-prompted'
 
 export default function NewsletterModal() {
   const [show, setShow] = useState(false)
+  const dismissTimer = useRef(null)
 
   useEffect(() => {
     if (localStorage.getItem(PROMPTED_KEY)) return
@@ -15,22 +16,26 @@ export default function NewsletterModal() {
     return () => clearTimeout(id)
   }, [])
 
+  useEffect(() => () => clearTimeout(dismissTimer.current), [])
+
   function dismiss() {
     localStorage.setItem(PROMPTED_KEY, 'true')
     setShow(false)
   }
 
-  useEffect(() => {
-    let timerId
-    function handleSubscribe() {
-      timerId = setTimeout(dismiss, 2500)
-    }
-    window.addEventListener('beehiiv:subscribe', handleSubscribe)
-    return () => {
-      window.removeEventListener('beehiiv:subscribe', handleSubscribe)
-      clearTimeout(timerId)
-    }
-  }, [])
+  // The modal used to close on a `beehiiv:subscribe` window event, which *their
+  // loader* emitted; a native form emits nothing, so without this the modal
+  // would sit open behind the new tab the subscription completes in.
+  //
+  // The deferral is a correctness rule, not a pause for effect. `dismiss`
+  // unmounts the form, and a form removed from the document during its own
+  // submit event does not navigate — measured in Chromium, both synchronously
+  // and from a microtask, which is exactly when React flushes a state update
+  // made in a discrete event handler. Dismissing inline would therefore swallow
+  // the subscription silently: the modal would close and nothing would be sent.
+  function dismissAfterSubmit() {
+    dismissTimer.current = setTimeout(dismiss, 0)
+  }
 
   if (!show) return null
 
@@ -47,7 +52,7 @@ export default function NewsletterModal() {
         <h2 className="text-2xl font-bold text-ink">Satoshi's Weekly Brief</h2>
         <p className="mt-2 text-sm text-muted">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
         <div className="mt-4">
-          <BeehiivEmbed />
+          <BeehiivForm onSubmit={dismissAfterSubmit} />
         </div>
         <button
           onClick={dismiss}

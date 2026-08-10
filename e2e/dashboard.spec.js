@@ -155,6 +155,18 @@ test.describe('Bitcoin Dashboard', () => {
     await expect(page.getByText("Satoshi's Weekly Brief", { exact: false }).first()).toBeVisible()
   })
 
+  test('the newsletter signup is our own form, not an injected embed', async ({ page }) => {
+    // The half no unit test can reach. `mocks.js` stubs third-party scripts to
+    // an empty body — correctly, the suite is hermetic — so while the form came
+    // from beehiiv's loader every run and every visual baseline held an empty
+    // box where production drew a white panel. A form that is ours renders here
+    // like anything else, which is a second argument for owning it.
+    const form = page.locator('form[action="https://app.beehiiv.com/subscribe"]')
+    await expect(form).toBeVisible()
+    await expect(form.locator('input[type="email"]')).toBeVisible()
+    await expect(form.getByRole('button', { name: 'Subscribe' })).toBeVisible()
+  })
+
   test('footer copyright line contains 2026', async ({ page }) => {
     await expect(page.getByText(/© 2026/)).toBeVisible()
   })
