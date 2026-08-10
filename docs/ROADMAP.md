@@ -238,12 +238,123 @@ currently subscribed, and the marginal cost per pair is close to zero.
 relay, optional NIP-07. The audience overlap with an opinionated no-login
 Bitcoin dashboard is about as high as it gets.
 
+**Choose a typeface. Nobody ever has.** `src/index.css`'s `@theme` block holds
+only `--color-*` tokens — there is no `--font-*` token and no `font-family`
+declaration anywhere in the app, so the entire UI runs on Tailwind's default
+system stack by inheritance rather than by decision. The only family utilities in
+`src/` are four `font-mono` usages. Nothing is loaded or self-hosted either: zero
+`@font-face`, no font files in `public/`, and the `woff2` glob in
+`vite.config.js` precaches nothing. The work is a *decision plus a token*, not a
+redesign — a `--font-*` token in `@theme` is the exact mirror of what v1.8.0 did
+for colour, and the same rule applies: name the role, not the face.
+
+Two things make it harder than picking something nice. **`tabular-nums` appears
+nine times across four files** and is absent from `VolumeCard`,
+`NetworkFeesCard`, `CycleIndicatorsCard`, `MarketSentimentCard`,
+`NetworkPulseCard` and `SupplyIssuedCard` — every one of which renders a
+live-updating figure that jitters on each tick without it. So the face has to
+carry real tabular figures *and* the pass has to apply them. And **three export
+surfaces already tell three different font stories, none matching the app**:
+`api/lib/ogView.js` draws on Satori's bundled Geist, which we do not supply,
+which has no weight axis (its hierarchy is size and letter-spacing alone) and no
+₿ — the reason `ogImage.test.js` pins the allowed character set;
+`scripts/generate-icons.mjs` uses a system stack and *probes* for U+20BF, throwing
+rather than committing a tofu box; `ShareCanvas.jsx` and `ShareModal.jsx` each
+declare the same `-apple-system…` stack independently. **This is the palette
+problem in a second notation** — adopting a display face means supplying the file
+to Satori and to html2canvas too, or the preview card and the share image drift
+away from the site with nothing failing to say so.
+
+**A full UI pass — the layout half of what v1.8.0 did for colour.** Colour is a
+system now; type and layout are still whatever each card decided at the time.
+Three countable problems.
+
+*Icons are hand-written at every call site.* Thirteen inline `<svg>`s across
+eight files, carrying between them **five rendered sizes** (10, 12, 13, 14, 16),
+**five viewBoxes** and **five stroke weights** (1.2 to 2.5) — and because the box
+and the rendered size vary independently, the *effective* weight varies again.
+The three header buttons sitting side by side end up at three optical weights and
+two sizes. There is no shared icon component and no sprite: `<use>` appears zero
+times. The header button shell is duplicated verbatim across `App.jsx`,
+`ShareButton.jsx` and `PriceAlertsButton.jsx`, with `ThemeToggle.jsx` a fourth
+variant. Several controls are text glyphs rather than icons — `✕` on both modals,
+`▾` on the currency select, `▲`/`▼` on five price deltas — which resolve in
+whatever font the device supplies, the same risk `generate-icons.mjs` documents.
+
+*The card label style is copy-pasted 35 times.* `text-xs font-semibold uppercase
+tracking-widest` appears 36 times across 16 files; exactly one is a named
+constant, and it is local to `CycleIndicatorsCard.jsx` and unexported. There is
+no exported className constant anywhere in `src/`. The drift has already started:
+a second `text-[10px]` label scale used only in `BtcPriceCard`, three labels
+typed in capitals instead of using `uppercase`, one of them doing both. The
+primary-value treatment is worse — `text-sm`, `text-lg`, `text-xl`, `text-2xl`
+and `text-3xl` all serve as "the big number" depending on which card you are in,
+across thirteen sites.
+
+*Card roots mostly agree; the grid does not.* `rounded-2xl bg-surface` on every
+card and `rounded-xl` on every inner tile is genuinely consistent and should
+survive the pass untouched — this is not a "rewrite everything" item. Padding is
+not: four schemes across fifteen cards (`p-6` ×7, `p-4 md:p-6` ×2, `p-4` ×2,
+`px-4 pt-4 pb-3` ×2). Six bake their own outer margin into the root while the
+rest rely on the grid's `gap-4`; two bake breakpoint visibility in; `h-full` is
+applied unevenly, so some rows have equal-height cards and others do not. The
+grid goes multi-column at `md:` in the first two rows and `lg:` in the last two,
+with wrapper `<div>`s in some rows and not others. Two responsive-duplicate pairs
+live as separate files rather than one component with a breakpoint
+(`NetworkHeartbeatCard`/`RecentBlocksCard`,
+`SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated presentation
+classes between them.
+
+Two cheap deletions while in there: **`public/icons.svg`** is 5 KB of Vite
+starter scaffolding that no code, template or manifest references, in colours
+from no palette this repo has ever had, and **`src/App.css` is 0 bytes and still
+imported** by `App.jsx`. Expect to regenerate all **eight** visual baselines (four cards × two
+themes as of v1.8.0) — that is what `visual-baselines.yml` exists for, and
+`CLAUDE.md` records the trap that follows it.
+
+**A character beside the Vibe Score, reacting to the reading.** Pixel art rather
+than another geometric SVG — the first piece of actual artwork in a product whose
+graphics have so far been lines and arcs. The Vibe Score is the thing this
+dashboard has that others do not, and right now it is a number and a word.
+
+*Environment, not emotion — decided, not open.* Frost and visible breath at Ice
+Cold; heat haze and a wilting plant at Overheated; the character itself stays
+neutral. §7 rejects buy/sell signals and this dashboard does not editorialise,
+and a character who looks *panicked* at Extreme Fear is the dashboard having a
+feeling about the market. A character standing in weather restates the
+temperature metaphor the ladder already uses, and says nothing that the words
+"Ice Cold" and "Overheated" do not already say.
+
+*Five constraints, each of them a way to get this wrong late.* A raster sprite
+cannot read a CSS variable — `src/lib/palette.js`'s problem in a third form — so
+it needs either one set per theme or a palette-limited sprite recoloured at
+runtime, and it has to hold up on the violet ground *and* the near-white one.
+v1.7.12's reduced-motion rule is blanket, so "their action reflects the score"
+must degrade to a still frame carrying the same reading. It should almost
+certainly be `aria-hidden`, which **inverts** the `seriesLabel.js` precedent:
+there the drawing was the only source of the reading, here the score and its
+label are already text, so describing the character makes a screen reader say it
+twice. There are **seven** states rather than six, because `computeVibeScore`
+returns `null` below three dimensions or 0.6 of the weight, and the no-reading
+case is the one that gets forgotten. And `ShareCanvas` and `api/lib/ogView.js`
+will both want it — html2canvas can rasterise an `<img>`, Satori takes a data URI
+— which is far cheaper to decide before the sprite is drawn than after.
+
+*The argument it has to win* is §1's, twice over: sprites are bytes against a
+precache already near 1.3 MB and a "free to run" filter, and this would be the
+first element on the page that is not load-bearing. The case for it is that a
+redundant encoding can make the five-second read *faster* rather than slower. That
+claim should be made out loud and tested, because if it is false the honest
+outcome is not to ship it.
+
 **What the v1.7.12 accessibility pass deliberately did not cover**, so nobody reads v1.7.12 as
 "accessible, done": focus indicators and visible focus order, keyboard
 operability of the alerts panel and share modal, heading structure, and any
-audit by an actual screen reader rather than by assertion. Contrast was fixed
-for text on `bg-gray-900` specifically — the one background this app uses for
-cards — and not proven for any other pairing.
+audit by an actual screen reader rather than by assertion. The contrast caveat
+that used to sit here — fixed for `bg-gray-900` only, unproven for any other
+pairing — is closed: v1.8.0's `palette.test.js` computes every text token
+against `ground`, `surface` and `raised` in both themes, and `raised` is the one
+that caught things.
 
 ---
 
