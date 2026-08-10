@@ -4,7 +4,7 @@ export default function SupporterTickerCard({ donors }) {
     : null
   return (
     <div className="hidden md:block rounded-2xl bg-surface px-4 pt-4 pb-3 mt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet mb-2">Supporters ⚡</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet mb-2">Supporters ⚡</h2>
       {content ? (
         <div className="relative w-full overflow-hidden">
           <span

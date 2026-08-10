@@ -17,7 +17,7 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
 
   return (
     <div data-testid="card-market-sentiment" className="rounded-2xl bg-surface p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Market Sentiment</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Market Sentiment</h2>
 
       <div className="mt-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>

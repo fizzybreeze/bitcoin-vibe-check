@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import ShareCanvas from './ShareCanvas.jsx'
+import useDialogFocus from '../hooks/useDialogFocus.js'
 import { useShareImage } from '../hooks/useShareImage.js'
 import { SHARE_CARDS } from './shareCards.js'
 import { PALETTE, resolveTheme } from '../lib/palette.js'
@@ -18,6 +19,11 @@ function withAlpha(hex, a) {
 export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary, currency, theme }) {
   const [selectedCards, setSelectedCards] = useState(() => SHARE_CARDS.map(c => c.key))
   const canvasRef = useRef(null)
+  const dialogRef = useRef(null)
+  // `active: isOpen` rather than a hook after the early return below — a modal
+  // that is not on screen must not hold the Escape listener, and it is the flag
+  // flipping that has to run the focus-in and the focus-restore.
+  useDialogFocus(dialogRef, { onClose, trap: true, active: isOpen })
   // Resolved here rather than in each consumer: the modal, the off-screen
   // canvas and the html2canvas background must all be the same theme, or the
   // captured image gets a border of the other one.
@@ -35,6 +41,7 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Share dashboard image"

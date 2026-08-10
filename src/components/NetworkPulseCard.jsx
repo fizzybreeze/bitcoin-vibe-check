@@ -67,7 +67,7 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
 
   return (
     <div data-testid="card-network-pulse" className="rounded-2xl bg-surface p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Health</p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Health</h2>
 
       {/* Row 1: Hash Rate | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">

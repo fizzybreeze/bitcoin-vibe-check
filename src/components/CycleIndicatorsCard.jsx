@@ -49,7 +49,7 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
 
   return (
     <div data-testid="card-cycle-indicators" className="rounded-2xl bg-surface p-4 md:p-6 flex flex-col gap-4 h-full">
-      <p className={LABEL}>Cycle Indicators</p>
+      <h2 className={LABEL}>Cycle Indicators</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 md:divide-x divide-line-soft">
         {/* Top-left: MVRV Ratio */}

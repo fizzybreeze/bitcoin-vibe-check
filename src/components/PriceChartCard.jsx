@@ -42,9 +42,9 @@ export default function PriceChartCard({
     <div className="rounded-2xl bg-surface p-6 h-full">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
             Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
-          </p>
+          </h2>
           {chartChange != null && !chartLoading && (
             <span
               data-testid="chart-range-change"

@@ -422,14 +422,32 @@ redundant encoding can make the five-second read *faster* rather than slower. Th
 claim should be made out loud and tested, because if it is false the honest
 outcome is not to ship it.
 
-**What the v1.7.12 accessibility pass deliberately did not cover**, so nobody reads v1.7.12 as
-"accessible, done": focus indicators and visible focus order, keyboard
-operability of the alerts panel and share modal, heading structure, and any
-audit by an actual screen reader rather than by assertion. The contrast caveat
-that used to sit here — fixed for `bg-gray-900` only, unproven for any other
-pairing — is closed: v1.8.0's `palette.test.js` computes every text token
+**What the accessibility passes still do not cover**, so nobody reads them as
+"accessible, done". Two of the four caveats that used to sit here are closed.
+The contrast one went in v1.8.0: `palette.test.js` computes every text token
 against `ground`, `surface` and `raised` in both themes, and `raised` is the one
-that caught things.
+that caught things. Focus indicators, keyboard operability of the three dialogs
+and heading structure went in v1.8.4 — one blanket unlayered `:focus-visible`
+rule, a shared `useDialogFocus`, and every card title promoted to `<h2>`.
+
+**What is left is the item none of this can substitute for: an audit by an
+actual screen reader.** Every assertion in the suite is a claim about markup —
+that a role is present, that a label exists, that focus moved. None of them is a
+claim about what someone actually *hears*, and the two come apart in ways a test
+cannot see: whether "24h Volume" read aloud between fifteen other headings is
+navigable or is noise, whether the Vibe Score breakdown reads as five figures or
+as a stream of digits, whether an alert row announces its direction. That needs
+VoiceOver or NVDA and a person, and it is the honest reason this item stays.
+
+Two smaller things, both deliberate and both worth naming so they are not
+mistaken for oversights. **`HalvingCountdown` has no heading** — it is a
+three-panel strip with no title of its own on screen, and inventing one would
+put a region in the outline that a sighted visitor cannot see;
+`cardHeadings.test.js` carries it as a named exception with an assertion that
+keeps the exception honest. And **the alerts panel does not trap Tab**, because
+it is a popover over a still-usable page rather than a modal over a scrim —
+trapping would claim otherwise. Neither is settled forever; both are recorded
+decisions rather than gaps.
 
 ---
 

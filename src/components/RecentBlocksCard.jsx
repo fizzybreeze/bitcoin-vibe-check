@@ -54,7 +54,7 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
 
   return (
     <div data-testid="card-recent-blocks" className="rounded-2xl bg-surface p-6 h-full">
-      <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></p>
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></h2>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
