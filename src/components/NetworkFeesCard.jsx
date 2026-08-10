@@ -28,7 +28,7 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
           <div className="h-2 w-full overflow-hidden rounded-full bg-raised">
             <div className={`h-full rounded-full ${cg.bar}`} style={{ width: `${pct}%` }} />
           </div>
-          <p className="mt-1.5 text-xs text-quiet">
+          <p className="mt-1.5 text-xs text-quiet tabular-nums">
             {mempool.count.toLocaleString('en-US')} unconfirmed transactions
           </p>
         </div>
@@ -51,11 +51,11 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
                 <div key={label} className="flex flex-col justify-center rounded-xl bg-raised px-2 py-3 md:px-3 md:py-4">
                   <p className="text-xs font-semibold uppercase tracking-widest text-quiet">{label}</p>
                   <div className="mt-1.5 flex items-baseline gap-0.5 md:gap-1">
-                    <span className="text-lg font-bold text-accent md:text-2xl">{value}</span>
+                    <span className="text-lg font-bold text-accent tabular-nums md:text-2xl">{value}</span>
                     <span className="text-xs text-quiet">sat/vB</span>
                   </div>
                   <p className="mt-0.5 text-xs text-quiet">{time}</p>
-                  {fiatStr && <p className="mt-0.5 text-xs text-quiet">{fiatStr}</p>}
+                  {fiatStr && <p className="mt-0.5 text-xs text-quiet tabular-nums">{fiatStr}</p>}
                 </div>
               )
             })
@@ -76,7 +76,7 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Capacity</p>
                   <div className="mt-1 flex items-baseline gap-0.5">
-                    <span className="text-base font-bold text-accent">
+                    <span className="text-base font-bold text-accent tabular-nums">
                       {(lightning.latest.total_capacity / 1e8).toFixed(1)}
                     </span>
                     <span className="text-xs text-quiet">BTC</span>
@@ -84,13 +84,13 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Nodes</p>
-                  <p className="mt-1 text-base font-bold text-accent">
+                  <p className="mt-1 text-base font-bold text-accent tabular-nums">
                     {lightning.latest.node_count.toLocaleString('en-US')}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Channels</p>
-                  <p className="mt-1 text-base font-bold text-accent">
+                  <p className="mt-1 text-base font-bold text-accent tabular-nums">
                     {lightning.latest.channel_count.toLocaleString('en-US')}
                   </p>
                 </div>

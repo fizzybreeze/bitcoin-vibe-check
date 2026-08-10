@@ -24,7 +24,7 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
         <div className="mt-2">
           {loading || fngScore == null
             ? <Skeleton className="h-8 w-10" />
-            : <p className="text-2xl font-bold text-accent">{fngScore}</p>
+            : <p className="text-2xl font-bold text-accent tabular-nums">{fngScore}</p>
           }
           <p className={`mt-1 text-sm ${fngLabelClass(fngClass)}`}>
             {fngClass ?? (loading ? ' ' : '—')}

@@ -293,41 +293,38 @@ currently subscribed, and the marginal cost per pair is close to zero.
 relay, optional NIP-07. The audience overlap with an opinionated no-login
 Bitcoin dashboard is about as high as it gets.
 
-**Choose a typeface. Nobody ever has.** `src/index.css`'s `@theme` block holds
-only `--color-*` tokens — there is no `--font-*` token and no `font-family`
-declaration anywhere in the app, so the entire UI runs on Tailwind's default
-system stack by inheritance rather than by decision. The only family utilities in
-`src/` are four `font-mono` usages. Nothing is loaded or self-hosted either: zero
-`@font-face`, no font files in `public/`, and the `woff2` glob in
-`vite.config.js` precaches nothing. The work is a *decision plus a token*, not a
-redesign — a `--font-*` token in `@theme` is the exact mirror of what v1.8.0 did
-for colour, and the same rule applies: name the role, not the face.
+**The typeface is chosen, and the choice is the platform UI face.** Shipped in
+v1.8.5; see the version-history row. What is worth keeping here is the shape of
+the remaining work, because the decision deliberately did not close it.
 
-Two things make it harder than picking something nice — one fewer than when this
-was written, because the app mark stopped being type. **`tabular-nums` appears
-nine times across four files** and is absent from `VolumeCard`,
-`NetworkFeesCard`, `CycleIndicatorsCard`, `MarketSentimentCard`,
-`NetworkPulseCard` and `SupplyIssuedCard` — every one of which renders a
-live-updating figure that jitters on each tick without it. So the face has to
-carry real tabular figures *and* the pass has to apply them. And **two export
-surfaces still tell different font stories, neither matching the app**:
-`api/lib/ogView.js` draws on Satori's bundled Geist, which we do not supply,
-which has no weight axis (its hierarchy is size and letter-spacing alone) and no
-₿ — the reason `ogImage.test.js` pins the allowed character set; and
-`ShareCanvas.jsx` and `ShareModal.jsx` each declare the same `-apple-system…`
-stack independently. **This is the palette problem in a second notation** —
-adopting a display face means supplying the file to Satori and to html2canvas
-too, or the preview card and the share image drift away from the site with
-nothing failing to say so.
+`--font-sans` and `--font-mono` are now `@theme` tokens mirroring
+`src/lib/typography.js`, `tabular-nums` reaches every figure that changes
+without a reload, and the two export surfaces that each declared their own
+`-apple-system…` stack now read the shared one. **Adopting a display face is
+therefore one token and its mirror**, not a hunt through fifteen components —
+which was the actual point of the item.
 
-> The icons used to be the third of these, and the way that one was closed is
-> the cheapest available answer where it applies: `scripts/generate-icons.mjs`
-> drew the ₿ as `<text>` in a system stack and had to *probe* for U+20BF and
-> throw rather than commit a tofu box. The mark is now a pixel grid in
-> `scripts/lib/mark.js`, so there is no font to resolve and no probe to run.
-> That does not generalise to the two above — a preview card is mostly prose and
-> cannot be drawn as rects — but it is worth noticing that one of the three
-> surfaces did not need a typeface at all.
+**Two standing requirements come with that door, and they are why it stayed
+shut.** Whatever face is chosen must carry real tabular figures, and it must be
+supplied to *both* export surfaces in the same change: Satori takes font buffers
+at request time inside a serverless function whose first constraint is that it
+must never return nothing, and html2canvas needs the face loaded in the document
+before it rasterises. Miss either and the preview card or the share image drifts
+away from the site with nothing failing to say so.
+
+**`api/lib/ogView.js` remains the one surface that cannot follow** — Satori's
+bundled Geist, which we do not supply, which has no weight axis and no ₿ (the
+reason `ogImage.test.js` pins the card's allowed character set). That exception
+is recorded in `typography.js` and re-asserted by `typography.test.js`, so it
+stays a decision rather than a surprise.
+
+**What the tabular pass cannot be checked by, recorded so nobody re-learns it.**
+`font-variant-numeric` only does anything if the resolved face has a `tnum`
+table, and the CI container has none of SF, Segoe UI or Roboto. Measured there:
+"111111" and "888888" render 6px apart *with the property set*. So the jitter is
+real and that environment cannot show the fix — the eight visual baselines
+passing this change proves nothing about how it renders on a phone, the same way
+v1.7.12 found them blind to contrast.
 
 **A full UI pass — the layout half of what v1.8.0 did for colour.** Colour is a
 system now; type and layout are still whatever each card decided at the time.

@@ -21,6 +21,21 @@
  * unlayered, so it wins regardless of specificity.
  */
 @theme {
+  /* Type. **These mirror `src/lib/typography.js`, which is the source of truth
+   * and carries the reasoning**; `typography.test.js` fails if the two
+   * disagree. Declared rather than inherited: the values are Tailwind's own
+   * defaults, which were already in force, so nothing here changes how a single
+   * character renders — what changes is that the choice now lives in the repo
+   * and has one place to be swapped. Preflight feeds `--font-sans` to `html`
+   * via `--default-font-family`, so this is what the whole app resolves to. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    'Noto Sans', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+
   --color-ground: #faf7fc;
   --color-surface: #ffffff;
   --color-raised: #f3eefa;

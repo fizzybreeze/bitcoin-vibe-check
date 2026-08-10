@@ -15,6 +15,7 @@ import { PALETTE, resolveTheme } from '../lib/palette.js'
 // congestion and MVRV ladders until the Afterglow pass; the MVRV one had
 // disagreed with the live card's for the same five bands.
 import { congestionBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
+import { FONT_STACKS } from '../lib/typography.js'
 
 /** The three text styles every share card is built from, at one theme. */
 function shareStyles(p) {
@@ -416,7 +417,11 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        // The app's own stack, not a second one written here. html2canvas
+        // rasterises whatever the document resolves, so a share image drawn in
+        // a different face from the card it copies is a drift nothing reports —
+        // and this stack had dropped the emoji families the ⚡ needs.
+        fontFamily: FONT_STACKS.sans,
       }}>
         {/* Top accent border */}
         <div style={{ height: 4, background: p.accent, flexShrink: 0 }} />
