@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { ICON_TARGETS } from '../../scripts/lib/mark.js'
 
 // Icons are the one asset class this project has got wrong twice, both times
 // silently: `/favicon.ico` was named by the notification path for as long as
@@ -25,6 +26,27 @@ function isPng(path) {
   const bytes = readFileSync(path)
   return PNG_MAGIC.every((byte, i) => bytes[i] === byte)
 }
+
+/** Width and height out of the IHDR chunk, which is always the first one. */
+function pngSize(path) {
+  const bytes = readFileSync(path)
+  const read = at => (bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]
+  return { width: read(16), height: read(20) }
+}
+
+describe('the committed icons match the generator', () => {
+  // `scripts/generate-icons.mjs` is run by hand, so the binaries and the target
+  // list can drift with nothing to say so: change a size in `mark.js`, forget
+  // to re-run it, and the manifest advertises a 512 that is still the old 384.
+  // Launchers do not report that — they scale it and move on.
+  it.each(ICON_TARGETS)('$file is a real PNG at $size×$size', ({ file, size }) => {
+    const path = join(ROOT, file)
+    expect(existsSync(path), `${file} is missing — re-run scripts/generate-icons.mjs`).toBe(true)
+    expect(isPng(path), `${file} is not a PNG`).toBe(true)
+    expect(pngSize(path), `${file} is stale — re-run scripts/generate-icons.mjs`)
+      .toEqual({ width: size, height: size })
+  })
+})
 
 describe('web app manifest icons', () => {
   it('names only files that are actually there', () => {
