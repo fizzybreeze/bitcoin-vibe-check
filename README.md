@@ -117,8 +117,8 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - The last-fetched dashboard state is mirrored to `localStorage` (`btc-cache`), so a reload — online or off — paints real numbers immediately instead of skeletons
 
 ### Newsletter
-- **Satoshi's Weekly Brief** — Beehiiv-powered newsletter signup embedded in the sidebar and surfaced as a modal 5 seconds after a first visit
-- Modal is shown once per browser (suppressed via `localStorage`); auto-dismisses after a successful subscribe event
+- **Satoshi's Weekly Brief** — newsletter signup shown above the donation card and surfaced as a modal 5 seconds after a first visit. The form is the app's own markup, styled from the same palette tokens as everything else and following the theme toggle; it posts to Beehiiv, which completes the subscription in a new tab
+- Modal is shown once per browser (suppressed via `localStorage`); dismisses itself once the form has been submitted
 
 ### Lightning Donations & Supporters
 - **Donate via Strike** — one-click link to `strike.me/fizzybreeze` for Lightning payments
@@ -146,7 +146,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | Hosting | [Vercel](https://vercel.com) — static site plus two serverless functions |
 | Database | [Supabase](https://supabase.com) Postgres (donor names, daily metric snapshots) |
 | CI / cron | [GitHub Actions](https://docs.github.com/actions) |
-| Newsletter | [Beehiiv](https://beehiiv.com) (embedded signup form) |
+| Newsletter | [Beehiiv](https://beehiiv.com) (our own form, posting to their subscribe endpoint) |
 
 ---
 

@@ -95,9 +95,14 @@ export async function mockApis(page, { nowMs } = {}) {
   // Third-party scripts. These are not part of the dashboard under test and are
   // unreachable on a restricted network, so stub them out rather than let the
   // suite depend on the public internet.
-  await page.route('https://subscribe-forms.beehiiv.com/**', route =>
-    route.fulfill({ contentType: 'application/javascript', body: '' })
-  )
+  //
+  // `subscribe-forms.beehiiv.com` was stubbed here until the newsletter form
+  // became ours. That stub was right and it was also the reason the embed
+  // shipped looking wrong: every run of this suite, and every mobile screenshot
+  // artifact, held an empty box where production drew a white panel. Nothing
+  // requests their loader now, so a rule for a host the app never calls is the
+  // dead-config smell v1.4.5 recorded — it goes rather than sitting here looking
+  // like coverage.
   await page.route('https://va.vercel-scripts.com/**', route =>
     route.fulfill({ contentType: 'application/javascript', body: '' })
   )
