@@ -98,10 +98,11 @@ export async function mockApis(page, { nowMs } = {}) {
   //
   // `subscribe-forms.beehiiv.com` was stubbed here until the newsletter form
   // became ours. That stub was right and it was also the reason the embed
-  // shipped looking wrong: every run and every visual baseline held an empty box
-  // where production drew a white panel. Nothing requests their loader now, so
-  // a rule for a host the app never calls is the dead-config smell v1.4.5
-  // recorded — it goes rather than sitting here looking like coverage.
+  // shipped looking wrong: every run of this suite, and every mobile screenshot
+  // artifact, held an empty box where production drew a white panel. Nothing
+  // requests their loader now, so a rule for a host the app never calls is the
+  // dead-config smell v1.4.5 recorded — it goes rather than sitting here looking
+  // like coverage.
   await page.route('https://va.vercel-scripts.com/**', route =>
     route.fulfill({ contentType: 'application/javascript', body: '' })
   )

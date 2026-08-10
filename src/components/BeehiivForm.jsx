@@ -5,9 +5,13 @@
 // has no idea which theme this document is in. Everything here is a semantic
 // token, so it paints in both themes and falls under `palette.test.js` and the
 // e2e suite like every other element on the page. It also means the newsletter
-// card is finally something the gates can see: `e2e/mocks.js` stubs their
-// script to an empty body, correctly, so no test run and no visual baseline has
-// ever contained the form production actually drew.
+// card is finally something the gates can see: `e2e/mocks.js` stubs their script
+// to an empty body, correctly, so no run of that suite and no mobile screenshot
+// artifact has ever contained the form production actually drew.
+//
+// Note what that does *not* buy, so nobody reads more into it than is there:
+// the `visual` project snapshots four structurally fragile cards and the
+// newsletter is not one of them, so no baseline covers this either way.
 //
 // What that costs, paid deliberately rather than discovered: `target="_blank"`
 // means the subscription completes on beehiiv's own page, so there is no inline

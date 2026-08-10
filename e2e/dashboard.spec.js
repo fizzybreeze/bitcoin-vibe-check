@@ -158,10 +158,17 @@ test.describe('Bitcoin Dashboard', () => {
   test('the newsletter signup is our own form, not an injected embed', async ({ page }) => {
     // The half no unit test can reach. `mocks.js` stubs third-party scripts to
     // an empty body — correctly, the suite is hermetic — so while the form came
-    // from beehiiv's loader every run and every visual baseline held an empty
-    // box where production drew a white panel. A form that is ours renders here
-    // like anything else, which is a second argument for owning it.
-    const form = page.locator('form[action="https://app.beehiiv.com/subscribe"]')
+    // from beehiiv's loader, every run of this suite and every mobile screenshot
+    // artifact held an empty box where production drew a white panel. (The
+    // visual baselines never held it in any form: that project snapshots four
+    // structurally fragile cards and the newsletter is not one of them.) A form
+    // that is ours renders here like anything else.
+    //
+    // Scoped to the card rather than matched page-wide, and that is load-bearing
+    // rather than tidy: this spec does *not* suppress the newsletter modal, so
+    // from five seconds after load there are two of these forms on the page and
+    // an unscoped locator is a strict-mode violation waiting for a slow runner.
+    const form = page.getByTestId('newsletter-card').locator('form[action="https://app.beehiiv.com/subscribe"]')
     await expect(form).toBeVisible()
     await expect(form.locator('input[type="email"]')).toBeVisible()
     await expect(form.getByRole('button', { name: 'Subscribe' })).toBeVisible()
