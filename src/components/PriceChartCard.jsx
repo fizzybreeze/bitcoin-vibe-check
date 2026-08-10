@@ -48,7 +48,7 @@ export default function PriceChartCard({
           {chartChange != null && !chartLoading && (
             <span
               data-testid="chart-range-change"
-              className={`text-xs font-semibold ${chartChange >= 0 ? 'text-up' : 'text-down'}`}
+              className={`text-xs font-semibold tabular-nums ${chartChange >= 0 ? 'text-up' : 'text-down'}`}
             >
               {chartChange >= 0 ? '▲' : '▼'}&nbsp;{chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
             </span>

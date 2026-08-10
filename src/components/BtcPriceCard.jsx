@@ -108,7 +108,7 @@ function VibeScoreSection({ vibe, loading, history }) {
       ) : (
         <>
           <div className="mt-2 flex items-baseline gap-2.5">
-            <p data-testid="vibe-score" className="text-3xl font-bold text-accent md:text-4xl">
+            <p data-testid="vibe-score" className="text-3xl font-bold text-accent tabular-nums md:text-4xl">
               {vibe.score}
             </p>
             <p
@@ -145,17 +145,17 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         <div>
           {value == null
             ? <Skeleton className="h-9 w-32" />
-            : <p className="text-2xl font-bold text-accent md:text-3xl">{value}</p>
+            : <p className="text-2xl font-bold text-accent tabular-nums md:text-3xl">{value}</p>
           }
           {/* ATH distance — left column, all breakpoints */}
           {athPct != null && value != null && (
             isAtATH
               ? <p className="mt-1 text-xs font-medium text-up md:mt-1.5 md:text-sm">AT ATH</p>
-              : <p className="mt-1 text-xs text-quiet md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
+              : <p className="mt-1 text-xs text-quiet tabular-nums md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
           )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (
-            <p className={`hidden md:block mt-1.5 text-sm font-medium ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p className={`hidden md:block mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
           )}
@@ -167,7 +167,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         {/* Mobile-only: change + sub on right */}
         {change != null && value != null && (
           <div className="md:hidden text-right shrink-0 ml-3">
-            <p className={`text-sm font-medium ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p className={`text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
             {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}

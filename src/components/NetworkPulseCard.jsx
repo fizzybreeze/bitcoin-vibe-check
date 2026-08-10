@@ -75,7 +75,7 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
           <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
             {hashRate != null
-              ? <p className="text-2xl font-bold text-accent">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
+              ? <p className="text-2xl font-bold text-accent tabular-nums">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
               : <Skeleton className="h-8 w-20" />
             }
             {hashRate != null && hashRateTrend != null && (
@@ -92,14 +92,14 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
                 ? <p className="text-2xl font-bold text-quiet">—</p>
-                : <p className="text-2xl font-bold text-accent">
+                : <p className="text-2xl font-bold text-accent tabular-nums">
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
             <p className={`mt-1 text-sm ${diffInterp ? diffInterp.cls : 'text-quiet'}`}>
               {loading ? ' ' : diffInterp ? diffInterp.text : (diffChange == null ? 'Unavailable' : ' ')}
             </p>
-            <p className="mt-1 text-xs text-quiet">
+            <p className="mt-1 text-xs text-quiet tabular-nums">
               {loading
                 ? ' '
                 : remainingBlocks != null

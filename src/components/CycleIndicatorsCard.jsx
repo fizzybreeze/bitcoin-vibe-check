@@ -32,8 +32,8 @@ function MetricRow({ label, value, context, contextCls = 'text-muted', tooltip }
   return (
     <div className="flex flex-col gap-0.5">
       <p className={`${LABEL} flex items-center`}>{label}{tooltip && <CardTooltip text={tooltip} />}</p>
-      <p className="text-xl font-bold text-accent">{value ?? '—'}</p>
-      {context && <p className={`text-xs ${contextCls}`}>{context}</p>}
+      <p className="text-xl font-bold text-accent tabular-nums">{value ?? '—'}</p>
+      {context && <p className={`text-xs tabular-nums ${contextCls}`}>{context}</p>}
     </div>
   )
 }

@@ -24,7 +24,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
-          : <p className="text-2xl font-bold text-accent md:text-3xl">{fmtVolume(volume, currency)}</p>
+          : <p className="text-2xl font-bold text-accent tabular-nums md:text-3xl">{fmtVolume(volume, currency)}</p>
         }
         {/* Every line below gates on the input it actually needs. They used to
             share one `volume != null` wrapper, which quietly made CoinPaprika a
@@ -35,13 +35,13 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
 
         {/* Line 1: vol vs 7d avg — desktop only, skipped when history is insufficient */}
         {volVs7d != null && (
-          <p className={`hidden md:block mt-1.5 text-xs ${volVs7d >= 0 ? 'text-up' : 'text-down'}`}>
+          <p className={`hidden md:block mt-1.5 text-xs tabular-nums ${volVs7d >= 0 ? 'text-up' : 'text-down'}`}>
             {volVs7d >= 0 ? '+' : ''}{Math.abs(volVs7d).toFixed(0)}%&nbsp;{volVs7d >= 0 ? 'above' : 'below'} 7d avg
           </p>
         )}
         {/* Line 2: BTC dominance — always visible (the mobile-visible line) */}
         {btcDominance != null && (
-          <p className="mt-1.5 text-xs text-muted">
+          <p className="mt-1.5 text-xs text-muted tabular-nums">
             BTC dominance {btcDominance.toFixed(1)}%
           </p>
         )}
@@ -56,7 +56,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
             precedent: a fallback that presents itself as the primary source is
             the one way it could be worse than the blank it replaces. */}
         {marketCapUsd != null && (
-          <p className="hidden md:block mt-0.5 text-xs text-quiet">
+          <p className="hidden md:block mt-0.5 text-xs text-quiet tabular-nums">
             Mkt cap {fmtVolume(marketCapUsd, 'usd')}{marketCapEstimated && ' · est. from issued supply'}
           </p>
         )}
@@ -65,7 +65,7 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
           <>
             <div className="mt-3 border-t border-line" />
             <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-quiet">Sats per fiat</p>
-            <p className="mt-1 text-lg font-bold text-ink">
+            <p className="mt-1 text-lg font-bold text-ink tabular-nums">
               {satsPerFiat.toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
             </p>
           </>

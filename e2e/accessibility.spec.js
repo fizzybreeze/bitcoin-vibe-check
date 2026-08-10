@@ -205,4 +205,77 @@ test.describe('Accessibility', () => {
         .toBeLessThanOrEqual(levels[i - 1] + 1)
     }
   })
+  // ── Typography (roadmap §5) ───────────────────────────────────────────────
+  //
+  // `typography.test.js` reads the stylesheet as text. Neither of the two
+  // things below can be seen that way: whether Tailwind actually emitted the
+  // token, and whether the digits a visitor sees are really tabular.
+
+  test('draws the share image in the same face as the app', async ({ page }) => {
+    // The non-vacuous browser claim, and it took a mutation to find the one
+    // that was not. The obvious test here — "--font-sans reached the browser" —
+    // passes with the declaration *typo'd*, because Tailwind's own `@theme
+    // default` already defines `--font-sans` and this repo deliberately
+    // declares the same value. There is no observable difference between our
+    // token existing and not, which is a consequence of the decision rather
+    // than a gap in it, so that test was deleted instead of kept as decoration.
+    //
+    // This is the claim that was actually false before: `ShareCanvas` carried a
+    // hand-written stack that agreed with the app for three families, then
+    // diverged and dropped the emoji fallbacks. html2canvas rasterises whatever
+    // the document resolves, so a share image drawn in a different face from
+    // the card it copies is a drift that nothing reports and that only shows up
+    // in a posted PNG.
+    await mockApis(page)
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: /bitcoin vibe check/i, level: 1 }))
+      .toBeVisible({ timeout: 15000 })
+
+    const appFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
+    expect(appFont).toContain('-apple-system')
+    // The emoji families are the part both hand-written stacks had dropped, and
+    // the supporter cards render "⚡".
+    expect(appFont).toContain('Noto Color Emoji')
+
+    await page.getByRole('button', { name: /share/i }).first().click()
+    await expect(page.getByRole('dialog', { name: /share dashboard/i })).toBeVisible()
+
+    const canvasFont = await page.evaluate(() => {
+      const sheet = document.querySelector('[role="dialog"] div[style*="-9999px"] > div')
+      return sheet && getComputedStyle(sheet).fontFamily
+    })
+    expect(canvasFont, 'the off-screen capture target moved').not.toBeNull()
+    expect(canvasFont).toBe(appFont)
+  })
+
+  test('renders the live figures with tabular digits', async ({ page }) => {
+    // This asserts the *declaration* reaches the element, and deliberately not
+    // that the glyphs came out equal width. The difference matters and was
+    // measured on this runner rather than assumed.
+    //
+    // `font-variant-numeric: tabular-nums` only does anything if the resolved
+    // face carries a `tnum` table. Here it does not — the CI container has none
+    // of SF, Segoe UI or Roboto and falls through to a generic sans — so
+    // "111111" (47.45px) and "888888" (53.39px) render 6px apart *with the
+    // property set*. The jitter this fixes is therefore real and visible, and
+    // this environment cannot show the fix.
+    //
+    // Two consequences worth stating rather than discovering. A width-based
+    // assertion here would fail on a correct implementation, so it is not used.
+    // And the eight visual baselines passing this change proves nothing about
+    // how it renders on a phone — they are blind to it by construction, the
+    // same way v1.7.12 found them blind to contrast. What Tailwind emitting the
+    // utility *does* control is the declaration, so that is what is asserted.
+    await mockApis(page)
+    await page.goto('/')
+
+    const price = page.getByTestId('card-btc-price').getByText(/^\$[\d,]+$/).first()
+    await expect(price).toBeVisible({ timeout: 15000 })
+    await expect(price).toHaveCSS('font-variant-numeric', 'tabular-nums')
+
+    // One from a card that had none at all before this pass, so a revert of the
+    // pass itself is caught rather than only a revert of the price.
+    const vibeScore = page.getByTestId('vibe-score')
+    await expect(vibeScore).toHaveCSS('font-variant-numeric', 'tabular-nums')
+  })
 })

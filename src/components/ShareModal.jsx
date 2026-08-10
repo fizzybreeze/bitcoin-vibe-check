@@ -4,6 +4,7 @@ import useDialogFocus from '../hooks/useDialogFocus.js'
 import { useShareImage } from '../hooks/useShareImage.js'
 import { SHARE_CARDS } from './shareCards.js'
 import { PALETTE, resolveTheme } from '../lib/palette.js'
+import { FONT_STACKS } from '../lib/typography.js'
 
 /**
  * A token as rgba. Inline styles cannot use Tailwind's `/30` opacity syntax,
@@ -56,7 +57,10 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
         borderRadius: 16,
         padding: 24,
         color: p.ink,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        // The app's own stack rather than a second one written here. The two
+        // agreed for three families and then diverged, and this one had dropped
+        // the emoji fallbacks entirely.
+        fontFamily: FONT_STACKS.sans,
       }}>
         {/* Close button */}
         <button
