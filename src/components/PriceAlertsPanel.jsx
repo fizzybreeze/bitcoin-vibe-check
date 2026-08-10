@@ -3,6 +3,7 @@ import useDialogFocus from '../hooks/useDialogFocus.js'
 import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/alertRules.js'
 import { PUSH_FAILED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED } from '../hooks/usePushSubscription.js'
 import { pushFooterCopy } from './pushCopy.js'
+import Icon from './Icon.jsx'
 
 export default function PriceAlertsPanel({
   alerts,
@@ -98,10 +99,7 @@ export default function PriceAlertsPanel({
             aria-label="Close alerts"
             className="flex h-6 w-6 items-center justify-center rounded-full text-quiet hover:text-ink-dim transition-colors"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <line x1="1" y1="1" x2="11" y2="11" />
-              <line x1="11" y1="1" x2="1" y2="11" />
-            </svg>
+            <Icon name="close" size="sm" />
           </button>
         </div>
 
@@ -209,10 +207,7 @@ export default function PriceAlertsPanel({
                       aria-label={`Remove alert for ${rowMeta?.shortName ?? alert.metric} ${alert.label}`}
                       className="ml-2 shrink-0 flex h-5 w-5 items-center justify-center rounded-full text-quiet hover:text-muted transition-colors"
                     >
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                        <line x1="1" y1="1" x2="9" y2="9" />
-                        <line x1="9" y1="1" x2="1" y2="9" />
-                      </svg>
+                      <Icon name="close" size="sm" />
                     </button>
                   </li>
                 )

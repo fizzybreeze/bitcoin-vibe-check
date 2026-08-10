@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import BeehiivEmbed from './BeehiivEmbed.jsx'
 import useDialogFocus from '../hooks/useDialogFocus.js'
+import Icon from './Icon.jsx'
 
 // Dismissal is remembered here rather than in component state so it survives a
 // reload. The e2e suite sets the same key to suppress the modal instead of
@@ -60,9 +61,9 @@ export default function NewsletterModal() {
         <button
           onClick={dismiss}
           aria-label="Close"
-          className="absolute top-4 right-4 text-sm text-quiet hover:text-ink-dim"
+          className="absolute top-4 right-4 flex text-quiet hover:text-ink-dim"
         >
-          ✕
+          <Icon name="close" size="md" />
         </button>
         <h2 id="newsletter-modal-title" className="text-2xl font-bold text-ink">Satoshi's Weekly Brief</h2>
         <p className="mt-2 text-sm text-muted">Bitcoin's mood, money, and mempool. Once a week. Free.</p>

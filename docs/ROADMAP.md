@@ -328,20 +328,17 @@ v1.7.12 found them blind to contrast.
 
 **A full UI pass — the layout half of what v1.8.0 did for colour.** Colour is a
 system now; type and layout are still whatever each card decided at the time.
-Three countable problems.
+It named three countable problems.
 
-*Icons are hand-written at every call site.* Thirteen inline `<svg>`s across
-eight files, carrying between them **five rendered sizes** (10, 12, 13, 14, 16),
-**five viewBoxes** and **five stroke weights** (1.2 to 2.5) — and because the box
-and the rendered size vary independently, the *effective* weight varies again.
-The three header buttons sitting side by side end up at three optical weights and
-two sizes. There is no shared icon component and no sprite: `<use>` appears zero
-times. The header button shell is duplicated verbatim across `App.jsx`,
-`ShareButton.jsx` and `PriceAlertsButton.jsx`, with `ThemeToggle.jsx` a fourth
-variant. Several controls are text glyphs rather than icons — `✕` on both modals,
-`▾` on the currency select, `▲`/`▼` on five price deltas — which resolve in
-whatever font the device supplies, which is the risk the app mark used to carry
-and no longer does.
+**The icon half shipped in v1.8.6; see the version-history row.** Thirteen
+inline `<svg>`s across eight files, at five sizes, five viewBoxes and five
+stroke weights, became `src/lib/icons.js` plus one `Icon` component on a single
+box at a single weight with three sizes — and the eight controls that were text
+glyphs (`✕`, `▾`, `▲`/`▼`) became icons, which was the one genuine defect in
+that list rather than an inconsistency. The four copies of the header button
+shell became `ICON_BUTTON`. `src/App.css` went with it.
+
+**Two are left, and they are the two below.**
 
 *The card label style is copy-pasted 35 times.* `text-xs font-semibold uppercase
 tracking-widest` appears 36 times across 16 files; exactly one is a named
@@ -367,12 +364,9 @@ live as separate files rather than one component with a breakpoint
 `SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated presentation
 classes between them.
 
-One cheap deletion while in there: **`src/App.css` is 0 bytes and still
-imported** by `App.jsx`. (`public/icons.svg` was the other — 5 KB of Vite
-starter scaffolding referenced by nothing, in colours from no palette this repo
-has ever had — and it went with the v1.8.1 mark, since a stale icon file is
-worst while the real icons are being replaced.) Expect to regenerate all
-**eight** visual baselines (four cards × two themes as of v1.8.0) — that is what
+Both cheap deletions this item carried are now done: `public/icons.svg` went
+with the v1.8.1 mark, and the 0-byte-but-still-imported `src/App.css` went with
+v1.8.6's icons. Expect to regenerate all **eight** visual baselines (four cards × two themes as of v1.8.0) — that is what
 `visual-baselines.yml` exists for, and `CLAUDE.md` records the trap that follows
 it.
 

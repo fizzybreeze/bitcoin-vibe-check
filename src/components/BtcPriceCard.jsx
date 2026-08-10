@@ -1,5 +1,6 @@
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import CardTooltip from './CardTooltip.jsx'
+import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
 import { hasEnoughVibeHistory, vibeHistoryLabel } from '../lib/vibeHistory.js'
 import { describeTrend } from './seriesLabel.js'
@@ -155,8 +156,9 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
           )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (
-            <p className={`hidden md:block mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
-              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
+            <p className={`hidden md:flex items-center gap-1 mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+              <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
+              {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
           )}
           {/* Desktop-only stacked sub */}
@@ -167,8 +169,9 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         {/* Mobile-only: change + sub on right */}
         {change != null && value != null && (
           <div className="md:hidden text-right shrink-0 ml-3">
-            <p className={`text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
-              {changePositive ? '▲' : '▼'}&nbsp;{changePositive ? '+' : ''}{change.toFixed(2)}%
+            <p className={`flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+              <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
+              {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
             {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
           </div>

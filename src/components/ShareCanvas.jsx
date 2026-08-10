@@ -9,6 +9,11 @@ import { calcPowerLawFairValue, calcMayerMultiple } from '../utils/cycleCalculat
 // The image follows the theme the visitor is actually looking at: a light-mode
 // reader sharing a card gets a light card.
 import { PALETTE, resolveTheme } from '../lib/palette.js'
+// The direction arrows were `▲`/`▼` — device-font glyphs, in an image. Whether
+// html2canvas draws an inline <svg> instead was measured rather than assumed
+// (Chromium, html2canvas 1.4.1: it rasterises), because the failure mode here
+// is a blank where an arrow used to be, in a picture somebody already posted.
+import Icon from './Icon.jsx'
 // Shared with api/og.js and with the live cards — the exported card, the link
 // preview and the dashboard show the same labelled scales, so they cannot be
 // allowed to colour them differently. This file carried its own copies of the
@@ -99,8 +104,9 @@ function BtcPriceShareCard({ cardData, currency, theme }) {
         </p>
       )}
       {priceChange24h != null && (
-        <p style={{ ...S.sub, color: changePos ? p.up : p.down }}>
-          {changePos ? '▲' : '▼'} {changePos ? '+' : ''}{priceChange24h.toFixed(2)}% (24h)
+        <p style={{ ...S.sub, color: changePos ? p.up : p.down, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name={changePos ? 'triangle-up' : 'triangle-down'} size="sm" />
+          {changePos ? '+' : ''}{priceChange24h.toFixed(2)}% (24h)
         </p>
       )}
       {/* Mirrors the live card, which carries the score in this same position.

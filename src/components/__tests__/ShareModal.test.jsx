@@ -84,7 +84,7 @@ describe('ShareModal', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('calls onClose when the ✕ button is clicked', () => {
+  it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn()
     renderModal({ onClose })
     fireEvent.click(screen.getByRole('button', { name: /close/i }))

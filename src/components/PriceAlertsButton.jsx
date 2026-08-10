@@ -1,14 +1,14 @@
+import Icon from './Icon.jsx'
+import { ICON_BUTTON_LABELLED } from '../lib/icons.js'
+
 export default function PriceAlertsButton({ onClick, hasActiveAlerts }) {
   return (
     <button
       onClick={onClick}
       aria-label="Alerts"
-      className="relative flex items-center justify-center w-7 h-7 rounded-full text-accent transition-colors hover:text-accent-hover md:w-auto md:h-auto md:gap-1.5 md:bg-raised md:px-3 md:py-1 md:text-xs md:font-semibold md:hover:bg-hover md:hover:text-accent"
+      className={`relative ${ICON_BUTTON_LABELLED} text-accent hover:text-accent-hover`}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-      </svg>
+      <Icon name="bell" size="lg" />
       <span className="hidden md:inline">Alerts</span>
       {hasActiveAlerts && (
         <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-accent md:hidden" aria-hidden="true" />

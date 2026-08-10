@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { PALETTE } from '../lib/palette.js'
 import useTheme from '../hooks/useTheme.js'
+import Icon from './Icon.jsx'
 
 export default function CardTooltip({ text }) {
   const { theme } = useTheme()
@@ -67,10 +68,7 @@ export default function CardTooltip({ text }) {
           visible ? 'text-muted' : 'text-quiet hover:text-muted'
         }`}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <circle cx="6" cy="6" r="5.25" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M6 5v3.5M6 3.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
+        <Icon name="info" size="sm" />
       </button>
 
       {visible && (
