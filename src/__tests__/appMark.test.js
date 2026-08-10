@@ -108,11 +108,16 @@ describe('the letterform', () => {
     expect(covered(MARK[MARK_ROWS - 1], MARK[MARK_ROWS - 2])).toBe(true)
   })
 
-  it('leaves two counters, so the bowls are not filled in', () => {
-    // Every row of the body has ink at the far left; the counters are the rows
-    // that also have a hole in the middle. Two of them is a B.
-    const holes = MARK.filter(row => /^#+\.+#+\.*$/.test(row))
-    expect(holes.length).toBeGreaterThanOrEqual(5)
+  it('leaves exactly two counters, so the bowls are not filled in', () => {
+    // Counted as contiguous *bands* rather than as rows, and over the body
+    // rather than the whole grid. The first draft of this did neither: the
+    // tick rows have a gap in them too, so they matched the same pattern a
+    // counter does, and a row count of "at least five" was then satisfiable
+    // without either bowl being open. One band is a D, three is not a letter.
+    const body = MARK.slice(1, -1)
+    const holed = body.map(row => /^#+\.+#+/.test(row))
+    const bands = holed.reduce((n, open, i) => n + (open && !holed[i - 1] ? 1 : 0), 0)
+    expect(bands, `bowl rows: ${holed.map(Number).join('')}`).toBe(2)
   })
 })
 

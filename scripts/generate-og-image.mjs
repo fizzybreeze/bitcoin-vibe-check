@@ -28,6 +28,14 @@
 // The layout mirrors `api/lib/ogView.js`'s header — same accent rule, same
 // letterspaced wordmark, same tagline and domain — so the fallback reads as the
 // live card's sibling rather than as a different product's placeholder.
+//
+// **The prose here is set in whatever sans this machine resolves, and that is
+// baked into the committed PNG.** Unlike the icons, that is not a defect being
+// left in: it is latin text, every machine has a face for it, and the output is
+// a binary reviewed by looking at it rather than a template resolved on a
+// visitor's device. It is worth knowing about only when §5's typeface decision
+// lands — at which point this script wants the chosen face and a re-run, the
+// same as `ogView.js` wants it supplied to Satori.
 
 import { chromium } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
