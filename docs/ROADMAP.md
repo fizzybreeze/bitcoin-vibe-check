@@ -304,22 +304,31 @@ system stack by inheritance rather than by decision. The only family utilities i
 redesign — a `--font-*` token in `@theme` is the exact mirror of what v1.8.0 did
 for colour, and the same rule applies: name the role, not the face.
 
-Two things make it harder than picking something nice. **`tabular-nums` appears
+Two things make it harder than picking something nice — one fewer than when this
+was written, because the app mark stopped being type. **`tabular-nums` appears
 nine times across four files** and is absent from `VolumeCard`,
 `NetworkFeesCard`, `CycleIndicatorsCard`, `MarketSentimentCard`,
 `NetworkPulseCard` and `SupplyIssuedCard` — every one of which renders a
 live-updating figure that jitters on each tick without it. So the face has to
-carry real tabular figures *and* the pass has to apply them. And **three export
-surfaces already tell three different font stories, none matching the app**:
+carry real tabular figures *and* the pass has to apply them. And **two export
+surfaces still tell different font stories, neither matching the app**:
 `api/lib/ogView.js` draws on Satori's bundled Geist, which we do not supply,
 which has no weight axis (its hierarchy is size and letter-spacing alone) and no
-₿ — the reason `ogImage.test.js` pins the allowed character set;
-`scripts/generate-icons.mjs` uses a system stack and *probes* for U+20BF, throwing
-rather than committing a tofu box; `ShareCanvas.jsx` and `ShareModal.jsx` each
-declare the same `-apple-system…` stack independently. **This is the palette
-problem in a second notation** — adopting a display face means supplying the file
-to Satori and to html2canvas too, or the preview card and the share image drift
-away from the site with nothing failing to say so.
+₿ — the reason `ogImage.test.js` pins the allowed character set; and
+`ShareCanvas.jsx` and `ShareModal.jsx` each declare the same `-apple-system…`
+stack independently. **This is the palette problem in a second notation** —
+adopting a display face means supplying the file to Satori and to html2canvas
+too, or the preview card and the share image drift away from the site with
+nothing failing to say so.
+
+> The icons used to be the third of these, and the way that one was closed is
+> the cheapest available answer where it applies: `scripts/generate-icons.mjs`
+> drew the ₿ as `<text>` in a system stack and had to *probe* for U+20BF and
+> throw rather than commit a tofu box. The mark is now a pixel grid in
+> `scripts/lib/mark.js`, so there is no font to resolve and no probe to run.
+> That does not generalise to the two above — a preview card is mostly prose and
+> cannot be drawn as rects — but it is worth noticing that one of the three
+> surfaces did not need a typeface at all.
 
 **A full UI pass — the layout half of what v1.8.0 did for colour.** Colour is a
 system now; type and layout are still whatever each card decided at the time.
@@ -335,7 +344,8 @@ times. The header button shell is duplicated verbatim across `App.jsx`,
 `ShareButton.jsx` and `PriceAlertsButton.jsx`, with `ThemeToggle.jsx` a fourth
 variant. Several controls are text glyphs rather than icons — `✕` on both modals,
 `▾` on the currency select, `▲`/`▼` on five price deltas — which resolve in
-whatever font the device supplies, the same risk `generate-icons.mjs` documents.
+whatever font the device supplies, which is the risk the app mark used to carry
+and no longer does.
 
 *The card label style is copy-pasted 35 times.* `text-xs font-semibold uppercase
 tracking-widest` appears 36 times across 16 files; exactly one is a named
@@ -361,17 +371,27 @@ live as separate files rather than one component with a breakpoint
 `SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated presentation
 classes between them.
 
-Two cheap deletions while in there: **`public/icons.svg`** is 5 KB of Vite
-starter scaffolding that no code, template or manifest references, in colours
-from no palette this repo has ever had, and **`src/App.css` is 0 bytes and still
-imported** by `App.jsx`. Expect to regenerate all **eight** visual baselines (four cards × two
-themes as of v1.8.0) — that is what `visual-baselines.yml` exists for, and
-`CLAUDE.md` records the trap that follows it.
+One cheap deletion while in there: **`src/App.css` is 0 bytes and still
+imported** by `App.jsx`. (`public/icons.svg` was the other — 5 KB of Vite
+starter scaffolding referenced by nothing, in colours from no palette this repo
+has ever had — and it went with the v1.8.1 mark, since a stale icon file is
+worst while the real icons are being replaced.) Expect to regenerate all
+**eight** visual baselines (four cards × two themes as of v1.8.0) — that is what
+`visual-baselines.yml` exists for, and `CLAUDE.md` records the trap that follows
+it.
 
 **A character beside the Vibe Score, reacting to the reading.** Pixel art rather
-than another geometric SVG — the first piece of actual artwork in a product whose
-graphics have so far been lines and arcs. The Vibe Score is the thing this
-dashboard has that others do not, and right now it is a number and a word.
+than another geometric SVG. The Vibe Score is the thing this dashboard has that
+others do not, and right now it is a number and a word.
+
+*It is no longer the first piece of artwork, and that changes the brief.* The app
+mark is a pixel grid as of v1.8.1, drawn at 9 × 13 with whole-number cells, so
+the idiom, the grid coarseness and the palette-token discipline are settled and
+the character should match them rather than re-decide them — a sprite in a
+second pixel idiom beside the logo is the drift this establishes a precedent
+against. `scripts/lib/mark.js` is the worked example, including the part that is
+easy to get wrong: cells have to land on whole pixels at every size the thing is
+displayed at, or the artwork antialiases into a smear that nothing reports.
 
 *Environment, not emotion — decided, not open.* Frost and visible breath at Ice
 Cold; heat haze and a wilting plant at Overheated; the character itself stays

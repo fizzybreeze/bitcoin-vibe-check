@@ -18,6 +18,9 @@ import { PALETTE } from '../lib/palette.js'
 
 const C = PALETTE.dark
 
+/** The static card `api/og.js` redirects to when it cannot render a live one. */
+const FALLBACK = new URL('../../public/og-image.png', import.meta.url)
+
 const NOW = new Date('2026-08-06T14:05:00Z')
 
 const FULL = {
@@ -223,7 +226,24 @@ describe('og:image wiring', () => {
   })
 
   it('keeps the static fallback the function redirects to', () => {
-    expect(existsSync(new URL('../../public/og-image.png', import.meta.url))).toBe(true)
+    expect(existsSync(FALLBACK)).toBe(true)
+  })
+
+  it('ships that fallback as a real PNG the same size as the live render', () => {
+    // The fallback and the live card occupy one slot, so they have to be one
+    // shape. This drifted unnoticed for exactly the reason the redirect exists:
+    // a fallback rendering *is* the old behaviour, so an unfurl that sheds to
+    // it looks fine, and nothing anywhere compares the two. It was 3750×1969 —
+    // the same aspect at 3.1× the scale, 167 KB of precache for a file no
+    // browser ever requests — and still in the pre-Afterglow orange, months
+    // after the app was re-skinned.
+    const bytes = readFileSync(FALLBACK)
+    const magic = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    expect(magic.every((byte, i) => bytes[i] === byte), 'not a PNG').toBe(true)
+
+    const read = at => bytes.readUInt32BE(at)
+    expect({ width: read(16), height: read(20) })
+      .toEqual({ width: OG_WIDTH, height: OG_HEIGHT })
   })
 })
 
