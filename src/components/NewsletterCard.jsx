@@ -1,4 +1,4 @@
-import BeehiivForm from './BeehiivForm.jsx'
+import BeehiivEmbed from './BeehiivEmbed.jsx'
 
 export default function NewsletterCard() {
   return (
@@ -7,7 +7,7 @@ export default function NewsletterCard() {
       <p className="mt-3 text-lg font-bold text-ink">Bitcoin's mood, money, and mempool. Once a week. Free.</p>
       <p className="mt-1 text-xs text-quiet">Join the newsletter. Unsubscribe any time.</p>
       <div className="mt-4">
-        <BeehiivForm />
+        <BeehiivEmbed />
       </div>
     </div>
   )

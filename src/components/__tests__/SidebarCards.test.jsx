@@ -15,7 +15,7 @@ import ChartTooltip from '../ChartTooltip.jsx'
 import SatoshiQuote from '../SatoshiQuote.jsx'
 import NewsletterModal from '../NewsletterModal.jsx'
 import NewsletterCard from '../NewsletterCard.jsx'
-import BeehiivForm from '../BeehiivForm.jsx'
+import BeehiivEmbed from '../BeehiivEmbed.jsx'
 
 afterEach(cleanup)
 
@@ -202,63 +202,38 @@ describe('SatoshiQuote', () => {
   })
 })
 
-describe('BeehiivForm', () => {
-  // The form had no test at all while it was dead code — it has been in the
-  // repo since PR #1 and imported by nothing. These pin the fields that make it
-  // a subscription rather than an empty POST, because none of them is visible
-  // on screen and a dropped hidden input looks exactly like a working form.
-  it('posts to beehiiv carrying the publication it is subscribing to', () => {
-    const { container } = render(<BeehiivForm />)
-    const form = container.querySelector('form')
-    expect(form).toHaveAttribute('action', 'https://app.beehiiv.com/subscribe')
-    expect(form).toHaveAttribute('method', 'POST')
-    expect(container.querySelector('input[name="publication_id"]'))
-      .toHaveValue('2f92f769-e2ce-4532-b1b6-ccd02017b0ec')
-  })
-
-  it('carries the attribution fields that say the signup came from here', () => {
-    const { container } = render(<BeehiivForm />)
-    expect(container.querySelector('input[name="utm_source"]')).toHaveValue('bitcoin-vibe-check')
-    expect(container.querySelector('input[name="utm_medium"]')).toHaveValue('dashboard')
-  })
-
-  it('requires an email address, so submit cannot fire on an empty field', () => {
-    render(<BeehiivForm />)
-    const email = screen.getByLabelText('Email address')
-    expect(email).toBeRequired()
-    expect(email).toHaveAttribute('type', 'email')
-  })
-
-  it('opens the subscription in a new tab without handing beehiiv a window handle', () => {
-    // Current browsers imply noopener for target=_blank; older ones do not, and
-    // the destination is cross-origin.
-    const { container } = render(<BeehiivForm />)
-    const form = container.querySelector('form')
-    expect(form).toHaveAttribute('target', '_blank')
-    expect(form.getAttribute('rel')).toContain('noopener')
-  })
-
-  it('submits fine with no handler, which is how the sidebar card uses it', () => {
-    const { container } = render(<BeehiivForm />)
-    expect(() => fireEvent.submit(container.querySelector('form'))).not.toThrow()
-  })
-
-  it('tells its caller when it was submitted', () => {
-    const onSubmit = vi.fn()
-    const { container } = render(<BeehiivForm onSubmit={onSubmit} />)
-    fireEvent.submit(container.querySelector('form'))
-    expect(onSubmit).toHaveBeenCalledTimes(1)
+describe('NewsletterCard', () => {
+  it('mounts beehiiv’s loader rather than a form of our own', () => {
+    // v1.8.2 swapped this for a native POST to `app.beehiiv.com/subscribe`,
+    // which is their logged-in dashboard — every signup landed on a login page.
+    // The embed is off-brand and works; that trade is recorded in §3.5.
+    const { container } = render(<NewsletterCard />)
+    expect(container.querySelector('script[src*="subscribe-forms.beehiiv.com"]')).not.toBeNull()
   })
 })
 
-describe('NewsletterCard', () => {
-  it('renders our own form rather than injecting a third-party script', () => {
-    // The whole of §3.5: the beehiiv loader drew a form from their origin that
-    // could follow neither the palette nor the theme toggle. A <script> back in
-    // this subtree means the embed has been reintroduced.
-    const { container } = render(<NewsletterCard />)
-    expect(screen.getByRole('button', { name: 'Subscribe' })).toBeInTheDocument()
-    expect(container.querySelector('script')).toBeNull()
+describe('BeehiivEmbed', () => {
+  it('names the publication’s form on the script it appends', () => {
+    // The id is the whole payload — the loader renders a different
+    // publication's form, or none, if it is wrong, and nothing on screen says
+    // so until a human subscribes.
+    const { container } = render(<BeehiivEmbed />)
+    const script = container.querySelector('script')
+    expect(script.getAttribute('src')).toBe('https://subscribe-forms.beehiiv.com/v3/loader.js')
+    expect(script.getAttribute('data-beehiiv-form')).toBe('2f92f769-e2ce-4532-b1b6-ccd02017b0ec')
+    expect(script.async).toBe(true)
+  })
+
+  it('detaches the script again on unmount', () => {
+    // Asserted on the node rather than by re-querying the container, which is
+    // the vacuous version: React removes its own wrapper on unmount, so the
+    // query answers null whether the cleanup ran or not. `parentNode` is what
+    // tells the two apart.
+    const { container, unmount } = render(<BeehiivEmbed />)
+    const script = container.querySelector('script')
+    expect(script.parentNode).not.toBeNull()
+    unmount()
+    expect(script.parentNode).toBeNull()
   })
 })
 
@@ -271,13 +246,6 @@ describe('NewsletterModal', () => {
     vi.useRealTimers()
     localStorage.clear()
   })
-
-  /** Open the modal and hand back its form. */
-  function openModal() {
-    const { container } = render(<NewsletterModal />)
-    act(() => vi.advanceTimersByTime(5000))
-    return container.querySelector('form')
-  }
 
   it('appears five seconds after a first visit', () => {
     render(<NewsletterModal />)
@@ -303,28 +271,17 @@ describe('NewsletterModal', () => {
     expect(localStorage.getItem('btc-vibe-newsletter-prompted')).toBe('true')
   })
 
-  it('closes once the visitor has subscribed', () => {
-    // It used to close on a `beehiiv:subscribe` window event, which their
-    // loader emitted. A native form emits nothing, so without this the modal
-    // sits open behind the new tab the subscription completes in.
-    const form = openModal()
-    fireEvent.submit(form)
-    act(() => vi.advanceTimersByTime(0))
+  it('closes on the subscribe event beehiiv’s loader emits', () => {
+    // This listener is only correct while the form is *theirs*. A form of our
+    // own emits nothing, so anyone replacing the embed has to replace this too
+    // — and must not do it by unmounting the form inside its own submit event,
+    // which cancels the navigation. Measured in Chromium: removal synchronously
+    // or from a microtask does not navigate, a deferred removal does.
+    render(<NewsletterModal />)
+    act(() => vi.advanceTimersByTime(5000))
+    act(() => { window.dispatchEvent(new Event('beehiiv:subscribe')) })
+    act(() => vi.advanceTimersByTime(2500))
     expect(screen.queryByRole('heading', { name: /Weekly Brief/ })).not.toBeInTheDocument()
     expect(localStorage.getItem('btc-vibe-newsletter-prompted')).toBe('true')
-  })
-
-  it('leaves the form in the document while the submit event is still running', () => {
-    // The one that matters, and it fails silently in production rather than
-    // loudly. Dismissing unmounts the form, and a form removed from the
-    // document during its own submit event does not navigate — measured in
-    // Chromium, both synchronously and from a microtask, which is exactly when
-    // React flushes a state update made in a discrete event handler. So the
-    // obvious `onSubmit={dismiss}` closes the modal and sends nothing, which
-    // looks from the outside like a subscription that worked.
-    const form = openModal()
-    fireEvent.submit(form)
-    expect(form).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /Weekly Brief/ })).toBeInTheDocument()
   })
 })
