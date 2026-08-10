@@ -371,12 +371,14 @@ live as separate files rather than one component with a breakpoint
 `SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated presentation
 classes between them.
 
-Two cheap deletions while in there: **`public/icons.svg`** is 5 KB of Vite
-starter scaffolding that no code, template or manifest references, in colours
-from no palette this repo has ever had, and **`src/App.css` is 0 bytes and still
-imported** by `App.jsx`. Expect to regenerate all **eight** visual baselines (four cards × two
-themes as of v1.8.0) — that is what `visual-baselines.yml` exists for, and
-`CLAUDE.md` records the trap that follows it.
+One cheap deletion while in there: **`src/App.css` is 0 bytes and still
+imported** by `App.jsx`. (`public/icons.svg` was the other — 5 KB of Vite
+starter scaffolding referenced by nothing, in colours from no palette this repo
+has ever had — and it went with the v1.8.1 mark, since a stale icon file is
+worst while the real icons are being replaced.) Expect to regenerate all
+**eight** visual baselines (four cards × two themes as of v1.8.0) — that is what
+`visual-baselines.yml` exists for, and `CLAUDE.md` records the trap that follows
+it.
 
 **A character beside the Vibe Score, reacting to the reading.** Pixel art rather
 than another geometric SVG. The Vibe Score is the thing this dashboard has that
