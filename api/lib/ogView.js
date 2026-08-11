@@ -182,7 +182,7 @@ const LABEL = {
  * Baked at the cell size rather than scaled by the `<img>` box, so every cell
  * lands on a whole pixel in the raster the way it does in the browser.
  */
-const OG_WORDMARK_CELL = 5
+const OG_WORDMARK_CELL = 6
 
 function wordmark() {
   return WORDMARK_LINES.map((line, i) => {

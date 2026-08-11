@@ -20,6 +20,28 @@ test.describe('Bitcoin Dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check', level: 1 })).toBeVisible()
   })
 
+  test('the title is the drawn wordmark, painted in two palette colours', async ({ page }) => {
+    // No unit test can see this. jsdom lays nothing out, so a wordmark rendered
+    // at zero width — an `sr-only` that swallowed the svg, a size class Tailwind
+    // never generated — passes every assertion in `wordmark.test.js` while the
+    // header is visibly empty. The heading test above would still pass too: its
+    // name comes from the `sr-only` text, not from the picture.
+    const mark = page.getByTestId('wordmark')
+    await expect(mark).toBeVisible()
+    const box = await mark.boundingBox()
+    expect(box.width).toBeGreaterThan(100)
+    expect(box.height).toBeGreaterThan(20)
+
+    // Two fills, and both are colours the stylesheet actually resolved — the
+    // second is what makes CHECK the accent rather than more of the same word.
+    const fills = await mark.evaluate(el =>
+      [...new Set([...el.querySelectorAll('rect')].map(r => r.getAttribute('fill')))])
+    expect(fills).toHaveLength(2)
+    const accent = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim())
+    expect(fills).toContain(accent)
+  })
+
   test('sentiment summary line is visible in the header within 10 seconds of load', async ({ page }) => {
     // The header sentence is derived from the Vibe Score's dimensions, and which
     // three it names depends on which are furthest from neutral. Match the union
