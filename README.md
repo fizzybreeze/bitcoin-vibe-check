@@ -204,6 +204,10 @@ api/lib/pushEvaluator.js     which rules crossed, in which currency, and what a 
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
+scripts/newsletter-draft.js  drafts the day's brief from the stored rows — sends nothing
+scripts/lib/newsletterDraft.js  what the draft says, and when it withholds a Vibe delta
+scripts/nostr-post.js        publishes the day's vibe to Nostr, behind a volatility guard
+scripts/lib/socialPost.js    what the post says, and the guard that decides not to post
 scripts/generate-icons.mjs   rasterises the PWA/notification icons — run by hand, not in CI
 scripts/lib/rollbackTarget.js which production deployment to roll back to, as a pure function
 supabase/migrations/         schema as code — every DB change belongs here
@@ -287,6 +291,12 @@ Copy `.env.example` to `.env` and fill in what you need. `.env` is gitignored; t
 
 The snapshot job additionally needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as GitHub Actions secrets — see [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
 
+It also takes an optional `NOSTR_PRIVATE_KEY` (an `nsec1…` or 64 hex characters).
+**That secret is the on/off switch for the daily Nostr post**: without it the step
+composes the post, prints it in the run summary and publishes nothing, so the
+first run is a dry run you can read and removing the secret stops posting with no
+code change. `NOSTR_RELAYS` optionally overrides the relay list.
+
 ---
 
 ## Development Workflow
@@ -318,7 +328,7 @@ Rules that hold regardless:
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
-| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots` |
+| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the newsletter draft (job summary + artifact) and the Nostr post |
 | `smoke.yml` | daily at 07:43 UTC, plus manual dispatch | Playwright against the live site with real upstreams, from a US-hosted runner |
 | `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
 
