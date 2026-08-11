@@ -14,6 +14,7 @@ import { PALETTE, resolveTheme } from '../lib/palette.js'
 // (Chromium, html2canvas 1.4.1: it rasterises), because the failure mode here
 // is a blank where an arrow used to be, in a picture somebody already posted.
 import Icon from './Icon.jsx'
+import Wordmark from './Wordmark.jsx'
 // Shared with api/og.js and with the live cards — the exported card, the link
 // preview and the dashboard show the same labelled scales, so they cannot be
 // allowed to colour them differently. This file carried its own copies of the
@@ -440,8 +441,12 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 28, color: p.accent, lineHeight: 1 }}>₿</span>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: p.ink, lineHeight: 1.2 }}>Bitcoin Vibe Check</div>
-                <div style={{ fontSize: 11, color: p.quiet, marginTop: 2 }}>Read the room.</div>
+                {/* Drawn, not set — the same wordmark the header and the link
+                    preview render, so a posted image cannot carry a title in a
+                    face the site does not use. html2canvas rasterises inline
+                    SVG; that was measured before this was relied on. */}
+                <Wordmark cell={2} />
+                <div style={{ fontSize: 11, color: p.quiet, marginTop: 4 }}>Read the room.</div>
               </div>
             </div>
             {sentimentSummary && (

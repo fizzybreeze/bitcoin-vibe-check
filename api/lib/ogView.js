@@ -8,6 +8,9 @@
 
 import { PALETTE } from '../../src/lib/palette.js'
 import { vibeLabelHex, fngLabelHex, fngScoreHex } from '../../src/lib/scales.js'
+import {
+  WORDMARK_LINES, GLYPH_HEIGHT, LINE_GAP, lineWidth, lineDataUri,
+} from '../../src/lib/wordmark.js'
 
 export const OG_WIDTH  = 1200
 export const OG_HEIGHT = 630
@@ -32,12 +35,15 @@ const RED      = C.down
 const PANEL    = C.surface
 const HAIRLINE = C.line
 
-// Satori ships one font: Geist Regular. It has no ₿ (U+20BF) — the wordmark on
-// the live site uses that character and it would rasterise as a tofu box in
-// every chat preview, so this image spells the name out instead. Anything added
-// here needs to be checked against the same font; `ogImage.test.js` pins the
-// allowed character set.
-export const OG_TITLE = 'BITCOIN VIBE CHECK'
+// Satori ships one font: Geist Regular. Every string in this file is drawn in
+// it, and it has no ₿ (U+20BF) — that character would rasterise as a tofu box
+// in every chat preview. Anything added here needs checking against the same
+// font; `ogImage.test.js` pins the allowed character set.
+//
+// The title is the one thing that escaped that constraint: it is drawn now
+// rather than set, from the same `wordmark.js` the header renders through, so
+// the preview card and the site show the same picture instead of the same
+// string in two different faces.
 const OG_TAGLINE = 'Read the room.'
 const OG_DOMAIN  = 'bitcoinvibecheck.com'
 
@@ -164,6 +170,34 @@ const LABEL = {
 }
 
 /**
+ * The wordmark, as two `<img>` elements carrying inline SVG.
+ *
+ * **This is the reason the drawn wordmark is worth anything on this surface.**
+ * Satori ships one font and no U+20BF, which is why `OG_TITLE` spells the name
+ * out in Geist — a face nothing else in the product uses, so the preview card
+ * and the site have never actually shared a wordmark, only a string. Drawing it
+ * makes them the same picture: `lineSvg` is the same function the header
+ * renders through, so the two cannot drift.
+ *
+ * Baked at the cell size rather than scaled by the `<img>` box, so every cell
+ * lands on a whole pixel in the raster the way it does in the browser.
+ */
+const OG_WORDMARK_CELL = 6
+
+function wordmark() {
+  return WORDMARK_LINES.map((line, i) => {
+    const width = lineWidth(line) * OG_WORDMARK_CELL
+    const height = GLYPH_HEIGHT * OG_WORDMARK_CELL
+    return h('img', {
+      src: lineDataUri(line, { cell: OG_WORDMARK_CELL, fill: i === 0 ? WHITE : ACCENT }),
+      width,
+      height,
+      style: { marginTop: i === 0 ? 0 : LINE_GAP * OG_WORDMARK_CELL },
+    })
+  })
+}
+
+/**
  * The 1200×630 tree.
  *
  * Sized for a chat list rather than for a preview tool: the price and the score
@@ -184,8 +218,8 @@ export function ogElement(model) {
 
       row({ alignItems: 'center', justifyContent: 'space-between' }, [
         col({}, [
-          text({ fontSize: 30, letterSpacing: '0.14em', color: WHITE }, OG_TITLE),
-          text({ fontSize: 22, color: MUTED, marginTop: 6 }, OG_TAGLINE),
+          ...wordmark(),
+          text({ fontSize: 22, color: MUTED, marginTop: 10 }, OG_TAGLINE),
         ]),
         text({ fontSize: 22, color: DIM }, OG_DOMAIN),
       ]),

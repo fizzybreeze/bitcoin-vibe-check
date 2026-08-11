@@ -45,6 +45,8 @@ import NewsletterCard from './components/NewsletterCard.jsx'
 import NewsletterModal from './components/NewsletterModal.jsx'
 import SatoshiQuote from './components/SatoshiQuote.jsx'
 import PriceChartCard from './components/PriceChartCard.jsx'
+import Wordmark from './components/Wordmark.jsx'
+import { WORDMARK_TEXT } from './lib/wordmark.js'
 
 const CACHE_KEY = 'btc-cache'
 const VOL_HISTORY_KEY = 'btc-vol-history'
@@ -698,8 +700,14 @@ export default function App() {
       {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
       <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
         <div>
-          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Bitcoin Vibe Check</h1>
-          <p className="mt-0.5 text-xs text-quiet">{vibeSummary ?? 'Read the room.'}</p>
+          {/* The mark is the picture; the heading's name is the `sr-only` text
+              beside it. Both are needed — a drawn wordmark with no text leaves
+              the page's only `<h1>` unnamed. */}
+          <h1>
+            <span className="sr-only">{WORDMARK_TEXT}</span>
+            <Wordmark />
+          </h1>
+          <p className="mt-1.5 text-xs text-quiet">{vibeSummary ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4 self-end md:self-auto">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />

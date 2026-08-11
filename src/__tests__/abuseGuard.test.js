@@ -172,8 +172,40 @@ function mockRes() {
 
 const ip = n => ({ 'x-real-ip': `203.0.113.${n}` })
 
+/**
+ * Freeze the clock at a window boundary for the two route suites.
+ *
+ * Both limiters use **fixed** windows — `floor(now / windowMs) * windowMs` — so
+ * a suite that fills a window and then asserts the next request is refused is
+ * racing the minute hand. Sixty requests, each fanning out to six mocked
+ * upstreams, is slow enough on a loaded runner to cross a boundary; when it
+ * does the limiter resets and the request under test renders for real. It
+ * failed exactly that way in CI, reporting six fetches where none were
+ * expected.
+ *
+ * This is v1.7.17's own finding met from the other side: that round aligned the
+ * *unit* fixture to a boundary after two tests failed for reasons that had
+ * nothing to do with the code, and left the route suites on the wall clock.
+ *
+ * `toFake: ['Date']` only. Faking the timer queue as well would stall the
+ * handlers' own `setTimeout`s with nothing advancing them — and per v1.6.10
+ * `AbortSignal.timeout` schedules on a native timer the fake clock does not
+ * patch, so the two halves would not agree in any case.
+ */
+function freezeAtWindowStart() {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // A round minute, so no window can roll over mid-suite however long it
+    // takes. Arbitrary date, deliberately not `Date.now()` rounded — a fixture
+    // that moves is a fixture that can start failing on its own.
+    vi.setSystemTime(new Date('2026-08-11T10:00:00.000Z'))
+  })
+  afterEach(() => { vi.useRealTimers() })
+}
+
 describe('/api/chain-data abuse posture', () => {
   let handler, rateLimiter, fetchMock
+  freezeAtWindowStart()
 
   beforeEach(async () => {
     ({ default: handler, rateLimiter } = await import('../../api/chain-data.js'))
@@ -229,6 +261,7 @@ describe('/api/chain-data abuse posture', () => {
 
 describe('/api/og abuse posture', () => {
   let handler, rateLimiter, fetchMock
+  freezeAtWindowStart()
 
   beforeEach(async () => {
     ({ default: handler, rateLimiter } = await import('../../api/og.js'))

@@ -224,3 +224,69 @@ describe('useTheme', () => {
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
   })
 })
+
+describe('every consumer sees one theme', () => {
+  // The defect this exists for, reported from the deployed preview and then
+  // measured in a browser: with `useState` per caller, only the component whose
+  // `toggleTheme` ran re-rendered. After a toggle to light the stylesheet had
+  // switched to the light `ink` while the wordmark was still filling the dark
+  // theme's, which is white — on a near-white ground.
+  //
+  // It is invisible for anything styled with a token, because the stylesheet
+  // does not care what React thinks. It bites exactly the components that
+  // cannot use a class: an SVG `fill` takes a value, which is the wordmark and
+  // the Vibe Score character.
+  it('a toggle in one instance reaches another', () => {
+    stubMatchMedia(false)
+    const header = renderHook(() => useTheme())
+    const artwork = renderHook(() => useTheme())
+
+    expect(header.result.current.theme).toBe('light')
+    expect(artwork.result.current.theme).toBe('light')
+
+    act(() => { header.result.current.toggleTheme() })
+
+    expect(header.result.current.theme).toBe('dark')
+    expect(artwork.result.current.theme, 'the second consumer kept the old theme').toBe('dark')
+  })
+
+  it('subscribes to the OS once however many consumers there are', () => {
+    // The listener belongs to the store rather than to a component, so N
+    // consumers do not mean N subscriptions — and the last unmount removes it.
+    const media = stubMatchMedia(false)
+    const a = renderHook(() => useTheme())
+    const b = renderHook(() => useTheme())
+    expect(media.listenerCount).toBe(1)
+
+    a.unmount()
+    expect(media.listenerCount).toBe(1)
+    b.unmount()
+    expect(media.listenerCount).toBe(0)
+  })
+
+  it('still follows the OS, and reaches every consumer when it changes', () => {
+    const media = stubMatchMedia(false)
+    const a = renderHook(() => useTheme())
+    const b = renderHook(() => useTheme())
+
+    act(() => { media.emit(true) })
+
+    expect(a.result.current.theme).toBe('dark')
+    expect(b.result.current.theme).toBe('dark')
+  })
+
+  it('re-reads on the next mount rather than resuming a stale value', () => {
+    // Nothing mounted means nothing to keep in sync, so the store lets go —
+    // which is what `useState`'s initialiser did on every mount and is what
+    // keeps a value changed in another tab from being ignored here.
+    stubMatchMedia(false)
+    const first = renderHook(() => useTheme())
+    act(() => { first.result.current.setTheme('dark') })
+    first.unmount()
+
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light')
+    const second = renderHook(() => useTheme())
+    expect(second.result.current.theme).toBe('light')
+  })
+})
+

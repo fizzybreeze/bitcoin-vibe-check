@@ -1,6 +1,7 @@
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import CardTooltip from './CardTooltip.jsx'
 import Icon from './Icon.jsx'
+import VibeCharacter from './VibeCharacter.jsx'
 import Skeleton from './Skeleton.jsx'
 import { hasEnoughVibeHistory, vibeHistoryLabel } from '../lib/vibeHistory.js'
 import { describeTrend } from './seriesLabel.js'
@@ -102,23 +103,32 @@ function VibeScoreSection({ vibe, loading, history }) {
         loading
           ? <Skeleton className="mt-2 h-10 w-28" />
           : (
-            <>
-              <p className={`mt-2 ${CARD_VALUE.hero} text-quiet`}>—</p>
-              <p className="mt-1.5 text-xs text-quiet">Not enough live data to score</p>
-            </>
+            // The character is here too, in its weather-less state. A day we
+            // could not measure and a mild day are different claims, so the
+            // seventh state draws no environment rather than a calm one.
+            <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className={`${CARD_VALUE.hero} text-quiet`}>—</p>
+                <p className="mt-1.5 text-xs text-quiet">Not enough live data to score</p>
+              </div>
+              <VibeCharacter label={null} />
+            </div>
           )
       ) : (
         <>
-          <div className="mt-2 flex items-baseline gap-2.5">
-            <p data-testid="vibe-score" className={`${CARD_VALUE.hero} text-accent tabular-nums`}>
-              {vibe.score}
-            </p>
-            <p
-              data-testid="vibe-label"
-              className={`text-sm font-semibold md:text-base ${vibeLabelClass(vibe.label)}`}
-            >
-              {vibe.label}
-            </p>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-baseline gap-2.5">
+              <p data-testid="vibe-score" className={`${CARD_VALUE.hero} text-accent tabular-nums`}>
+                {vibe.score}
+              </p>
+              <p
+                data-testid="vibe-label"
+                className={`text-sm font-semibold md:text-base ${vibeLabelClass(vibe.label)}`}
+              >
+                {vibe.label}
+              </p>
+            </div>
+            <VibeCharacter label={vibe.label} />
           </div>
           <VibeBreakdown dimensions={vibe.dimensions} />
           {/* Counts raw inputs, not dimensions — valuation reporting a number

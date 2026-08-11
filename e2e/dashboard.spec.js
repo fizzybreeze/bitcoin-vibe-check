@@ -20,6 +20,39 @@ test.describe('Bitcoin Dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check', level: 1 })).toBeVisible()
   })
 
+  test('the title is the drawn wordmark, painted in two palette colours', async ({ page }) => {
+    // No unit test can see this. jsdom lays nothing out, so a wordmark rendered
+    // at zero width — an `sr-only` that swallowed the svg, a size class Tailwind
+    // never generated — passes every assertion in `wordmark.test.js` while the
+    // header is visibly empty. The heading test above would still pass too: its
+    // name comes from the `sr-only` text, not from the picture.
+    const mark = page.getByTestId('wordmark')
+    await expect(mark).toBeVisible()
+    const box = await mark.boundingBox()
+    expect(box.width).toBeGreaterThan(100)
+    expect(box.height).toBeGreaterThan(20)
+
+    // And it is the thing at that point on the page. A box is not paint:
+    // `sr-only` clips its subtree while leaving every child's layout box the
+    // size it was, so an svg accidentally nested inside the screen-reader span
+    // measures 183×45, reports visible, and shows nothing. Measured — that
+    // mutation passed every assertion above.
+    const hit = await mark.evaluate((el, [x, y]) => {
+      const at = document.elementFromPoint(x, y)
+      return Boolean(at && (at === el || el.contains(at)))
+    }, [box.x + box.width / 2, box.y + box.height / 2])
+    expect(hit).toBe(true)
+
+    // Two fills, and both are colours the stylesheet actually resolved — the
+    // second is what makes CHECK the accent rather than more of the same word.
+    const fills = await mark.evaluate(el =>
+      [...new Set([...el.querySelectorAll('rect')].map(r => r.getAttribute('fill')))])
+    expect(fills).toHaveLength(2)
+    const accent = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim())
+    expect(fills).toContain(accent)
+  })
+
   test('sentiment summary line is visible in the header within 10 seconds of load', async ({ page }) => {
     // The header sentence is derived from the Vibe Score's dimensions, and which
     // three it names depends on which are furthest from neutral. Match the union

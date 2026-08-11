@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { DEFAULT_THEME, PALETTE, THEME_STORAGE_KEY, THEMES, resolveTheme } from '../lib/palette.js'
 
 // Which theme is on, and the one call that changes it.
@@ -61,27 +61,83 @@ export function applyTheme(value) {
   return theme
 }
 
+// ── One value, however many components ask for it ──────────────────────────
+//
+// This was `useState` per caller, which is fine while exactly one component
+// reads the theme and wrong the moment a second does: each instance gets its
+// own copy, and only the one whose `toggleTheme` ran re-renders. Everything
+// else keeps painting the theme that was on when it mounted.
+//
+// That is invisible for anything styled with a `dark:` variant or a token,
+// because the stylesheet does not care what React thinks. It bites exactly the
+// components that *cannot* use a class — an SVG `fill` takes a value — which is
+// the wordmark and the Vibe Score character. Measured in a browser: after a
+// toggle to light the stylesheet had switched to the light `ink` while the
+// wordmark was still filling the dark theme's, which is white — on a near-white
+// ground. (The values are not quoted here on purpose; `palette.test.js` fails
+// the build on a raw hex anywhere in `src/`, and a comment is not an exception.)
+//
+// A store rather than a context, because a context needs a provider and a
+// provider is something the next caller can forget to be inside. `getSnapshot`
+// re-derives when nothing is mounted, so the value is read fresh on the first
+// mount exactly as `useState`'s initialiser did.
+
+const listeners = new Set()
+let current = null
+
+function getSnapshot() {
+  if (current === null) current = readStoredTheme() ?? systemTheme()
+  return current
+}
+
+function emit(next) {
+  if (next === current) return
+  current = next
+  for (const fn of listeners) fn()
+}
+
+function subscribe(onChange) {
+  listeners.add(onChange)
+  // The OS listener belongs to the store, not to a component: one subscription
+  // however many consumers, and it stops existing when the last one unmounts.
+  if (listeners.size === 1) attachSystemListener()
+  return () => {
+    listeners.delete(onChange)
+    if (listeners.size === 0) {
+      detachSystemListener()
+      // Nothing is mounted to keep in sync, so the next mount re-reads rather
+      // than resuming a value that may have been changed in another tab.
+      current = null
+    }
+  }
+}
+
+let detachSystemListener = () => {}
+
+// Follow the OS until the visitor has said otherwise. The stored value is read
+// inside the handler rather than closed over, so a press of the toggle stops
+// the following immediately.
+function attachSystemListener() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+  const query = window.matchMedia(DARK_QUERY)
+  const onChange = (event) => {
+    if (readStoredTheme() === null) emit(event.matches ? 'dark' : 'light')
+  }
+  query.addEventListener('change', onChange)
+  detachSystemListener = () => {
+    query.removeEventListener('change', onChange)
+    detachSystemListener = () => {}
+  }
+}
+
 export default function useTheme() {
-  const [theme, setThemeState] = useState(() => readStoredTheme() ?? systemTheme())
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => { applyTheme(theme) }, [theme])
 
-  // Follow the OS until the visitor has said otherwise. Re-read the stored
-  // value inside the handler rather than closing over it, so a press of the
-  // toggle stops the following immediately without re-subscribing.
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
-    const query = window.matchMedia(DARK_QUERY)
-    const onChange = (event) => {
-      if (readStoredTheme() === null) setThemeState(event.matches ? 'dark' : 'light')
-    }
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
-
   const setTheme = useCallback((value) => {
     const next = resolveTheme(value)
-    setThemeState(next)
+    emit(next)
     // Written here rather than in the effect above: the effect also runs for
     // the value inherited from the OS, and persisting that would silently
     // freeze the theme at whatever it was on the first visit.

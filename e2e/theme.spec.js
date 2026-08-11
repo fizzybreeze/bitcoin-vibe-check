@@ -102,6 +102,31 @@ test.describe('theme', () => {
       .toHaveAttribute('content', PALETTE.light.ground)
   })
 
+  test('the artwork repaints with it, not only the stylesheet', async ({ page }) => {
+    // The bug this exists for, reported from the deployed preview: the wordmark
+    // and the Vibe Score character take an SVG `fill`, which is a *value* — so
+    // they read the palette through React rather than through the stylesheet,
+    // and with a per-caller `useState` only the component that owned the toggle
+    // re-rendered. Everything drawn kept the theme it mounted in, which in
+    // light mode is white ink on a near-white ground.
+    //
+    // No unit test reaches this: it needs the real toggle wired to the real
+    // header, and `App.jsx` has no unit test.
+    await loadWith(page, { prefersDark: true })
+    const strokeOf = async () =>
+      page.getByTestId('wordmark').locator('rect').first().getAttribute('fill')
+
+    expect(await strokeOf()).toBe(PALETTE.dark.ink)
+
+    await toggle(page).click()
+    await expect(page.locator('html')).not.toHaveClass(/dark/)
+    expect(await strokeOf(), 'the wordmark kept the theme it mounted in').toBe(PALETTE.light.ink)
+
+    // Back again, because a fix that only works one way is half a fix.
+    await toggle(page).click()
+    expect(await strokeOf()).toBe(PALETTE.dark.ink)
+  })
+
   test('the choice survives a reload', async ({ page }) => {
     await loadWith(page, { prefersDark: true })
     await toggle(page).click()
