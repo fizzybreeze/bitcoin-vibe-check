@@ -252,25 +252,29 @@ that serves an empty shell to crawlers; the content is not personalised, so
 build-time generation is both simpler and better. Do the design work before the
 implementation work.
 
-### 4.4 Automate the daily post and the newsletter draft
+### 4.4 The newsletter draft — shipped in v1.9.0
 
-**What.** After the snapshot job runs, render the Vibe card and draft the day's
-summary automatically.
+**Shipped; see the version-history row.** `snapshot.yml` composes the day's
+draft from the rows it just wrote and leaves it in the job summary and an
+artifact. Nothing is sent, and there is no beehiiv credential in the job, so the
+human in the send loop is structural rather than a policy.
 
-**Why.** "Satoshi's Weekly Brief" already exists and the Beehiiv integration is
-already built. Newsletters go quiet because writing them is manual, and the
-value here is not the prose — it is the numbers, which are already collected,
-already formatted, and already have a rendering pipeline. Automating the draft
-removes the only expensive part.
+**What was deliberately left out, and why it is not a gap.** The item said
+"generate the card image server-side (shares machinery with §3.3)". The draft
+*links* `/og-live.png` instead, which is that machinery reached at read time —
+the alternative was installing Chromium into a daily cron to produce a second
+copy of a picture that already renders on request. The cost is that the image is
+live rather than pinned to the day, which the draft says out loud. **If a
+newsletter archive ever needs the card frozen per day, that is the change to
+make** — and it wants a rasteriser and somewhere to put the binaries, which is a
+real item rather than a follow-up.
 
-**How.** Extend `snapshot.yml`: generate the card image server-side (shares
-machinery with §3.3), compose a summary from the day's metrics and the Vibe
-Score delta, and leave it as a draft. **Keep a human in the send loop** — an
-automated dashboard posting automated commentary about markets is exactly the
-kind of thing that is fine 364 days a year and mortifying on the day of a
-crash.
-
----
+**The daily *post* half of this item is not done and is not scheduled.** §4.4
+originally paired the newsletter draft with an automated social post. The draft
+is safe because a person reads it before anything leaves; a post is not, and the
+"fine 364 days a year and mortifying on the day of a crash" argument applies to
+it with full force. If it is ever picked up it should reuse
+`buildNewsletterDraft`'s output rather than composing a second opinion.
 
 ## 5. Later — deepen
 
@@ -337,8 +341,6 @@ box at a single weight with three sizes — and the eight controls that were tex
 glyphs (`✕`, `▾`, `▲`/`▼`) became icons, which was the one genuine defect in
 that list rather than an inconsistency. The four copies of the header button
 shell became `ICON_BUTTON`. `src/App.css` went with it.
-
-**Two are left, and they are the two below.**
 
 **The label and shell halves shipped in v1.8.7; see the version-history row.**
 The card label became `CARD_LABEL` (36 hand-written copies, 16 files), the
