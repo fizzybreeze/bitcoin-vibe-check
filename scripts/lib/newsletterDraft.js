@@ -479,7 +479,12 @@ export function networkSection(week) {
   if (isNum(m.block_height)) {
     const remaining = blocksToNextHalving(m.block_height)
     const third = [`Block height is ${fmtInt(m.block_height)}.`]
-    if (isNum(remaining)) {
+    // `blocksToNextHalving` counts down to a fixed height and keeps counting
+    // past it, so the day after the halving this sentence would offer a
+    // negative number of blocks and a date in the past. Two years away, one
+    // condition, and the alternative is a brief that is obviously broken on
+    // the one morning it is most read.
+    if (isNum(remaining) && remaining > 0) {
       const secs = blocks?.avgBlockSeconds ?? 600
       const days = Math.round((remaining * secs) / 86_400)
       third.push(

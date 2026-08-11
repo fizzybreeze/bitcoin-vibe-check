@@ -274,6 +274,15 @@ describe('the network section', () => {
     expect(text).toContain('Block height is 900,123')
     expect(text).toContain('149,877 blocks remain until the next halving')
   })
+
+  it('stops counting down once the halving is behind it', () => {
+    // `blocksToNextHalving` counts down to a fixed height and keeps going past
+    // it, so the morning after the halving this sentence would offer a
+    // negative number of blocks and a date in the past.
+    const text = networkSection(week({ '2026-08-09': { block_height: 1_050_001 } })).join(' ')
+    expect(text).toContain('Block height is 1,050,001')
+    expect(text).not.toContain('until the next halving')
+  })
 })
 
 describe('the Vibe Score delta', () => {
