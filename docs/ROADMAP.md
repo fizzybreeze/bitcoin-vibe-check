@@ -252,38 +252,6 @@ that serves an empty shell to crawlers; the content is not personalised, so
 build-time generation is both simpler and better. Do the design work before the
 implementation work.
 
-### 4.4 The newsletter draft — shipped in v1.9.0
-
-**Shipped; see the version-history row.** `snapshot.yml` composes the day's
-draft from the rows it just wrote and leaves it in the job summary and an
-artifact. Nothing is sent, and there is no beehiiv credential in the job, so the
-human in the send loop is structural rather than a policy.
-
-**What was deliberately left out, and why it is not a gap.** The item said
-"generate the card image server-side (shares machinery with §3.3)". The draft
-*links* `/og-live.png` instead, which is that machinery reached at read time —
-the alternative was installing Chromium into a daily cron to produce a second
-copy of a picture that already renders on request. The cost is that the image is
-live rather than pinned to the day, which the draft says out loud. **If a
-newsletter archive ever needs the card frozen per day, that is the change to
-make** — and it wants a rasteriser and somewhere to put the binaries, which is a
-real item rather than a follow-up.
-
-**The daily post half shipped in v1.9.1, to Nostr, behind a guard.** This file
-argued against it — a draft is safe because a person reads it before anything
-leaves, and a post is not — and that objection was overruled deliberately, so it
-became a guard rather than a veto: no post on a day the market moved past ±10%,
-none on a stale snapshot, none on a day whose volatility cannot even be
-measured. The reasoning is in `scripts/lib/socialPost.js` and the version
-history, including the distinction the guard rests on — it refuses on *velocity*,
-not on *level*, because extreme fear is when this dashboard is most useful and
-"the vibe is 8, Ice Cold" is an honest reading rather than a gaffe.
-
-**The thing no gate here can check** is that a post reached a relay: nothing in
-CI publishes, so the first real post is the first evidence the transport works.
-That is what the dry run is for — with no `NOSTR_PRIVATE_KEY` the step composes
-and prints without sending, so the first run is readable before it is public.
-
 ## 5. Later — deepen
 
 Directionally right, not yet specified. Listed so they are not forgotten.
@@ -376,49 +344,6 @@ treatments, and one of them was styling a subtree inside `hidden lg:block` that
 could never render. It is real behaviour risk (each pair swaps at a breakpoint
 and the swap is asserted in `responsive.spec.js`), so it wants its own change
 with its own tests rather than riding along with a class consolidation.
-
-**A character beside the Vibe Score, reacting to the reading.** Pixel art rather
-than another geometric SVG. The Vibe Score is the thing this dashboard has that
-others do not, and right now it is a number and a word.
-
-*It is no longer the first piece of artwork, and that changes the brief.* The app
-mark is a pixel grid as of v1.8.1, drawn at 9 × 13 with whole-number cells, so
-the idiom, the grid coarseness and the palette-token discipline are settled and
-the character should match them rather than re-decide them — a sprite in a
-second pixel idiom beside the logo is the drift this establishes a precedent
-against. `scripts/lib/mark.js` is the worked example, including the part that is
-easy to get wrong: cells have to land on whole pixels at every size the thing is
-displayed at, or the artwork antialiases into a smear that nothing reports.
-
-*Environment, not emotion — decided, not open.* Frost and visible breath at Ice
-Cold; heat haze and a wilting plant at Overheated; the character itself stays
-neutral. §7 rejects buy/sell signals and this dashboard does not editorialise,
-and a character who looks *panicked* at Extreme Fear is the dashboard having a
-feeling about the market. A character standing in weather restates the
-temperature metaphor the ladder already uses, and says nothing that the words
-"Ice Cold" and "Overheated" do not already say.
-
-*Five constraints, each of them a way to get this wrong late.* A raster sprite
-cannot read a CSS variable — `src/lib/palette.js`'s problem in a third form — so
-it needs either one set per theme or a palette-limited sprite recoloured at
-runtime, and it has to hold up on the violet ground *and* the near-white one.
-v1.7.12's reduced-motion rule is blanket, so "their action reflects the score"
-must degrade to a still frame carrying the same reading. It should almost
-certainly be `aria-hidden`, which **inverts** the `seriesLabel.js` precedent:
-there the drawing was the only source of the reading, here the score and its
-label are already text, so describing the character makes a screen reader say it
-twice. There are **seven** states rather than six, because `computeVibeScore`
-returns `null` below three dimensions or 0.6 of the weight, and the no-reading
-case is the one that gets forgotten. And `ShareCanvas` and `api/lib/ogView.js`
-will both want it — html2canvas can rasterise an `<img>`, Satori takes a data URI
-— which is far cheaper to decide before the sprite is drawn than after.
-
-*The argument it has to win* is §1's, twice over: sprites are bytes against a
-precache already near 1.3 MB and a "free to run" filter, and this would be the
-first element on the page that is not load-bearing. The case for it is that a
-redundant encoding can make the five-second read *faster* rather than slower. That
-claim should be made out loud and tested, because if it is false the honest
-outcome is not to ship it.
 
 **What the accessibility passes still do not cover**, so nobody reads them as
 "accessible, done". Two of the four caveats that used to sit here are closed.
