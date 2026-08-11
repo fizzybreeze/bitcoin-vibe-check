@@ -119,6 +119,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### Newsletter
 - **Satoshi's Weekly Brief** — Beehiiv-powered newsletter signup shown above the donation card and surfaced as a modal 5 seconds after a first visit
 - Modal is shown once per browser (suppressed via `localStorage`); auto-dismisses after a successful subscribe event
+- The brief itself is **drafted for you every Sunday** by `snapshot.yml`, from the week of snapshot rows already in the database: the price arc, the Vibe Score and its week-over-week move, block production, fees, sentiment and dominance, all composed as prose. Two sections — *WHY IT MATTERS* and *ONE THING TO WATCH* — come through deliberately empty, because they need reporting and a view, and this project generates neither. **Nothing is sent**: there is no beehiiv credential in that job
 
 ### Lightning Donations & Supporters
 - **Donate via Strike** — one-click link to `strike.me/fizzybreeze` for Lightning payments
@@ -204,8 +205,9 @@ api/lib/pushEvaluator.js     which rules crossed, in which currency, and what a 
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
-scripts/newsletter-draft.js  drafts the day's brief from the stored rows — sends nothing
-scripts/lib/newsletterDraft.js  what the draft says, and when it withholds a Vibe delta
+scripts/newsletter-draft.js  drafts the weekly brief from the stored rows — sends nothing
+scripts/lib/newsletterDraft.js  what the brief says, what it refuses to say, and what it leaves blank
+src/lib/quotes.js            the Satoshi quotes, shared by the footer and the brief's sign-off
 scripts/nostr-post.js        publishes the day's vibe to Nostr, behind a volatility guard
 scripts/lib/socialPost.js    what the post says, and the guard that decides not to post
 scripts/generate-icons.mjs   rasterises the PWA/notification icons — run by hand, not in CI
@@ -328,7 +330,7 @@ Rules that hold regardless:
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
-| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the newsletter draft (job summary + artifact) and the Nostr post |
+| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the Nostr post, and **on Sundays** the weekly brief (job summary + `weekly-brief` artifact). Dispatch takes `draft_newsletter` to force a brief on any day, and `newsletter_issue` to override its number |
 | `smoke.yml` | daily at 07:43 UTC, plus manual dispatch | Playwright against the live site with real upstreams, from a US-hosted runner |
 | `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
 

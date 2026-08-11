@@ -8,6 +8,15 @@ on:
   # Lets you trigger a run by hand from the GitHub mobile app — the thing the
   # old Proxmox cron could never do.
   workflow_dispatch:
+    inputs:
+      draft_newsletter:
+        description: 'Compose the weekly brief even if today is not the publishing day'
+        type: boolean
+        default: false
+      newsletter_issue:
+        description: 'Override the issue number (blank derives it from ISSUE_ANCHOR)'
+        type: string
+        required: false
 
 # Never let two snapshot runs overlap; the later one wins.
 concurrency:
@@ -36,22 +45,32 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BGEOMETRICS_API_KEY: ${{ secrets.BGEOMETRICS_API_KEY }}
 
-      # Composed from the rows just written, so the draft and the permanent
+      # Composed from the rows just written, so the brief and the permanent
       # record cannot disagree. Nothing is sent: there is no beehiiv credential
       # in this job, which is what keeps the human in the send loop structural
       # rather than a policy.
       #
+      # **The brief is weekly and this step is daily on purpose.** It needs the
+      # day's capture to exist, and GitHub's scheduler drifts by hours — the cron
+      # above asks for 06:17 and its scheduled runs start nearer 09:10 — so a
+      # separate weekly workflow would have to guess a time late enough to be
+      # after this one. Running here makes the ordering structural; `shouldDraft`
+      # returns early on the six days that are not the publishing day, and says
+      # so in the log rather than exiting silently.
+      #
       # Runs even when the capture failed (`!cancelled()`, the same guard the
-      # e2e artifacts use): a failed capture still leaves
-      # yesterday's row, and a draft with a "this is not today's data" banner on
-      # it is more use than no step at all. The banner is `buildNewsletterDraft`'s
-      # job, from the `asOf` it is given.
-      - name: Draft the newsletter
+      # e2e artifacts use): a failed capture still leaves last week's rows, and a
+      # brief with a "this is not this week's data" banner on it is more use than
+      # no step at all. The banner is `buildNewsletterDraft`'s job, from the
+      # `asOf` it is given.
+      - name: Draft the weekly brief
         if: ${{ !cancelled() }}
         run: node scripts/newsletter-draft.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEWSLETTER_FORCE: ${{ inputs.draft_newsletter }}
+          NEWSLETTER_ISSUE: ${{ inputs.newsletter_issue }}
 
       # Publishes the day's vibe to Nostr. Guarded rather than unconditional:
       # `shouldPublish` refuses a stale snapshot, an unscoreable day, and a 24h
@@ -70,12 +89,14 @@ jobs:
           NOSTR_PRIVATE_KEY: ${{ secrets.NOSTR_PRIVATE_KEY }}
 
       # The copy-paste path. The step summary above is the one you read on a
-      # phone; this is the one you paste into beehiiv.
-      - name: Upload the draft
+      # phone; this is the one you paste into beehiiv. `if-no-files-found:
+      # ignore` is what makes a weekly artifact out of a daily step — on the six
+      # non-publishing days there is no file and no failure.
+      - name: Upload the brief
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: newsletter-draft
-          path: newsletter-draft.md
+          name: weekly-brief
+          path: weekly-brief.md
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 90
