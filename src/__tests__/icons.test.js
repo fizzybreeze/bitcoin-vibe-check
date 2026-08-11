@@ -25,13 +25,20 @@ import {
 const SRC = resolve('src')
 const ICON_COMPONENT = join(SRC, 'components', 'Icon.jsx')
 /**
- * The one exemption, and it is a category difference rather than a favour.
- * `VibeCharacter.jsx` draws *artwork* — a 20 × 20 pixel grid from
- * `vibeCharacter.js`, in the same idiom as the app mark — not an icon on the
- * 24-box scale this file exists to enforce. Routing it through `Icon` would
- * mean 400 registry entries for one drawing. Held honest below.
+ * The exemptions, and they are a category difference rather than a favour.
+ * These draw *artwork* — pixel grids in the app mark's idiom — not icons on the
+ * 24-box scale this file exists to enforce. Routing a 32 × 32 character or a
+ * 61-cell wordmark through `Icon` would mean hundreds of registry entries for
+ * one drawing apiece. Each is held honest below.
  */
-const ARTWORK_COMPONENT = join(SRC, 'components', 'VibeCharacter.jsx')
+const ARTWORK = [
+  { path: join(SRC, 'components', 'VibeCharacter.jsx'), from: 'vibeCharacter.js' },
+  { path: join(SRC, 'components', 'Wordmark.jsx'),      from: 'wordmark.js' },
+  // Not a component: it builds standalone SVG strings for the three export
+  // surfaces, which cannot render React and must not each redraw the alphabet.
+  { path: join(SRC, 'lib', 'wordmark.js'),              from: 'GLYPHS' },
+]
+const ARTWORK_PATHS = new Set(ARTWORK.map(a => a.path))
 const ICONS_MODULE = join(SRC, 'lib', 'icons.js')
 
 /** Every `.js`/`.jsx` under `src/`, tests excluded — they assert *about* this. */
@@ -98,7 +105,7 @@ describe('the scale is one decision, not fifteen', () => {
 describe('nothing outside Icon.jsx draws its own', () => {
   it('holds the only <svg> in src/', () => {
     const offenders = FILES
-      .filter(f => f !== ICON_COMPONENT && f !== ARTWORK_COMPONENT)
+      .filter(f => f !== ICON_COMPONENT && !ARTWORK_PATHS.has(f))
       .filter(f => /<svg[\s>]/.test(code(f)))
       .map(rel)
     expect(offenders, 'these files hand-write an <svg>; use <Icon>').toEqual([])
@@ -125,13 +132,13 @@ describe('nothing outside Icon.jsx draws its own', () => {
   })
 })
 
-describe('the artwork exemption', () => {
-  it('still describes a file that draws from the pixel grid, not an icon', () => {
+describe('the artwork exemptions', () => {
+  it.each(ARTWORK)('$path still draws from a pixel grid, not an icon', ({ path, from }) => {
     // An exemption nobody re-checks is how a list rots — the same rule the
     // Satori and overlay exemptions are held to elsewhere.
-    const body = readFileSync(ARTWORK_COMPONENT, 'utf8')
-    expect(body).toContain('vibeCharacter.js')
-    expect(body).toContain('<rect')
+    const body = readFileSync(path, 'utf8')
+    expect(body).toContain(from)
+    expect(body).toMatch(/<rect/)
     // And it must not quietly become a second icon set.
     expect(body).not.toMatch(/\bICON_PATHS\b/)
   })

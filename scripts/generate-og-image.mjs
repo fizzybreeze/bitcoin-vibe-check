@@ -26,7 +26,7 @@
 //      grid means this one cannot regress into it either.
 //
 // The layout mirrors `api/lib/ogView.js`'s header — same accent rule, same
-// letterspaced wordmark, same tagline and domain — so the fallback reads as the
+// drawn wordmark, same tagline and domain — so the fallback reads as the
 // live card's sibling rather than as a different product's placeholder.
 //
 // **The prose here is set in whatever sans this machine resolves, and that is
@@ -41,6 +41,7 @@ import { chromium } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { PALETTE } from '../src/lib/palette.js'
 import { MARK_COLS, MARK_ROWS, markRuns, markSvg } from './lib/mark.js'
+import { WORDMARK_LINES, lineSvg } from '../src/lib/wordmark.js'
 
 const C = PALETTE.dark
 const WIDTH = 1200
@@ -49,7 +50,6 @@ const OUT = 'public/og-image.png'
 
 // The same strings the live card uses, so the two cannot drift apart in wording
 // while looking identical.
-const TITLE = 'BITCOIN VIBE CHECK'
 const TAGLINE = 'Read the room.'
 const BLURB = "Bitcoin's mood, money, and mempool. Real-time."
 const DOMAIN = 'bitcoinvibecheck.com'
@@ -77,6 +77,15 @@ function watermark(cell, x, y) {
 // what makes this shape legible is the ticks and the counters, and cropping
 // took both. A watermark nobody recognises is just noise behind the text.
 const WATERMARK_CELL = 33
+
+// The title, drawn rather than set — the same `wordmark.js` the header and the
+// live preview card render through, which is the whole reason the fallback
+// reads as the live card's sibling rather than merely carrying the same words.
+// `CHECK` takes the accent, as it does everywhere else.
+const WORDMARK_CELL = 6
+const wordmark = () => WORDMARK_LINES
+  .map((line, i) => lineSvg(line, { cell: WORDMARK_CELL, fill: i === 0 ? C.ink : C.accent }))
+  .join('')
 const card = `
 <style>
   html, body { margin: 0; padding: 0; }
@@ -92,7 +101,7 @@ const card = `
   .content { position: absolute; inset: 10px 0 0 0; padding: 52px 56px 44px;
              display: flex; flex-direction: column; justify-content: space-between; }
   .brand { display: flex; align-items: center; gap: 28px; }
-  .title { font-size: 44px; font-weight: 700; letter-spacing: 0.14em; line-height: 1.1; }
+  .title { display: flex; flex-direction: column; gap: 6px; }
   .tagline { font-size: 60px; font-weight: 700; color: ${C.ink}; letter-spacing: -0.01em; }
   .blurb { font-size: 30px; color: ${C.muted}; margin-top: 18px; }
   .foot { display: flex; align-items: center; justify-content: space-between;
@@ -106,7 +115,7 @@ const card = `
 <div class="content">
   <div class="brand">
     ${markSvg({ size: 96, coverage: 0.625 })}
-    <div class="title">${TITLE}</div>
+    <div class="title">${wordmark()}</div>
   </div>
   <div>
     <div class="tagline">${TAGLINE}</div>
