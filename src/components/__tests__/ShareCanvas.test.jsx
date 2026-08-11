@@ -80,3 +80,28 @@ describe('ShareCanvas — theme', () => {
     expect(sheetBackground({ theme: 'sepia' })).toBe(rgb(PALETTE.dark.ground))
   })
 })
+
+describe('the header', () => {
+  it('draws the wordmark rather than setting the title in a font', () => {
+    // A posted image outlives the moment it was made, and this one carries the
+    // product's name — so it has to be the same picture the site shows, not the
+    // same words in whatever face html2canvas resolved. Asserting the element
+    // rather than the import is the difference between this and a check that
+    // passes while the header has quietly gone back to `fontWeight: 700`.
+    const { container } = render(
+      <ShareCanvas
+        selectedCards={['btcPrice']}
+        sentimentSummary=""
+        cardData={{ priceUsd: 100_000 }}
+        currency="usd"
+        forwardedRef={null}
+      />
+    )
+    const mark = container.querySelector('[data-testid="wordmark"]')
+    expect(mark).toBeTruthy()
+    // Fixed cell, no breakpoints: this tree is rasterised at one size, and a
+    // `md:` class that ever resolved would change the size of an exported image.
+    expect(mark.getAttribute('class')).not.toMatch(/md:/)
+    expect(screen.queryByText('Bitcoin Vibe Check')).toBeNull()
+  })
+})

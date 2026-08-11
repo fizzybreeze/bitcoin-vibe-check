@@ -9,6 +9,11 @@ import {
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
 
+/** Source with comment lines removed — prose about the wordmark is not a use of it. */
+const strip = (source) => source.split('\n')
+  .filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l))
+  .join('\n')
+
 describe('the alphabet', () => {
   it('covers exactly the letters the wordmark uses — no more, no fewer', () => {
     // Both halves matter. Fewer, and the title renders with a hole in it.
@@ -199,24 +204,36 @@ describe('the surfaces that carry it', () => {
     expect(source).toContain(symbol)
   })
 
+  it('calls into the module rather than importing it and not using it', () => {
+    // The import surviving a revert is exactly how a surface goes quietly back
+    // to a font: the line at the top still names `wordmark.js` while the header
+    // below it is a `fontWeight: 700` div again. These are the call sites.
+    expect(strip(read('../../api/lib/ogView.js'))).toMatch(/lineDataUri\(/)
+    expect(strip(read('../../scripts/generate-og-image.mjs'))).toMatch(/\$\{wordmark\(\)\}/)
+  })
+
   it('leaves the title out of every surface as a typed string', () => {
+    // Unquoted too — the static card composes HTML in a template literal, where
+    // a reverted title is bare text rather than a string constant. Case
+    // sensitive on purpose: `App.jsx` carries "Bitcoin Vibe Check" in its
+    // copyright line, which is prose rather than the mark. The one surface
+    // whose title was title-case is `ShareCanvas`, and its own render test
+    // asserts the words are absent there.
     for (const path of ['../App.jsx', '../components/ShareCanvas.jsx',
       '../../api/lib/ogView.js', '../../scripts/generate-og-image.mjs']) {
-      const code = read(path).split('\n')
-        .filter(l => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'))
-        .join('\n')
-      expect(code, `${path} still sets the title as text`)
-        .not.toMatch(/['"`]BITCOIN VIBE CHECK['"`]/i)
+      expect(strip(read(path)), `${path} still sets the title as text`)
+        .not.toMatch(/BITCOIN VIBE CHECK/)
     }
   })
 
   it('gives the header a name a screen reader can read', () => {
     // The drawing is `aria-hidden`, so without this the page's only <h1> has no
     // accessible name at all — which `dashboard.spec.js` asserts and which is
-    // the one thing a picture cannot supply.
-    const app = read('../App.jsx')
-    expect(app).toContain('sr-only')
-    expect(app).toContain('WORDMARK_TEXT')
+    // the one thing a picture cannot supply. Matched with comments stripped,
+    // because the line above the span mentions `sr-only` in prose and a
+    // substring check would have passed on the comment alone.
+    expect(strip(read('../App.jsx')))
+      .toMatch(/<h1>[\s\S]*sr-only[^>]*>\{WORDMARK_TEXT\}[\s\S]*<\/h1>/)
     expect(WORDMARK_TEXT).toBe('Bitcoin Vibe Check')
   })
 })
