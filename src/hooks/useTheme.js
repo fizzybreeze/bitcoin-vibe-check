@@ -71,9 +71,11 @@ export function applyTheme(value) {
 // That is invisible for anything styled with a `dark:` variant or a token,
 // because the stylesheet does not care what React thinks. It bites exactly the
 // components that *cannot* use a class — an SVG `fill` takes a value — which is
-// the wordmark and the Vibe Score character. Measured: after a toggle to light,
-// `--color-ink` is `#241f38` and the wordmark was still filling `#ffffff`,
-// white on a near-white ground.
+// the wordmark and the Vibe Score character. Measured in a browser: after a
+// toggle to light the stylesheet had switched to the light `ink` while the
+// wordmark was still filling the dark theme's, which is white — on a near-white
+// ground. (The values are not quoted here on purpose; `palette.test.js` fails
+// the build on a raw hex anywhere in `src/`, and a comment is not an exception.)
 //
 // A store rather than a context, because a context needs a provider and a
 // provider is something the next caller can forget to be inside. `getSnapshot`

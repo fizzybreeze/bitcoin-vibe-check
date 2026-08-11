@@ -228,9 +228,9 @@ describe('useTheme', () => {
 describe('every consumer sees one theme', () => {
   // The defect this exists for, reported from the deployed preview and then
   // measured in a browser: with `useState` per caller, only the component whose
-  // `toggleTheme` ran re-rendered. After a toggle to light, `--color-ink` was
-  // `#241f38` and the wordmark was still filling `#ffffff` — white on a
-  // near-white ground.
+  // `toggleTheme` ran re-rendered. After a toggle to light the stylesheet had
+  // switched to the light `ink` while the wordmark was still filling the dark
+  // theme's, which is white — on a near-white ground.
   //
   // It is invisible for anything styled with a token, because the stylesheet
   // does not care what React thinks. It bites exactly the components that
