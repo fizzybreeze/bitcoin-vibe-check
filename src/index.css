@@ -208,3 +208,94 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* The CRT treatment on the price chart.
+ *
+ * **These rules mirror `src/lib/crt.js`, which carries the reasoning**;
+ * `crt.test.js` parses this file and fails if the two disagree. The short
+ * version of why each number is what it is:
+ *
+ * **Everything moves `transform` and nothing else.** Both animations run on the
+ * compositor — no layout, no repaint, no React render, no rAF. The obvious way
+ * to roll a scanline gradient is to animate `background-position`, which draws
+ * the identical picture while repainting the layer every frame. Translating by
+ * exactly one gradient period instead is free, seamless at any height, and needs
+ * only one period of headroom rather than a doubled element.
+ *
+ * **The scanline opacity is a measured ceiling, not a taste.** It shifts the
+ * axis labels and the ground under them together, which compresses their
+ * contrast rather than preserving it. 10% holds every role drawn inside the
+ * chart above 4.8:1 in both themes and 12% is the last value that clears the
+ * headroom bar. `crt.test.js` recomputes that through the composite, so turning
+ * this up to taste fails the build instead of the reader.
+ *
+ * **`ink` rather than a fixed dark, and that is not a cosmetic choice.** Drawn
+ * in `scrim` — the obvious pick, since a scanline is the unlit gap between rows
+ * — the banding measured 1.013 in dark mode, where 1.000 is a flat field: there
+ * is no luminance room below a near-black plot area, and no alpha rescues it.
+ * `ink` opposes the surface in both themes, so it darkens a light chart and
+ * brightens a dark one, which is also what a phosphor raster actually looks
+ * like. In the light theme the two tokens are the same value, so only dark mode
+ * moved — from 1.013 to 1.329.
+ *
+ * **The wobble is applied to the chart wrapper, so the axes and gridlines move
+ * with the series** — displacing the line alone would shift a reading against
+ * its own scale. Whole pixels, and `steps(1, end)` so nothing interpolates
+ * between them: a fractional transform on a composited layer resamples the 11px
+ * tick labels inside it, and soft text is a real cost where jerk is not.
+ *
+ * Reduced motion needs no rule of its own. The blanket block above stops both of
+ * these, and they degrade the way it assumes — the scanlines stop rolling and
+ * remain a static texture, so only the movement goes.
+ */
+@keyframes crt-scanline-roll {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, 3px, 0); }
+}
+
+@keyframes crt-wobble {
+  0%   { transform: translate3d(0, 0, 0); }
+  28%  { transform: translate3d(-1px, 0, 0); }
+  29%  { transform: translate3d(0, 0, 0); }
+  61%  { transform: translate3d(1px, 0, 0); }
+  62%  { transform: translate3d(-1px, 0, 0); }
+  63%  { transform: translate3d(0, 0, 0); }
+  92%  { transform: translate3d(-1px, 0, 0); }
+  93%  { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* The clipping frame. `pointer-events: none` is load-bearing rather than tidy:
+ * this sits over the whole plot area, and without it the chart's hover tooltip
+ * is unreachable — the effect would silently take a feature away. */
+.crt-scanlines {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.crt-scanlines::before {
+  content: '';
+  position: absolute;
+  /* One period of headroom at the top, since the roll travels downward. */
+  inset: -3px 0 0 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    color-mix(in srgb, var(--color-ink) 10%, transparent) 2px 3px
+  );
+  animation: crt-scanline-roll 1.2s linear infinite;
+  will-change: transform;
+}
+
+.crt-wobble {
+  animation: crt-wobble 7s steps(1, end) infinite;
+  will-change: transform;
+}
+
+/* Steady while it is being read. The ticker does the same on hover, and a chart
+ * you are pointing at to read a tooltip has a stronger claim to holding still. */
+.crt-wobble:hover {
+  animation-play-state: paused;
+}

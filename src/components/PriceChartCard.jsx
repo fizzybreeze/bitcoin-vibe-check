@@ -105,7 +105,12 @@ export default function PriceChartCard({
         ? <Skeleton className="h-64" />
         : (
           <div className="relative">
-            <div className={`transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+            {/* `crt-wobble` and the overlay below are the CRT treatment — see
+              * `src/lib/crt.js`. The wobble is on this wrapper rather than on the
+              * series so the axes and gridlines move with it: a line displaced
+              * against its own scale is a decorative effect changing a reading.
+              * `relative` is what the overlay's `inset: 0` anchors to. */}
+            <div className={`crt-wobble relative transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
               <ResponsiveContainer width="100%" height={264}>
                 <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
@@ -166,6 +171,10 @@ export default function PriceChartCard({
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              {/* Inside the wobbling wrapper on purpose, so the scanlines travel
+                * with the picture rather than sitting in front of a moving one,
+                * and so they dim with the chart while a range is loading. */}
+              <div className="crt-scanlines" data-testid="chart-scanlines" aria-hidden="true" />
             </div>
             {chartLoading && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
