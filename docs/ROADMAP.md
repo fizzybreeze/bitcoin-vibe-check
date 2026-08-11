@@ -340,29 +340,32 @@ shell became `ICON_BUTTON`. `src/App.css` went with it.
 
 **Two are left, and they are the two below.**
 
-*The card label style is copy-pasted 35 times.* `text-xs font-semibold uppercase
-tracking-widest` appears 36 times across 16 files; exactly one is a named
-constant, and it is local to `CycleIndicatorsCard.jsx` and unexported. There is
-no exported className constant anywhere in `src/`. The drift has already started:
-a second `text-[10px]` label scale used only in `BtcPriceCard`, three labels
-typed in capitals instead of using `uppercase`, one of them doing both. The
-primary-value treatment is worse — `text-sm`, `text-lg`, `text-xl`, `text-2xl`
-and `text-3xl` all serve as "the big number" depending on which card you are in,
-across thirteen sites.
+**The label and shell halves shipped in v1.8.7; see the version-history row.**
+The card label became `CARD_LABEL` (36 hand-written copies, 16 files), the
+`text-[10px]` second scale became a named `CARD_LABEL_SM` rather than being
+flattened away, the five "big number" treatments became a four-role
+`CARD_VALUE` scale — which is where the 14px block height on a phone was found
+— and the four padding schemes became one `CARD`. Card roots gave their `mt-4`
+and their breakpoint visibility back to `App.jsx`.
 
-*Card roots mostly agree; the grid does not.* `rounded-2xl bg-surface` on every
-card and `rounded-xl` on every inner tile is genuinely consistent and should
-survive the pass untouched — this is not a "rewrite everything" item. Padding is
-not: four schemes across fifteen cards (`p-6` ×7, `p-4 md:p-6` ×2, `p-4` ×2,
-`px-4 pt-4 pb-3` ×2). Six bake their own outer margin into the root while the
-rest rely on the grid's `gap-4`; two bake breakpoint visibility in; `h-full` is
-applied unevenly, so some rows have equal-height cards and others do not. The
-grid goes multi-column at `md:` in the first two rows and `lg:` in the last two,
-with wrapper `<div>`s in some rows and not others. Two responsive-duplicate pairs
-live as separate files rather than one component with a breakpoint
-(`NetworkHeartbeatCard`/`RecentBlocksCard`,
-`SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated presentation
-classes between them.
+**What is left of this item is design rather than consolidation**, which is why
+it was deliberately not bundled with the above:
+
+- **The grid goes multi-column at `md:` in the first two rows and `lg:` in the
+  last two.** Picking one changes what a tablet sees, which is a decision about
+  the product rather than a tidy-up, and nobody has looked at the dashboard at
+  820px to make it.
+- **`h-full` is applied unevenly**, so some rows have equal-height cards and
+  others do not. Same argument: which rows *should* be equal-height is a design
+  question.
+- **Two responsive-duplicate pairs live as separate files**
+  (`NetworkHeartbeatCard`/`RecentBlocksCard`,
+  `SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated
+  presentation classes between them. v1.8.7 found the concrete cost of this —
+  the two had drifted to different value treatments, and one of them was styling
+  a subtree that could never render — so the case for merging them is now
+  evidence rather than principle. It is still a real refactor with real
+  behaviour risk, not a pass.
 
 Both cheap deletions this item carried are now done: `public/icons.svg` went
 with the v1.8.1 mark, and the 0-byte-but-still-imported `src/App.css` went with

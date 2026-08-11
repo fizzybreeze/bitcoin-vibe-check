@@ -3,6 +3,7 @@ import CardTooltip from './CardTooltip.jsx'
 import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
 import { describeDifficulty } from './seriesLabel.js'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const HASH_RATE_TOOLTIP  = 'Total computational power securing the Bitcoin network, measured in exahashes per second. Rising hash rate signals miner confidence; a sharp drop can signal miner stress or capitulation.'
 const DIFFICULTY_TOOLTIP = 'Adjusts every ~2,016 blocks (~2 weeks) to keep average block times near 10 minutes. A positive adjustment means blocks were found faster than target — network is growing. Negative means slower — miners left or difficulty was too high.'
@@ -67,16 +68,16 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
   }, [])
 
   return (
-    <div data-testid="card-network-pulse" className="rounded-2xl bg-surface p-6 h-full">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Network Health</h2>
+    <div data-testid="card-network-pulse" className={`${CARD} h-full`}>
+      <h2 className={CARD_LABEL}>Network Health</h2>
 
       {/* Row 1: Hash Rate | Difficulty */}
       <div className="mt-3 grid grid-cols-2 gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
+          <p className={`${CARD_LABEL} flex items-center`}>Hash Rate<CardTooltip text={HASH_RATE_TOOLTIP} /></p>
           <div className="mt-2">
             {hashRate != null
-              ? <p className="text-2xl font-bold text-accent tabular-nums">{hashRate} <span className="text-base font-semibold">EH/s</span></p>
+              ? <p className={`${CARD_VALUE.base} text-accent tabular-nums`}>{hashRate} <span className="text-base font-semibold">EH/s</span></p>
               : <Skeleton className="h-8 w-20" />
             }
             {hashRate != null && hashRateTrend != null && (
@@ -88,13 +89,13 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
+          <p className={`${CARD_LABEL} flex items-center`}>Difficulty<CardTooltip text={DIFFICULTY_TOOLTIP} /></p>
           <div className="mt-2">
             {loading
               ? <Skeleton className="h-8 w-16" />
               : diffChange == null
-                ? <p className="text-2xl font-bold text-quiet">—</p>
-                : <p className="text-2xl font-bold text-accent tabular-nums">
+                ? <p className={`${CARD_VALUE.base} text-quiet`}>—</p>
+                : <p className={`${CARD_VALUE.base} text-accent tabular-nums`}>
                     {diffChange >= 0 ? '+' : ''}{diffChange.toFixed(1)}%
                   </p>
             }
@@ -118,7 +119,7 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
 
       {/* Difficulty Adjustment bar (full width) */}
       <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Difficulty Adjustment</p>
+        <p className={CARD_LABEL}>Difficulty Adjustment</p>
         <DifficultyBar change={loading ? null : diffChange} />
       </div>
     </div>

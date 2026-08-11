@@ -842,12 +842,20 @@ export default function App() {
         </div>
       </div>
 
-      {/* Supporters ticker */}
-      <SupporterTickerCard donors={donors} />
-      <MobileSupportersCard donors={donors} />
+      {/* Supporters ticker. The breakpoint lives here rather than inside the two
+          cards: a card that hides itself cannot be reused at another width, and
+          both roots carried their own `mt-4` besides. */}
+      <div className="mt-4 hidden md:block">
+        <SupporterTickerCard donors={donors} />
+      </div>
+      <div className="mt-4 md:hidden">
+        <MobileSupportersCard donors={donors} />
+      </div>
 
       {/* Newsletter signup */}
-      <NewsletterCard />
+      <div className="mt-4">
+        <NewsletterCard />
+      </div>
 
       {/* Privacy note */}
       <p className="mt-2 text-center text-xs text-quiet">
@@ -863,7 +871,9 @@ export default function App() {
       </p>
 
       {/* Donation card */}
-      <DonationCard />
+      <div className="mt-4">
+        <DonationCard />
+      </div>
 
       <SatoshiQuote />
 

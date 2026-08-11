@@ -1,10 +1,11 @@
+import { CARD, CARD_LABEL } from '../lib/typography.js'
 export default function SupporterTickerCard({ donors }) {
   const content = donors.length
     ? `Proudly supported by Bitcoiners: ${donors.map(d => `⚡ ${d.name}`).join(' ')} ⚡   `
     : null
   return (
-    <div className="hidden md:block rounded-2xl bg-surface px-4 pt-4 pb-3 mt-4">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet mb-2">Supporters ⚡</h2>
+    <div className={CARD}>
+      <h2 className={`${CARD_LABEL} mb-2`}>Supporters ⚡</h2>
       {content ? (
         <div className="relative w-full overflow-hidden">
           <span

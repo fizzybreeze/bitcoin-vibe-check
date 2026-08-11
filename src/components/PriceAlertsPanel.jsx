@@ -4,6 +4,7 @@ import { ALERT_METRICS, ALERT_METRIC_IDS, DEFAULT_ALERT_METRIC } from '../lib/al
 import { PUSH_FAILED, PUSH_OFF, PUSH_ON, PUSH_UNCONFIGURED } from '../hooks/usePushSubscription.js'
 import { pushFooterCopy } from './pushCopy.js'
 import Icon from './Icon.jsx'
+import { CARD_LABEL } from '../lib/typography.js'
 
 export default function PriceAlertsPanel({
   alerts,
@@ -163,7 +164,7 @@ export default function PriceAlertsPanel({
 
         {/* Alert list */}
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-quiet">Active alerts</h3>
+          <h3 className={`${CARD_LABEL} mb-2`}>Active alerts</h3>
           {alerts.length === 0 ? (
             <p className="text-xs text-quiet">No alerts set. Pick a metric and add a level above.</p>
           ) : (

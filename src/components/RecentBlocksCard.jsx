@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
 import { blockTimeBand } from '../lib/scales.js'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
@@ -53,29 +54,29 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
     : null
 
   return (
-    <div data-testid="card-recent-blocks" className="rounded-2xl bg-surface p-6 h-full">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></h2>
+    <div data-testid="card-recent-blocks" className={`${CARD} h-full`}>
+      <h2 className={`${CARD_LABEL} flex items-center`}>Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></h2>
 
       {/* Heartbeat header — desktop only, merged above the block list */}
       <div className="hidden lg:block">
         <div className="mt-3 flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Block Height</p>
+            <p className={CARD_LABEL}>Block Height</p>
             <div className="mt-1">
               {loading || blockHeight == null
                 ? <Skeleton className="h-7 w-16" />
-                : <p className="text-sm font-bold text-accent tabular-nums md:text-2xl">
+                : <p className={`${CARD_VALUE.dense} text-accent tabular-nums`}>
                     {blockHeight.toLocaleString('en-US')}
                   </p>
               }
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Avg Block Time</p>
+            <p className={CARD_LABEL}>Avg Block Time</p>
             <div className="mt-1">
               {loading || avgBlockMins == null
                 ? <Skeleton className="h-7 w-12" />
-                : <p className={`text-sm font-bold tabular-nums md:text-2xl ${colors.text}`}>
+                : <p className={`${CARD_VALUE.dense} tabular-nums ${colors.text}`}>
                     {avgBlockMins.toFixed(1)} min
                   </p>
               }

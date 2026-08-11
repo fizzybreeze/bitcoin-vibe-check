@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { blocksToNextHalving, epochPercentage } from '../utils.js'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const HALVING_TOOLTIP = 'Every 210,000 blocks (~4 years), the reward paid to miners is cut in half, reducing new BTC issuance. Each of the four previous halvings preceded significant price appreciation in the following 12–18 months. Past performance is not indicative of future results.'
 
@@ -52,25 +53,25 @@ export default function HalvingCountdown({ blockHeight }) {
   ) : <Skeleton className="h-2 w-full" />
 
   return (
-    <div className="rounded-2xl bg-surface p-4 mb-4">
+    <div className={CARD}>
 
       {/* Mobile: two columns top row + epoch bar below */}
       <div className="flex md:hidden flex-col gap-2">
         <div className="flex gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
+            <p className={`${CARD_LABEL} flex items-center`}>Blocks to Halving<CardTooltip text={HALVING_TOOLTIP} /></p>
             {blocksRemaining != null
-              ? <p className="mt-1 text-xl font-bold text-accent tabular-nums">
+              ? <p className={`mt-1 ${CARD_VALUE.dense} text-accent tabular-nums`}>
                   {blocksRemaining.toLocaleString('en-US')}
                 </p>
               : <Skeleton className="mt-1 h-7 w-20" />
             }
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Estimated Time</p>
+            <p className={CARD_LABEL}>Estimated Time</p>
             {secsLeft != null
               ? <>
-                  <p className="mt-1 text-xl font-bold text-ink tabular-nums">
+                  <p className={`mt-1 ${CARD_VALUE.dense} text-ink tabular-nums`}>
                     {days}d {hours}h {mins}m
                   </p>
                   {estStr && <p className="text-xs text-quiet">est. {estStr}</p>}
@@ -86,9 +87,9 @@ export default function HalvingCountdown({ blockHeight }) {
       <div className="hidden md:flex gap-0">
 
         <div className="flex-1 pr-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Blocks to Halving</p>
+          <p className={CARD_LABEL}>Blocks to Halving</p>
           {blocksRemaining != null
-            ? <p className="mt-1.5 text-2xl font-bold text-accent tabular-nums">
+            ? <p className={`mt-1.5 ${CARD_VALUE.dense} text-accent tabular-nums`}>
                 {blocksRemaining.toLocaleString('en-US')}
               </p>
             : <Skeleton className="mt-1.5 h-8 w-28" />
@@ -98,10 +99,10 @@ export default function HalvingCountdown({ blockHeight }) {
         <div className="w-px self-stretch bg-raised" />
 
         <div className="flex-1 px-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Estimated Time</p>
+          <p className={CARD_LABEL}>Estimated Time</p>
           {secsLeft != null
             ? <>
-                <p className="mt-1.5 text-2xl font-bold text-ink tabular-nums">
+                <p className={`mt-1.5 ${CARD_VALUE.dense} text-ink tabular-nums`}>
                   {days}d {hours}h {mins}m
                 </p>
                 {estStr && <p className="mt-1 text-sm text-quiet">est. {estStr}</p>}
@@ -113,7 +114,7 @@ export default function HalvingCountdown({ blockHeight }) {
         <div className="w-px self-stretch bg-raised" />
 
         <div className="flex-1 pl-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-quiet">Epoch Progress</p>
+          <p className={CARD_LABEL}>Epoch Progress</p>
           <div className="mt-2">{epochBarContent}</div>
         </div>
 

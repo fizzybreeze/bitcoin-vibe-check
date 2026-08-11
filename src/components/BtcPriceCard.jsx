@@ -7,6 +7,7 @@ import { describeTrend } from './seriesLabel.js'
 import { vibeLabelClass } from '../lib/scales.js'
 import { PALETTE } from '../lib/palette.js'
 import useTheme from '../hooks/useTheme.js'
+import { CARD, CARD_LABEL, CARD_LABEL_SM, CARD_VALUE } from '../lib/typography.js'
 
 const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
 
@@ -32,7 +33,7 @@ function VibeBreakdown({ dimensions }) {
         const value = dimensions?.[key]
         return (
           <div key={key} className="flex items-baseline justify-between gap-2">
-            <span className="text-[10px] uppercase tracking-wider text-quiet">{label}</span>
+            <span className={CARD_LABEL_SM}>{label}</span>
             <span className={`text-xs font-semibold tabular-nums ${value == null ? 'text-quiet' : 'text-ink-dim'}`}>
               {value == null ? '—' : Math.round(value)}
             </span>
@@ -78,7 +79,7 @@ function VibeHistorySparkline({ points }) {
       </div>
       {/* Labelled by what the line actually covers, never by the window it was
           asked for. Until 30 points exist this names the first day on it. */}
-      <p className="mt-1 text-[10px] uppercase tracking-wider text-quiet">
+      <p className={`mt-1 ${CARD_LABEL_SM}`}>
         Vibe trend ({vibeHistoryLabel(points)})
       </p>
     </div>
@@ -93,7 +94,7 @@ function VibeScoreSection({ vibe, loading, history }) {
       {/* h3, not h2 — this is a titled section *inside* the BTC Price card
           rather than a card of its own, and skipping a level is the one way a
           heading outline is worse than no headings at all. */}
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
+      <h3 className={`${CARD_LABEL} flex items-center`}>
         Vibe Score<CardTooltip text={VIBE_TOOLTIP} />
       </h3>
 
@@ -102,14 +103,14 @@ function VibeScoreSection({ vibe, loading, history }) {
           ? <Skeleton className="mt-2 h-10 w-28" />
           : (
             <>
-              <p className="mt-2 text-3xl font-bold text-quiet md:text-4xl">—</p>
+              <p className={`mt-2 ${CARD_VALUE.hero} text-quiet`}>—</p>
               <p className="mt-1.5 text-xs text-quiet">Not enough live data to score</p>
             </>
           )
       ) : (
         <>
           <div className="mt-2 flex items-baseline gap-2.5">
-            <p data-testid="vibe-score" className="text-3xl font-bold text-accent tabular-nums md:text-4xl">
+            <p data-testid="vibe-score" className={`${CARD_VALUE.hero} text-accent tabular-nums`}>
               {vibe.score}
             </p>
             <p
@@ -139,19 +140,19 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
   const changePositive = change != null && change >= 0
   const isAtATH = athPct != null && athPct >= -0.1
   return (
-    <div data-testid="card-btc-price" className="rounded-2xl bg-surface p-6 h-full flex flex-col">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></h2>
+    <div data-testid="card-btc-price" className={`${CARD} h-full flex flex-col`}>
+      <h2 className={`${CARD_LABEL} flex items-center`}>BTC Price<CardTooltip text={BTC_PRICE_TOOLTIP} /></h2>
       {/* Mobile: price left, change+sub right on same row. Desktop: stacked. */}
       <div className="mt-3 md:mt-[30px] flex items-start justify-between md:block">
         <div>
           {value == null
             ? <Skeleton className="h-9 w-32" />
-            : <p className="text-2xl font-bold text-accent tabular-nums md:text-3xl">{value}</p>
+            : <p className={`${CARD_VALUE.lead} text-accent tabular-nums`}>{value}</p>
           }
           {/* ATH distance — left column, all breakpoints */}
           {athPct != null && value != null && (
             isAtATH
-              ? <p className="mt-1 text-xs font-medium text-up md:mt-1.5 md:text-sm">AT ATH</p>
+              ? <p className="mt-1 text-xs font-medium uppercase text-up md:mt-1.5 md:text-sm">At ATH</p>
               : <p className="mt-1 text-xs text-quiet tabular-nums md:mt-1.5 md:text-sm">{athPct.toFixed(1)}% from ATH</p>
           )}
           {/* Desktop-only stacked change */}
