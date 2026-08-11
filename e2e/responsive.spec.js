@@ -166,5 +166,28 @@ test.describe('Tablet band (md: on, lg: off)', () => {
       expect(spills, spills.join('\n')).toEqual([])
     })
   }
+
+  test('the character stays right-aligned when it wraps below the score', async ({ page }) => {
+    // At this width the score and the character no longer fit on one line, so
+    // the character wraps to its own. `justify-between` gives a lone item
+    // flex-start, which would leave it stranded under the number with the card
+    // empty beside it — `ml-auto` is what keeps it where it was.
+    await page.setViewportSize({ width: 820, height: 1100 })
+    await mockApis(page)
+    await page.goto('/')
+    await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
+
+    const gap = await page.evaluate(() => {
+      const ch = document.querySelector('[data-testid="vibe-character"]')
+      const row = ch.parentElement
+      const score = document.querySelector('[data-testid="vibe-score"]')
+      return {
+        wrapped: ch.getBoundingClientRect().top >= score.getBoundingClientRect().bottom,
+        fromRight: Math.round(row.getBoundingClientRect().right - ch.getBoundingClientRect().right),
+      }
+    })
+    expect(gap.wrapped, 'this width no longer wraps — re-pick it').toBe(true)
+    expect(gap.fromRight, 'the wrapped character is not against the right edge').toBeLessThanOrEqual(1)
+  })
 })
 
