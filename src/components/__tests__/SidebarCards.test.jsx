@@ -16,6 +16,9 @@ import SatoshiQuote from '../SatoshiQuote.jsx'
 import NewsletterModal from '../NewsletterModal.jsx'
 import NewsletterCard from '../NewsletterCard.jsx'
 import BeehiivEmbed from '../BeehiivEmbed.jsx'
+import { BEEHIIV_FORM_IDS, beehiivFormId } from '../beehiivForms.js'
+import useTheme from '../../hooks/useTheme.js'
+import { DEFAULT_THEME, THEMES, THEME_STORAGE_KEY } from '../../lib/palette.js'
 
 afterEach(cleanup)
 
@@ -213,15 +216,75 @@ describe('NewsletterCard', () => {
 })
 
 describe('BeehiivEmbed', () => {
-  it('names the publication’s form on the script it appends', () => {
-    // The id is the whole payload — the loader renders a different
-    // publication's form, or none, if it is wrong, and nothing on screen says
-    // so until a human subscribes.
+  // The form is a cross-origin iframe, so the theme cannot be carried into it
+  // by a class or a token — it is carried by loading a *different form*, one
+  // styled in beehiiv's designer per theme. What is assertable here is that the
+  // right one is requested; what the form looks like once it renders is in
+  // someone else's dashboard and out of reach of every gate in this repo.
+  beforeEach(() => localStorage.clear())
+  afterEach(() => localStorage.clear())
+
+  /** A second consumer of the theme store, so the toggle is pressable. */
+  function ThemeHarness() {
+    const { toggleTheme } = useTheme()
+    return <button onClick={toggleTheme}>toggle theme</button>
+  }
+
+  const formIdIn = (container) =>
+    container.querySelector('script').getAttribute('data-beehiiv-form')
+
+  it('names the dark theme’s form when the theme is dark', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark')
     const { container } = render(<BeehiivEmbed />)
     const script = container.querySelector('script')
     expect(script.getAttribute('src')).toBe('https://subscribe-forms.beehiiv.com/v3/loader.js')
-    expect(script.getAttribute('data-beehiiv-form')).toBe('2f92f769-e2ce-4532-b1b6-ccd02017b0ec')
+    expect(script.getAttribute('data-beehiiv-form')).toBe(BEEHIIV_FORM_IDS.dark)
     expect(script.async).toBe(true)
+  })
+
+  it('names the light theme’s form when the theme is light', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'light')
+    const { container } = render(<BeehiivEmbed />)
+    expect(formIdIn(container)).toBe(BEEHIIV_FORM_IDS.light)
+  })
+
+  it('swaps the form when the theme changes, without leaving the old one behind', () => {
+    // The load-bearing one. A toggle has to *replace* the form, not add to it:
+    // the loader injects its iframe beside the script, so re-running the effect
+    // in place would stack the previous theme's form under the new one — two
+    // signup forms in one card, the first of them the wrong colour. The iframe
+    // here stands in for the one their loader would inject, which nothing in a
+    // hermetic suite can produce for real.
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark')
+    const { container } = render(<><ThemeHarness /><BeehiivEmbed /></>)
+    expect(formIdIn(container)).toBe(BEEHIIV_FORM_IDS.dark)
+    const mountedInto = container.querySelector('div')
+    mountedInto.appendChild(document.createElement('iframe'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle theme' }))
+
+    expect(container.querySelectorAll('script')).toHaveLength(1)
+    expect(formIdIn(container)).toBe(BEEHIIV_FORM_IDS.light)
+    expect(container.querySelector('iframe')).toBeNull()
+    // And into a *fresh* node. This is the assertion that pins the `key`
+    // specifically: the two above would also pass if the container were merely
+    // emptied, and it is the key that makes the iframe go away.
+    expect(container.querySelector('div')).not.toBe(mountedInto)
+  })
+
+  it('gives every theme a form, and no two themes the same one', () => {
+    // The failure this catches is a paste, and it is invisible: two ids that
+    // are the same render a perfectly good form in both themes, wrong in one of
+    // them, with nothing on screen or in any other test to say so. A theme
+    // added without a form is the other half — `data-beehiiv-form="undefined"`
+    // renders nothing at all under a card that still invites you to sign up.
+    const ids = THEMES.map((theme) => BEEHIIV_FORM_IDS[theme])
+    expect(ids.every(Boolean)).toBe(true)
+    expect(new Set(ids).size).toBe(THEMES.length)
+  })
+
+  it('falls back to a real form for a theme it does not have', () => {
+    expect(beehiivFormId('sepia')).toBe(BEEHIIV_FORM_IDS[DEFAULT_THEME])
   })
 
   it('detaches the script again on unmount', () => {
