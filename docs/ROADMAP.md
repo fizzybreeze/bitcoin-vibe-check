@@ -146,61 +146,6 @@ until 7 comparable rows exist, and a 365-day control over 3 weeks of data is a
 control that lies about what is behind it. Revisit when the table has a
 quarter in it.
 
-### 3.5 The newsletter form still ignores the palette — and the obvious fix has been tried
-
-**What.** `BeehiivEmbed` appends `subscribe-forms.beehiiv.com/v3/loader.js` to an
-empty `<div>` and lets beehiiv inject their own form: a white panel with an
-orange button, inside a `bg-surface` card, on the violet ground. It is the one
-element on the page that does not follow the palette, and the only one that
-**cannot follow the theme toggle**, because a form rendered from their origin
-has no idea which theme this document is in.
-
-**Read this before starting: option (2) was shipped in v1.8.2 and reverted in
-v1.8.3.** `src/components/BeehiivForm.jsx` was a native `POST` to
-`https://app.beehiiv.com/subscribe`. That host is beehiiv's **logged-in
-dashboard** — it answers a subscriber with a redirect to
-`/login?redirect=/subscribe` — so for the life of that release every signup
-asked the visitor to create a beehiiv account. The component had been dead since
-PR #1, and its deadness was read as an opportunity when it was the warning:
-nothing had ever exercised it because it had never worked. The file is deleted;
-recovering the markup is one `git show` away, and it is the endpoint, not the
-markup, that this item is blocked on.
-
-**So the levers are now four, and three of them need something nobody has yet.**
-
-1. **Restyle in beehiiv's own form designer.** No code, and still capped at one
-   fixed appearance against two grounds — match dark and it glares in light,
-   match light and it is the white slab already on screen.
-2. **Our markup posting to a real public endpoint.** Needs the actual endpoint,
-   from beehiiv's own embed/custom-form documentation or dashboard. `app.` is
-   not it. Whatever it is, `NewsletterModal`'s auto-dismiss has to be replaced
-   too, since it listens for a `beehiiv:subscribe` event *their loader* emits.
-   If the replacement dismisses on submit, it **must not** unmount the form
-   inside the submit event: measured in Chromium, a form removed from the
-   document synchronously or from a microtask — which is when React flushes a
-   discrete-event state update — does not navigate at all, while a deferred
-   removal does.
-3. **Our markup posting to our own serverless route**, which proxies beehiiv's
-   v2 API with a key held server-side. This is the option with the best
-   ceiling — it keeps every pixel ours, gives an inline success state instead of
-   a new tab, and is the only variant that can be smoke-tested against a
-   sandbox or test publication rather than by hand. It needs a beehiiv API key,
-   a `/api/subscribe` route, and the abuse posture §6 already has primitives
-   for (`api/lib/abuseGuard.js`). It is the most work and the only one that ends
-   with this verifiable.
-4. **Drop the embed for a link.** Cheapest, gives up the inline signup that is
-   why the card converts. Listed for completeness, not recommended.
-
-**The constraint that actually decides this, and that v1.8.2 did not have
-written down.** Every gate in this repo can see that a form is *shaped* right;
-none can see whether the endpoint accepts it. `e2e/mocks.js` stubs their script
-to an empty body — correctly, the suite is hermetic — so no e2e run and no
-mobile screenshot artifact has ever contained the real form, and the eight
-visual baselines never held it in any form, the `visual` project covering four
-other cards. A smoke test that submitted for real would add a junk subscriber
-every day. **So any change here is verified by subscribing once, by hand, on the
-preview** — unless it is option (3), which is the argument for option (3).
-
 ---
 
 ## 4. Next — become a destination, and a source
@@ -447,6 +392,7 @@ considered and rejected on the thesis, not on effort.
 | Price predictions or buy/sell signals | Power Law and Mayer Multiple are *models with published formulas*, presented as such. A signal is advice, and advice is a liability. |
 | Native App Store apps | The PWA installs on iOS, Android and desktop today. App-store review, two more build pipelines and a 30% cut buy nothing the install prompt does not already provide. |
 | Ads | They would undercut the fast, dense, no-nonsense feel that is the entire reason to prefer this over a block explorer. Lightning donations, and the supporter ticker, stay the model. |
+| Owning the newsletter form's markup | Settled on evidence rather than on effort, so it stops being re-proposed every time the embed looks off-brand. **Posting to beehiiv's form endpoint is not buildable**: the real request was captured from the live site, and `subscribe-forms.beehiiv.com/api/submit` sits behind a Rails `authenticity_token` minted for their iframe's own session, a PerimeterX token minted by their sensor script, Cloudflare bot management, and an `origin` check — every one of those from *their* origin, on third-party cookies our visitors' browsers increasingly refuse. Four walls, each fatal alone, and all of them deliberate anti-automation. **The v2 API is the only supported route and it is closed too**: an API key requires Stripe identity verification, which this project will not do. What shipped instead is v1.11.1's two forms, one per theme. Reopen only if beehiiv publishes a public form endpoint or drops the identity check. |
 
 ---
 
