@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
       newsletter_issue:
-        description: 'Issue number for the brief (blank leaves it off the subject line)'
+        description: 'Override the issue number (blank derives it from ISSUE_ANCHOR)'
         type: string
         required: false
 

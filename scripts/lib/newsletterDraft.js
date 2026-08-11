@@ -85,6 +85,37 @@ export const BRIEF_TITLE = "Satoshi's Weekly Brief"
  */
 export const PUBLISH_WEEKDAY = 0
 
+/**
+ * The issue number, anchored to a known one rather than counted anywhere.
+ *
+ * The brief goes out numbered, and the number has to survive a job that keeps
+ * no state: there is nowhere to increment a counter, and the only durable store
+ * this job has is a table of market metrics. One published issue and its date
+ * fix the whole sequence, forwards and backwards — so a brief re-made for a
+ * past week carries the number that week's brief carried, which a counter could
+ * never promise.
+ *
+ * 16 August 2026 is the first Sunday this automation runs, and it is issue 005.
+ */
+export const ISSUE_ANCHOR = Object.freeze({ date: '2026-08-16', number: 5 })
+
+/**
+ * Which issue a brief published on `iso` is.
+ *
+ * Floored rather than rounded, so a brief forced on a Wednesday belongs to the
+ * issue of the Sunday that opened its week rather than being pulled forward
+ * into the next one. Null below issue 1 — a brief dated before the sequence
+ * began has no number, and printing "issue 000" or a negative one is worse than
+ * printing none.
+ */
+export function issueNumber(iso) {
+  const ms = Date.parse(`${iso}T00:00:00Z`)
+  const anchor = Date.parse(`${ISSUE_ANCHOR.date}T00:00:00Z`)
+  if (!Number.isFinite(ms)) return null
+  const n = ISSUE_ANCHOR.number + Math.floor((ms - anchor) / (7 * 86_400_000))
+  return n >= 1 ? n : null
+}
+
 /** How far apart the two ends of "the week" are meant to be, and the slack. */
 export const WEEK_SPAN_DAYS = 7
 /**
@@ -617,8 +648,8 @@ const HEADINGS = [
  *
  * `week` is `pickWeek`'s result. `asOf` is the date the job believes it is
  * drafting for, so a stale newest row is reported rather than silently
- * published as this week's news. `issue` is the number the brief goes out
- * under, when the caller knows it.
+ * published as this week's news. `issue` overrides the number derived from the
+ * anchor, for the week somebody skips an issue or sends two.
  */
 export function buildNewsletterDraft({ week, asOf = null, issue = null } = {}) {
   if (!week?.latest?.metrics) return null
@@ -644,7 +675,10 @@ export function buildNewsletterDraft({ week, asOf = null, issue = null } = {}) {
   const endDay    = dayOf(week.latest)
   const dateLabel = formatDate(endDay) ?? endDay
   const stale     = Boolean(asOf && endDay && asOf !== endDay)
-  const number    = isNum(issue) ? ` ${String(issue).padStart(3, '0')}` : ''
+  // Derived from the date the brief covers, not from the day the job ran: a
+  // brief re-made for a past week has to carry that week's number.
+  const issueNo   = isNum(issue) ? issue : issueNumber(endDay)
+  const number    = isNum(issueNo) ? ` ${String(issueNo).padStart(3, '0')}` : ''
   const subject   = `${BRIEF_TITLE}${number} — ${dateLabel}`
 
   const body = [`# ${subject}`, '', `_${BRIEF_TITLE} is powered by [Bitcoin Vibe Check](${SITE_URL})._`, '']
@@ -698,6 +732,7 @@ export function buildNewsletterDraft({ week, asOf = null, issue = null } = {}) {
     subject,
     markdown: body.join('\n'),
     stale,
+    issue: isNum(issueNo) ? issueNo : null,
     hasWeekAgo: Boolean(week.weekAgo),
     sections: sections.map(([heading]) => heading),
   }

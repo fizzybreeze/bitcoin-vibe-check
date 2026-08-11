@@ -3,6 +3,7 @@ import {
   buildNewsletterDraft, vibeDelta, describeDelta, pickRows, pickWeek, shouldDraft,
   formatDate, formatDay, vibeFromRow, changePct, weekPrices, blockProduction,
   situationSection, vibeSection, networkSection, sentimentSection, dominanceSection,
+  issueNumber, ISSUE_ANCHOR,
   LIVE_CARD_URL, PUBLISH_WEEKDAY, WEEK_SPAN_DAYS,
 } from '../../scripts/lib/newsletterDraft.js'
 
@@ -403,21 +404,64 @@ describe('a stale or lonely capture is flagged, not silently drafted', () => {
   })
 })
 
-describe('the subject line', () => {
-  it('carries the issue number when the caller knows it, padded as published', () => {
-    expect(buildNewsletterDraft({ week: week(), issue: 12 }).subject)
-      .toBe("Satoshi's Weekly Brief 012 — 9 August 2026")
+describe('the issue number', () => {
+  it('puts the first automated Sunday at the issue it was told it is', () => {
+    // 16 August 2026 is the first Sunday this runs, and it is issue 005. One
+    // published issue and its date fix the whole sequence; there is nowhere in
+    // this job to keep a counter.
+    expect(ISSUE_ANCHOR).toEqual({ date: '2026-08-16', number: 5 })
+    expect(new Date(`${ISSUE_ANCHOR.date}T00:00:00Z`).getUTCDay()).toBe(PUBLISH_WEEKDAY)
+    expect(issueNumber('2026-08-16')).toBe(5)
   })
 
-  it('omits the number rather than guessing one', () => {
-    expect(buildNewsletterDraft({ week: week() }).subject)
-      .toBe("Satoshi's Weekly Brief — 9 August 2026")
+  it('advances by one a week in both directions', () => {
+    expect(issueNumber('2026-08-23')).toBe(6)
+    expect(issueNumber('2026-08-30')).toBe(7)
+    expect(issueNumber('2026-10-04')).toBe(12)
+    // Backwards too, so a brief re-made for a past week carries that week's
+    // number rather than today's.
+    expect(issueNumber('2026-08-09')).toBe(4)
+    expect(issueNumber('2026-07-26')).toBe(2)
+  })
+
+  it('keeps a mid-week brief in the issue of the Sunday that opened its week', () => {
+    // Floored, not rounded: a brief forced on the Wednesday belongs to the
+    // issue already in flight, not to the one after it.
+    for (const day of ['2026-08-16', '2026-08-17', '2026-08-19', '2026-08-22']) {
+      expect(issueNumber(day)).toBe(5)
+    }
+    expect(issueNumber('2026-08-23')).toBe(6)
+  })
+
+  it('has no number below issue one rather than a zero or a negative', () => {
+    expect(issueNumber('2026-07-12')).toBe(null)
+    expect(issueNumber('2025-01-01')).toBe(null)
+    expect(issueNumber('not-a-date')).toBe(null)
+  })
+
+  it('reaches the subject line padded as published', () => {
+    const w = pickWeek([row('2026-08-16')], new Date('2026-08-16T12:00:00Z'))
+    expect(buildNewsletterDraft({ week: w }).subject)
+      .toBe("Satoshi's Weekly Brief 005 — 16 August 2026")
+  })
+
+  it('is derived from the week the brief covers, not from the day the job ran', () => {
+    const w = pickWeek([row('2026-08-23')], new Date('2026-09-20T12:00:00Z'))
+    expect(buildNewsletterDraft({ week: w, asOf: '2026-09-20' }).issue).toBe(6)
+  })
+
+  it('can be overridden, for the week an issue is skipped or doubled', () => {
+    expect(buildNewsletterDraft({ week: week(), issue: 12 }).subject)
+      .toBe("Satoshi's Weekly Brief 012 — 9 August 2026")
   })
 
   it('never renders a null, undefined or NaN', () => {
     for (const issue of [null, undefined, NaN]) {
       expect(buildNewsletterDraft({ week: week(), issue }).subject).not.toMatch(/null|undefined|NaN/)
     }
+    // A week before the sequence began: the number is dropped, not printed as 000.
+    const early = pickWeek([row('2026-06-14')], new Date('2026-06-14T12:00:00Z'))
+    expect(buildNewsletterDraft({ week: early }).subject).toBe("Satoshi's Weekly Brief — 14 June 2026")
   })
 })
 

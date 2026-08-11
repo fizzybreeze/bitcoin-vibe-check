@@ -330,7 +330,7 @@ Rules that hold regardless:
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
 | `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
-| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the Nostr post, and **on Sundays** the weekly brief (job summary + `weekly-brief` artifact). Dispatch takes `draft_newsletter` to force a brief on any day, and `newsletter_issue` for its number |
+| `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the Nostr post, and **on Sundays** the weekly brief (job summary + `weekly-brief` artifact). Dispatch takes `draft_newsletter` to force a brief on any day, and `newsletter_issue` to override its number |
 | `smoke.yml` | daily at 07:43 UTC, plus manual dispatch | Playwright against the live site with real upstreams, from a US-hosted runner |
 | `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
 

@@ -52,6 +52,9 @@ const OUT_FILE = process.env.NEWSLETTER_DRAFT_PATH || 'weekly-brief.md'
 // Blank counts as absent — an Actions input left unfilled arrives as "", and a
 // truthy check on it would force a brief every single day.
 const FORCE = (process.env.NEWSLETTER_FORCE ?? '').trim().toLowerCase() === 'true'
+// An *override*, not the source: the number is derived from `ISSUE_ANCHOR` and
+// this is here for the week somebody skips an issue or sends two. Blank counts
+// as absent, so an unfilled dispatch input leaves the derivation alone.
 const ISSUE = Number.parseInt((process.env.NEWSLETTER_ISSUE ?? '').trim(), 10)
 
 // Sixteen days: a fortnight of captures plus slack, so the row a week back is
@@ -124,8 +127,8 @@ async function main() {
   console.log(`[brief] Sections: ${draft.sections.join(', ')} (+ WHY IT MATTERS, ONE THING TO WATCH to write)`)
   if (draft.stale)       console.warn('[brief] The newest snapshot is not today — check the capture step.')
   if (!draft.hasWeekAgo) console.warn('[brief] No row a week back: every week-over-week comparison is missing.')
-  if (!Number.isFinite(ISSUE)) {
-    console.log('[brief] No NEWSLETTER_ISSUE set, so the subject carries no issue number.')
+  if (draft.issue == null) {
+    console.warn('[brief] No issue number: this brief is dated before the anchor in ISSUE_ANCHOR.')
   }
 }
 
