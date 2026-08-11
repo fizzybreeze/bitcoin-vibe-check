@@ -51,7 +51,7 @@ export default function VibeCharacter({ label = null, className = '' }) {
       // 96px is the floor and 128px is comfortable — measured by rasterising
       // the set, not chosen. `w-24`/`w-32` are 96 and 128 on Tailwind's scale,
       // and both divide the 32-cell grid whole.
-      className={`shrink-0 w-24 h-24 md:w-32 md:h-32 ${className}`}
+      className={`shrink-0 ml-auto w-24 h-24 md:w-32 md:h-32 ${className}`}
     >
       {toneRuns(grid).map(({ x, y, width, tone }) => (
         <rect

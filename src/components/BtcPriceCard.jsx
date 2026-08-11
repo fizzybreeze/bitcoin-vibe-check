@@ -106,7 +106,7 @@ function VibeScoreSection({ vibe, loading, history }) {
             // The character is here too, in its weather-less state. A day we
             // could not measure and a mild day are different claims, so the
             // seventh state draws no environment rather than a calm one.
-            <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className={`${CARD_VALUE.hero} text-quiet`}>—</p>
                 <p className="mt-1.5 text-xs text-quiet">Not enough live data to score</p>
@@ -116,7 +116,7 @@ function VibeScoreSection({ vibe, loading, history }) {
           )
       ) : (
         <>
-          <div className="mt-2 flex items-start justify-between gap-3">
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-baseline gap-2.5">
               <p data-testid="vibe-score" className={`${CARD_VALUE.hero} text-accent tabular-nums`}>
                 {vibe.score}

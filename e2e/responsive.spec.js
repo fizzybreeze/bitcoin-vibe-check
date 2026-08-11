@@ -124,3 +124,47 @@ test.describe('Responsive layout', () => {
     expect(visible).toBe(1)
   })
 })
+
+// The `md:`-on/`lg:`-off band is the one no project in this suite covers —
+// `desktop` is 1280 and `mobile` is 390, so a card column that only exists
+// between 768 and ~1024 is invisible to both. This is where the Vibe Score
+// character overflowed its card: reported at 820px, and worst at 768, where
+// the column is 176px and the character alone is 128.
+test.describe('Tablet band (md: on, lg: off)', () => {
+  // Both edges of the band plus the middle. 768 is where it was worst and 900
+  // is where it was nearly gone, which is exactly the shape of bug a single
+  // sample misses.
+  for (const width of [768, 820, 900, 1023]) {
+    test(`nothing spills out of a card at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1100 })
+      await mockApis(page)
+      await page.goto('/')
+      await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
+
+      // Every card, not just the one that broke — the cause is a fixed-width
+      // child in a column narrower than the layout was designed against, and
+      // that is not specific to the character.
+      const spills = await page.evaluate(() => {
+        const out = []
+        for (const card of document.querySelectorAll('[data-testid^="card-"]')) {
+          const box = card.getBoundingClientRect()
+          for (const el of card.querySelectorAll('*')) {
+            const r = el.getBoundingClientRect()
+            if (r.width === 0 || r.height === 0) continue
+            const over = Math.round(r.right - box.right)
+            // A couple of pixels is a rounding artefact; a fixed-width child
+            // that does not fit overhangs by tens.
+            if (over > 2) {
+              out.push(`${card.dataset.testid}: <${el.tagName.toLowerCase()}` +
+                `${el.dataset.testid ? ` data-testid="${el.dataset.testid}"` : ''}> ` +
+                `overhangs by ${over}px`)
+            }
+          }
+        }
+        return [...new Set(out)]
+      })
+      expect(spills, spills.join('\n')).toEqual([])
+    })
+  }
+})
+
