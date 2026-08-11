@@ -32,6 +32,17 @@ test.describe('Bitcoin Dashboard', () => {
     expect(box.width).toBeGreaterThan(100)
     expect(box.height).toBeGreaterThan(20)
 
+    // And it is the thing at that point on the page. A box is not paint:
+    // `sr-only` clips its subtree while leaving every child's layout box the
+    // size it was, so an svg accidentally nested inside the screen-reader span
+    // measures 183×45, reports visible, and shows nothing. Measured — that
+    // mutation passed every assertion above.
+    const hit = await mark.evaluate((el, [x, y]) => {
+      const at = document.elementFromPoint(x, y)
+      return Boolean(at && (at === el || el.contains(at)))
+    }, [box.x + box.width / 2, box.y + box.height / 2])
+    expect(hit).toBe(true)
+
     // Two fills, and both are colours the stylesheet actually resolved — the
     // second is what makes CHECK the accent rather than more of the same word.
     const fills = await mark.evaluate(el =>
