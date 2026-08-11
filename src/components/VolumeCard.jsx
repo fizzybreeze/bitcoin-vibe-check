@@ -2,6 +2,7 @@ import { CURRENCY_META, fmtVolume, btcDominanceLabel } from '../utils.js'
 import { computeSatsPerFiat, computeVol7dAvg } from '../lib/calculations.js'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const VOLUME_TOOLTIP = 'Total BTC traded across major exchanges in the last 24 hours. High volume during a price move confirms its strength; the same move on low volume is easier to reverse.'
 
@@ -19,12 +20,12 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
   // threw during render and blanked the entire dashboard.
   const satsPerFiat = computeSatsPerFiat(price)
   return (
-    <div className="rounded-2xl bg-surface p-6 h-full">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></h2>
+    <div className={`${CARD} h-full`}>
+      <h2 className={`${CARD_LABEL} flex items-center`}>24h Volume<CardTooltip text={VOLUME_TOOLTIP} /></h2>
       <div className="mt-3">
         {volume == null
           ? <Skeleton className="h-9 w-32" />
-          : <p className="text-2xl font-bold text-accent tabular-nums md:text-3xl">{fmtVolume(volume, currency)}</p>
+          : <p className={`${CARD_VALUE.lead} text-accent tabular-nums`}>{fmtVolume(volume, currency)}</p>
         }
         {/* Every line below gates on the input it actually needs. They used to
             share one `volume != null` wrapper, which quietly made CoinPaprika a
@@ -64,8 +65,8 @@ export default function VolumeCard({ volumeUsd, volume, currency, btcDominance, 
         {satsPerFiat != null && (
           <>
             <div className="mt-3 border-t border-line" />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-quiet">Sats per fiat</p>
-            <p className="mt-1 text-lg font-bold text-ink tabular-nums">
+            <p className={`${CARD_LABEL} mt-3`}>Sats per fiat</p>
+            <p className={`mt-1 ${CARD_VALUE.tight} text-ink tabular-nums`}>
               {satsPerFiat.toLocaleString('en-GB')}&nbsp;sats per {CURRENCY_META[currency]?.sym ?? '$'}1
             </p>
           </>

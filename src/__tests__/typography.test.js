@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { FONT_STACKS, FONT_ROLES, SATORI_FONT_FAMILY, TABULAR } from '../lib/typography.js'
+import {
+  FONT_STACKS, FONT_ROLES, SATORI_FONT_FAMILY, TABULAR,
+  CARD, CARD_LABEL, CARD_LABEL_SM, CARD_VALUE, CARD_VALUE_TIERS, CARD_ROOT_FORBIDDEN,
+} from '../lib/typography.js'
 
 // The type decision, held to the four claims it makes.
 //
@@ -22,6 +25,16 @@ import { FONT_STACKS, FONT_ROLES, SATORI_FONT_FAMILY, TABULAR } from '../lib/typ
 const SRC = resolve('src')
 const INDEX_CSS = join(SRC, 'index.css')
 const COMPONENTS = join(SRC, 'components')
+
+/** Every `.js`/`.jsx` under `src/`, tests excluded — they assert *about* these. */
+function sourceFiles(dir = SRC) {
+  return readdirSync(dir).flatMap(name => {
+    const full = join(dir, name)
+    if (statSync(full).isDirectory()) return name === '__tests__' ? [] : sourceFiles(full)
+    return /\.jsx?$/.test(full) ? [full] : []
+  })
+}
+const rel = (f) => f.replace(`${SRC}/`, 'src/')
 
 /** Collapse whitespace so a wrapped CSS declaration compares to a JS string. */
 const normalise = (s) => s.replace(/\s+/g, ' ').replace(/"/g, "'").trim()
@@ -46,14 +59,6 @@ describe('the stylesheet and the module agree', () => {
 })
 
 describe('nothing outside the module writes its own font stack', () => {
-  function sourceFiles(dir) {
-    return readdirSync(dir).flatMap(name => {
-      const full = join(dir, name)
-      if (statSync(full).isDirectory()) return name === '__tests__' ? [] : sourceFiles(full)
-      return /\.jsx?$/.test(full) ? [full] : []
-    })
-  }
-  const rel = (f) => f.replace(`${SRC}/`, 'src/')
   const ALLOWED = new Set([join(SRC, 'lib/typography.js')])
 
   it('names no font family in src', () => {
@@ -111,7 +116,10 @@ describe('live figures have tabular figures', () => {
     // the page, and it was the one element with no tabular figures at all while
     // the vibe breakdown beside it had them.
     const body = readFileSync(join(COMPONENTS, 'BtcPriceCard.jsx'), 'utf8')
-    expect(body).toMatch(new RegExp(`text-2xl font-bold text-accent ${TABULAR}[^"]*">\\{value\\}`))
+    // The size now comes from the value scale, so this pins the pair — the
+    // headline tier *and* the tabular figures — on the element rendering the
+    // price, rather than a literal that has moved into `typography.js`.
+    expect(body).toMatch(new RegExp(`CARD_VALUE\\.lead\\} text-accent ${TABULAR}\`\\}>\\{value\\}`))
   })
 
   it('found the cards to check', () => {
@@ -133,5 +141,115 @@ describe('the Satori exception', () => {
     const og = readFileSync(resolve('api/lib/ogView.js'), 'utf8')
     expect(og).toContain(`fontFamily: '${SATORI_FONT_FAMILY}'`)
     expect(og).not.toContain('FONT_STACKS')
+  })
+})
+
+describe('the card label is written once', () => {
+  // It was copy-pasted 36 times across 16 files, and the one call site that had
+  // named it kept the constant local and unexported.
+  const LABEL_LITERAL = 'text-xs font-semibold uppercase tracking-widest'
+
+  it('appears nowhere in src/ as a hand-written string', () => {
+    const offenders = sourceFiles()
+      .filter(f => f !== join(SRC, 'lib', 'typography.js'))
+      .filter(f => readFileSync(f, 'utf8').includes(LABEL_LITERAL))
+      .map(rel)
+    expect(offenders, 'these restate the label; import CARD_LABEL').toEqual([])
+  })
+
+  it('is actually used, so the check above cannot pass by the label being gone', () => {
+    const users = sourceFiles().filter(f => /\bCARD_LABEL\b/.test(readFileSync(f, 'utf8')))
+    expect(users.length).toBeGreaterThan(10)
+  })
+
+  it('carries its colour, because that half never varied', () => {
+    // All 36 were `text-quiet`, byte-identical — the opposite of ICON_BUTTON,
+    // which leaves colour out precisely because settings and actions differ.
+    expect(CARD_LABEL).toContain('text-quiet')
+  })
+
+  it('keeps the smaller tier a named decision rather than a second scale', () => {
+    expect(CARD_LABEL_SM).toContain('text-[10px]')
+    const offenders = sourceFiles()
+      .filter(f => f !== join(SRC, 'lib', 'typography.js'))
+      .filter(f => /"[^"]*text-\[10px\][^"]*uppercase/.test(readFileSync(f, 'utf8')))
+      .map(rel)
+    expect(offenders, 'these hand-write the small label tier').toEqual([])
+  })
+})
+
+describe('the value scale', () => {
+  it('is four roles, and text-xl is not one of them', () => {
+    // Five treatments served this role across nineteen sites. `text-xl` is the
+    // one with no role to describe it, so it does not survive the pass.
+    expect(CARD_VALUE_TIERS).toEqual(['hero', 'lead', 'base', 'dense', 'tight'])
+    for (const cls of Object.values(CARD_VALUE)) {
+      expect(cls).toContain('font-bold')
+      expect(cls).not.toContain('text-xl ')
+    }
+  })
+
+  it('never puts a headline figure at text-sm', () => {
+    // `NetworkHeartbeatCard` rendered the block height at 14px on a phone —
+    // smaller than the label above it — and `RecentBlocksCard` carried the same
+    // class inside a `hidden lg:block` subtree where it could never render at
+    // all. Both are the `dense` tier now.
+    for (const cls of Object.values(CARD_VALUE)) expect(cls).not.toMatch(/\btext-sm\b/)
+    const offenders = sourceFiles()
+      .filter(f => /text-sm font-bold/.test(readFileSync(f, 'utf8')))
+      .map(rel)
+    expect(offenders, 'a big number at 14px').toEqual([])
+  })
+
+  it('leaves colour and tabular-nums at the call site', () => {
+    for (const cls of Object.values(CARD_VALUE)) {
+      expect(cls).not.toContain('text-accent')
+      expect(cls).not.toContain('text-ink')
+      expect(cls).not.toContain(TABULAR)
+    }
+  })
+})
+
+describe('the card shell', () => {
+  // Overlays, not cards in the grid. A modal has a border, a max-width and a
+  // scrim behind it; the alerts popover has a shadow and sits over a still-
+  // usable page. Forcing the card shell on either would drop those and give a
+  // modal responsive padding it has no reason to want.
+  const OVERLAYS = ['NewsletterModal.jsx', 'PriceAlertsPanel.jsx']
+
+  it('is one padding scheme, not four', () => {
+    expect(CARD).toBe('rounded-2xl bg-surface p-4 md:p-6')
+  })
+
+  it('is what every card in the grid uses', () => {
+    const offenders = readdirSync(COMPONENTS)
+      .filter(n => n.endsWith('.jsx') && !OVERLAYS.includes(n))
+      .filter(n => /rounded-2xl bg-surface/.test(readFileSync(join(COMPONENTS, n), 'utf8')))
+    expect(offenders, 'these hand-write the card shell; import CARD').toEqual([])
+  })
+
+  it('still describes the two overlays it exempts', () => {
+    // An exemption nobody re-checks is how a list rots — the same rule the
+    // Satori exception above is held to.
+    for (const n of OVERLAYS) {
+      expect(readFileSync(join(COMPONENTS, n), 'utf8')).toContain('rounded-2xl bg-surface')
+    }
+  })
+
+  it('leaves a card no opinion about where it sits', () => {
+    // Six roots baked their own mt-4/mb-4 in while the rest relied on the
+    // grid's gap-4, and two hid themselves at a breakpoint — so a card could
+    // not be moved, or shown at another width, without editing the card.
+    const offenders = []
+    for (const n of readdirSync(COMPONENTS).filter(f => f.endsWith('.jsx'))) {
+      const body = readFileSync(join(COMPONENTS, n), 'utf8')
+      for (const m of body.matchAll(/className=\{?[`"]([^`"]*rounded-2xl bg-surface[^`"]*)[`"]/g)) {
+        if (CARD_ROOT_FORBIDDEN.test(m[1])) offenders.push(`${n}: ${m[1]}`)
+      }
+      for (const m of body.matchAll(/className=\{`\$\{CARD\}([^`]*)`\}/g)) {
+        if (CARD_ROOT_FORBIDDEN.test(m[1])) offenders.push(`${n}: CARD +${m[1]}`)
+      }
+    }
+    expect(offenders, 'a card root carrying its own margin or breakpoint').toEqual([])
   })
 })

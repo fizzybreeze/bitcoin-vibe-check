@@ -41,7 +41,7 @@ const TITLED_CARDS = [
   ['Cycle Indicators',           <CycleIndicatorsCard chainData={null} price={100000} ma200={90000} />],
   ['Support Bitcoin Vibe Check', <DonationCard />],
   ['Market Sentiment',           <MarketSentimentCard fng={{ value: '55', value_classification: 'Greed' }} />],
-  ['OUR SUPPORTERS ⚡',          <MobileSupportersCard donors={[]} />],
+  ['Our Supporters ⚡',          <MobileSupportersCard donors={[]} />],
   ['Network Fees',               <NetworkFeesCard fees={null} mempool={null} lightning={null} price={100000} currency="usd" />],
   ['Network Heartbeat',          <NetworkHeartbeatCard blockHeight={900000} difficulty={null} lastBlockTs={null} />],
   ['Network Health',             <NetworkPulseCard difficulty={null} hashrate={null} hashrateHistory={[]} />],
@@ -85,9 +85,16 @@ const COMPONENTS = resolve('src/components')
 const UNTITLED_BY_DESIGN = ['HalvingCountdown.jsx']
 
 describe('every card carries its own heading', () => {
+  // A card is anything wearing the card shell — which since v1.8.7 is the
+  // `CARD` constant rather than the literal. Both are matched: the two overlays
+  // still hand-write `rounded-2xl bg-surface` because a modal and a popover are
+  // not grid cards, and they should stay in this scan.
   const cards = readdirSync(COMPONENTS)
     .filter(f => f.endsWith('.jsx'))
-    .filter(f => readFileSync(join(COMPONENTS, f), 'utf8').includes('rounded-2xl bg-surface'))
+    .filter(f => {
+      const body = readFileSync(join(COMPONENTS, f), 'utf8')
+      return body.includes('rounded-2xl bg-surface') || /\bCARD\b[^_]/.test(body)
+    })
 
   it('found the cards to scan', () => {
     // A scan that matched nothing would pass every assertion below it.

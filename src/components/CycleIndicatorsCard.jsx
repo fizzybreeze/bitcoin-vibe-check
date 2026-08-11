@@ -2,8 +2,7 @@ import { fmtCurrency } from '../utils.js'
 import { calcMayerMultiple, calcPowerLawFairValue } from '../utils/cycleCalculations.js'
 import CardTooltip from './CardTooltip.jsx'
 import { mvrvBand, powerLawBand } from '../lib/scales.js'
-
-const LABEL = 'text-xs font-semibold uppercase tracking-widest text-quiet'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const MVRV_TOOLTIP      = "Compares Bitcoin's market cap to the aggregate cost basis of all coins. Above 3.5 has historically marked cycle tops; below 1 has marked bottoms. Near 1 means the market is close to its collective break-even."
 const POWER_LAW_TOOLTIP = "A long-term model treating adoption as a power function of time since Bitcoin's genesis block. Shows where price sits relative to a historical fair value range. A model, not a prediction — label it accordingly."
@@ -31,8 +30,8 @@ function powerLawInterpretation(currentPrice, fairValue) {
 function MetricRow({ label, value, context, contextCls = 'text-muted', tooltip }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <p className={`${LABEL} flex items-center`}>{label}{tooltip && <CardTooltip text={tooltip} />}</p>
-      <p className="text-xl font-bold text-accent tabular-nums">{value ?? '—'}</p>
+      <p className={`${CARD_LABEL} flex items-center`}>{label}{tooltip && <CardTooltip text={tooltip} />}</p>
+      <p className={`${CARD_VALUE.dense} text-accent tabular-nums`}>{value ?? '—'}</p>
       {context && <p className={`text-xs tabular-nums ${contextCls}`}>{context}</p>}
     </div>
   )
@@ -48,8 +47,8 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
   const isOhlcReady = !ohlcLoading && !ohlcError && ma200 != null
 
   return (
-    <div data-testid="card-cycle-indicators" className="rounded-2xl bg-surface p-4 md:p-6 flex flex-col gap-4 h-full">
-      <h2 className={LABEL}>Cycle Indicators</h2>
+    <div data-testid="card-cycle-indicators" className={`${CARD} flex flex-col gap-4 h-full`}>
+      <h2 className={CARD_LABEL}>Cycle Indicators</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 md:divide-x divide-line-soft">
         {/* Top-left: MVRV Ratio */}

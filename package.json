@@ -1,7 +1,7 @@
 {
   "name": "bitcoin-vibe-check",
   "private": true,
-  "version": "1.8.6",
+  "version": "1.8.7",
   "type": "module",
   "engines": {
     "node": "24.x"

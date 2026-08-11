@@ -7,6 +7,7 @@ import CardTooltip from './CardTooltip.jsx'
 import ChartTooltip from './ChartTooltip.jsx'
 import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
+import { CARD, CARD_LABEL } from '../lib/typography.js'
 
 const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable."
 
@@ -40,10 +41,10 @@ export default function PriceChartCard({
   const xInterval = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
 
   return (
-    <div className="rounded-2xl bg-surface p-6 h-full">
+    <div className={`${CARD} h-full`}>
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">
+          <h2 className={`${CARD_LABEL} flex items-center`}>
             Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
           </h2>
           {chartChange != null && !chartLoading && (

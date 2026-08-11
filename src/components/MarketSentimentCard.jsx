@@ -5,6 +5,7 @@ import Skeleton from './Skeleton.jsx'
 import { fngLabelClass } from '../lib/scales.js'
 import { PALETTE } from '../lib/palette.js'
 import useTheme from '../hooks/useTheme.js'
+import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
 const FNG_TOOLTIP = 'A composite sentiment score from 0 (extreme fear) to 100 (extreme greed). Values below 25 have historically preceded recoveries; above 75 have preceded corrections. Measures crowd psychology, not fundamentals.'
 
@@ -16,15 +17,15 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
   const fngClass = fng?.value_classification ?? null
 
   return (
-    <div data-testid="card-market-sentiment" className="rounded-2xl bg-surface p-6 h-full">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Market Sentiment</h2>
+    <div data-testid="card-market-sentiment" className={`${CARD} h-full`}>
+      <h2 className={CARD_LABEL}>Market Sentiment</h2>
 
       <div className="mt-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-quiet flex items-center">Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
+        <p className={`${CARD_LABEL} flex items-center`}>Fear &amp; Greed<CardTooltip text={FNG_TOOLTIP} /></p>
         <div className="mt-2">
           {loading || fngScore == null
             ? <Skeleton className="h-8 w-10" />
-            : <p className="text-2xl font-bold text-accent tabular-nums">{fngScore}</p>
+            : <p className={`${CARD_VALUE.base} text-accent tabular-nums`}>{fngScore}</p>
           }
           <p className={`mt-1 text-sm ${fngLabelClass(fngClass)}`}>
             {fngClass ?? (loading ? ' ' : '—')}

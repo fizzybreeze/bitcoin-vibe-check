@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { CARD, CARD_LABEL } from '../lib/typography.js'
 
 export default function DonationCard() {
   const [name, setName]           = useState('')
@@ -32,8 +33,8 @@ export default function DonationCard() {
   }
 
   return (
-    <div className="rounded-2xl bg-surface p-6 mt-4">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-quiet">Support Bitcoin Vibe Check</h2>
+    <div className={CARD}>
+      <h2 className={CARD_LABEL}>Support Bitcoin Vibe Check</h2>
       <div className="mt-3 space-y-1">
         <p className="text-sm text-quiet">
           1. Send any amount to Strike:{' '}
