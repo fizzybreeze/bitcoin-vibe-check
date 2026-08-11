@@ -297,11 +297,20 @@ must never return nothing, and html2canvas needs the face loaded in the document
 before it rasterises. Miss either and the preview card or the share image drifts
 away from the site with nothing failing to say so.
 
-**`api/lib/ogView.js` remains the one surface that cannot follow** — Satori's
-bundled Geist, which we do not supply, which has no weight axis and no ₿ (the
-reason `ogImage.test.js` pins the card's allowed character set). That exception
-is recorded in `typography.js` and re-asserted by `typography.test.js`, so it
-stays a decision rather than a surprise.
+**The title is no longer part of that question.** v1.11.0 draws the wordmark
+from a ten-glyph pixel alphabet (`src/lib/wordmark.js`) rather than setting it,
+so the header, the share canvas, the live preview card and the static fallback
+all render the same picture with no font to resolve. That narrows the two
+standing requirements below to *body* type: a display face would still have to
+carry tabular figures and still have to reach both export surfaces, but it can
+no longer take the product's name with it when it fails.
+
+**`api/lib/ogView.js` remains the one surface whose *text* cannot follow** —
+Satori's bundled Geist, which we do not supply, which has no weight axis and no ₿
+(the reason `ogImage.test.js` pins the card's allowed character set). That
+exception is recorded in `typography.js` and re-asserted by `typography.test.js`,
+so it stays a decision rather than a surprise. Its title escaped by ceasing to be
+text at all, which is not a route the rest of the card can take.
 
 **What the tabular pass cannot be checked by, recorded so nobody re-learns it.**
 `font-variant-numeric` only does anything if the resolved face has a `tnum`

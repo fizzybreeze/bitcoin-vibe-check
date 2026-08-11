@@ -82,8 +82,14 @@ export const FONT_ROLES = Object.keys(FONT_STACKS)
  * `api/lib/ogView.js` draws on Satori's bundled Geist. We do not supply that
  * font and cannot reach it from the browser, it has no weight axis (its
  * hierarchy is size and letter-spacing alone) and it has no U+20BF — which is
- * why `ogImage.test.js` pins the card's whole allowed character set and why the
- * card spells "Bitcoin" out rather than drawing a ₿.
+ * why `ogImage.test.js` pins the card's whole allowed character set and why
+ * every string on the card avoids that character.
+ *
+ * **The title escaped this by ceasing to be text.** Since v1.11.0 the wordmark
+ * is drawn from `src/lib/wordmark.js` and reaches Satori as an `<img>`, so the
+ * preview card and the site show the same picture rather than the same words in
+ * two faces. That is not a route the rest of the card can take — a price is a
+ * number, not a mark — so this exception still stands for everything else.
  *
  * Changing this means shipping font buffers into a serverless function whose
  * first constraint is that it must never return nothing. That is a real change
