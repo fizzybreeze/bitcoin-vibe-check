@@ -53,6 +53,22 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      # Publishes the day's vibe to Nostr. Guarded rather than unconditional:
+      # `shouldPublish` refuses a stale snapshot, an unscoreable day, and a 24h
+      # move past ±10% — the crash case, where a cheerful scheduled post reads
+      # worst. The guard's reason lands in this run's summary either way.
+      #
+      # **The kill switch is the secret.** With no NOSTR_PRIVATE_KEY this is a
+      # dry run that prints the post and sends nothing, so switching it off is
+      # deleting one secret and switching it on the first time is reviewable.
+      - name: Post the daily vibe
+        if: ${{ !cancelled() }}
+        run: node scripts/nostr-post.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NOSTR_PRIVATE_KEY: ${{ secrets.NOSTR_PRIVATE_KEY }}
+
       # The copy-paste path. The step summary above is the one you read on a
       # phone; this is the one you paste into beehiiv.
       - name: Upload the draft

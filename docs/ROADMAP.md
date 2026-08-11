@@ -269,12 +269,20 @@ newsletter archive ever needs the card frozen per day, that is the change to
 make** — and it wants a rasteriser and somewhere to put the binaries, which is a
 real item rather than a follow-up.
 
-**The daily *post* half of this item is not done and is not scheduled.** §4.4
-originally paired the newsletter draft with an automated social post. The draft
-is safe because a person reads it before anything leaves; a post is not, and the
-"fine 364 days a year and mortifying on the day of a crash" argument applies to
-it with full force. If it is ever picked up it should reuse
-`buildNewsletterDraft`'s output rather than composing a second opinion.
+**The daily post half shipped in v1.9.1, to Nostr, behind a guard.** This file
+argued against it — a draft is safe because a person reads it before anything
+leaves, and a post is not — and that objection was overruled deliberately, so it
+became a guard rather than a veto: no post on a day the market moved past ±10%,
+none on a stale snapshot, none on a day whose volatility cannot even be
+measured. The reasoning is in `scripts/lib/socialPost.js` and the version
+history, including the distinction the guard rests on — it refuses on *velocity*,
+not on *level*, because extreme fear is when this dashboard is most useful and
+"the vibe is 8, Ice Cold" is an honest reading rather than a gaffe.
+
+**The thing no gate here can check** is that a post reached a relay: nothing in
+CI publishes, so the first real post is the first evidence the transport works.
+That is what the dry run is for — with no `NOSTR_PRIVATE_KEY` the step composes
+and prints without sending, so the first run is readable before it is public.
 
 ## 5. Later — deepen
 
@@ -293,9 +301,14 @@ is why §3.2 matters now rather than later.
 **More currencies and locales.** Kraken carries more fiat pairs than the five
 currently subscribed, and the marginal cost per pair is close to zero.
 
-**Nostr-native.** Zaps alongside the Strike link, the daily vibe published to a
-relay, optional NIP-07. The audience overlap with an opinionated no-login
-Bitcoin dashboard is about as high as it gets.
+**Nostr-native. The daily vibe reached a relay in v1.9.1**; the rest of this
+item has not. What is left is the half that touches the *app* rather than a
+cron: zaps alongside the Strike link, and optional NIP-07 so a visitor can be
+recognised without an account. Both are real design work — NIP-07 in particular
+has to survive §1's no-login filter, which it plausibly does (a signer extension
+is not an account this site holds) but which needs the argument made rather than
+assumed. The audience overlap with an opinionated no-login Bitcoin dashboard is
+about as high as it gets.
 
 **The typeface is chosen, and the choice is the platform UI face.** Shipped in
 v1.8.5; see the version-history row. What is worth keeping here is the shape of
