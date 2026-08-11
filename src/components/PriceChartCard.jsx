@@ -5,6 +5,7 @@ import { PALETTE } from '../lib/palette.js'
 import useTheme from '../hooks/useTheme.js'
 import CardTooltip from './CardTooltip.jsx'
 import ChartTooltip from './ChartTooltip.jsx'
+import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
 
 const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable."
@@ -48,9 +49,10 @@ export default function PriceChartCard({
           {chartChange != null && !chartLoading && (
             <span
               data-testid="chart-range-change"
-              className={`text-xs font-semibold tabular-nums ${chartChange >= 0 ? 'text-up' : 'text-down'}`}
+              className={`inline-flex items-center gap-1 text-xs font-semibold tabular-nums ${chartChange >= 0 ? 'text-up' : 'text-down'}`}
             >
-              {chartChange >= 0 ? '▲' : '▼'}&nbsp;{chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
+              <Icon name={chartChange >= 0 ? 'triangle-up' : 'triangle-down'} size="sm" />
+              {chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
             </span>
           )}
         </div>
@@ -75,16 +77,7 @@ export default function PriceChartCard({
             aria-label="Refresh chart"
             className="ml-1 rounded-full p-1 text-quiet transition-colors hover:text-ink-dim disabled:opacity-30"
           >
-            <svg
-              width="13" height="13" viewBox="0 0 13 13"
-              fill="none" stroke="currentColor" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              className={chartLoading ? 'animate-spin' : ''}
-              aria-hidden="true"
-            >
-              <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-              <polyline points="11.5 1.5 11.5 5 8 5"/>
-            </svg>
+            <Icon name="refresh" size="md" className={chartLoading ? 'animate-spin' : ''} />
           </button>
         </div>
         <p className="text-xs text-quiet">Chart in USD</p>
@@ -102,15 +95,7 @@ export default function PriceChartCard({
             aria-label="Retry chart"
             className="text-quiet transition-colors hover:text-muted"
           >
-            <svg
-              width="13" height="13" viewBox="0 0 13 13"
-              fill="none" stroke="currentColor" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M11.5 6.5a5 5 0 1 1-1.33-3.35"/>
-              <polyline points="11.5 1.5 11.5 5 8 5"/>
-            </svg>
+            <Icon name="refresh" size="md" />
           </button>
         </div>
       )}

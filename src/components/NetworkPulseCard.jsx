@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import CardTooltip from './CardTooltip.jsx'
+import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
 import { describeDifficulty } from './seriesLabel.js'
 
@@ -79,8 +80,9 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
               : <Skeleton className="h-8 w-20" />
             }
             {hashRate != null && hashRateTrend != null && (
-              <p className={`mt-1 text-xs font-medium ${hashRateTrend >= 0 ? 'text-up' : 'text-down'}`}>
-                {hashRateTrend >= 0 ? '▲' : '▼'}&nbsp;{hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
+              <p className={`mt-1 flex items-center gap-1 text-xs font-medium tabular-nums ${hashRateTrend >= 0 ? 'text-up' : 'text-down'}`}>
+                <Icon name={hashRateTrend >= 0 ? 'triangle-up' : 'triangle-down'} size="sm" />
+                {hashRateTrend >= 0 ? '+' : ''}{hashRateTrend.toFixed(1)}% (30d)
               </p>
             )}
           </div>

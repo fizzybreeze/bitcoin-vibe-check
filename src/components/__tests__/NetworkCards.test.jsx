@@ -81,16 +81,22 @@ describe('NetworkPulseCard', () => {
   // colour, which makes it the part most worth pinning.
   it('renders the hash rate and its 30d trend once the fetch lands', async () => {
     stubFetch({ currentHashrate: 812e18 })
-    render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={4.25} />)
+    const { container } = render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={4.25} />)
     expect(await screen.findByText('812.0')).toBeTruthy()
-    expect(screen.getByText(/▲.*\+4\.3% \(30d\)/)).toBeTruthy()
+    expect(screen.getByText(/\+4\.3% \(30d\)/)).toBeTruthy()
+    // The direction used to be a `▲` inside the text node, so the regex above
+    // carried it. It is an icon now, and `aria-hidden` — so the arrow is
+    // asserted by the name it renders rather than by a character a device
+    // without the glyph would have drawn as a tofu box anyway.
+    expect(container.querySelector('[data-icon="triangle-up"]')).toBeTruthy()
   })
 
   it('marks a falling hash-rate trend red rather than green', async () => {
     stubFetch({ currentHashrate: 812e18 })
-    render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={-4.25} />)
-    const trend = await screen.findByText(/▼.*-4\.3% \(30d\)/)
+    const { container } = render(<NetworkPulseCard difficulty={null} loading={false} hashRateTrend={-4.25} />)
+    const trend = await screen.findByText(/-4\.3% \(30d\)/)
     expect(trend.className).toContain('text-down')
+    expect(container.querySelector('[data-icon="triangle-down"]')).toBeTruthy()
   })
 })
 

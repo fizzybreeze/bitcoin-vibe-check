@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Analytics } from '@vercel/analytics/react'
-import './App.css'
 import { usePersistedState } from './hooks/usePersistedState.js'
+import Icon from './components/Icon.jsx'
+import { ICON_BUTTON } from './lib/icons.js'
 import ShareButton from './components/ShareButton.jsx'
 import ShareModal from './components/ShareModal.jsx'
 import PriceAlertsButton from './components/PriceAlertsButton.jsx'
@@ -705,20 +706,9 @@ export default function App() {
           <button
             onClick={handleSoundToggle}
             aria-label={soundEnabled ? 'Disable sound' : 'Enable sound'}
-            className={`flex items-center justify-center w-7 h-7 rounded-full transition-colors ${soundEnabled ? 'text-accent' : 'text-quiet hover:text-muted'}`}
+            className={`${ICON_BUTTON} ${soundEnabled ? 'text-accent' : 'text-quiet hover:text-muted'}`}
           >
-            {soundEnabled ? (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                <path d="M1 5.5v5h3l4 3v-11l-4 3H1z"/>
-                <path d="M11.5 5.5a4 4 0 010 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                <path d="M1 5.5v5h3l4 3v-11l-4 3H1z"/>
-                <line x1="10.5" y1="6" x2="14.5" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                <line x1="14.5" y1="6" x2="10.5" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            )}
+            <Icon name={soundEnabled ? 'volume-on' : 'volume-off'} size="lg" />
           </button>
           <ShareButton onClick={() => setIsShareOpen(true)} />
           <PriceAlertsButton
@@ -736,7 +726,9 @@ export default function App() {
                 <option key={c} value={c}>{c.toUpperCase()}</option>
               ))}
             </select>
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-accent text-xs">▾</span>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex text-accent" aria-hidden="true">
+              <Icon name="chevron-down" size="sm" />
+            </span>
           </div>
           <p className="flex items-center gap-1.5 text-sm text-quiet">
             {wsLive ? (

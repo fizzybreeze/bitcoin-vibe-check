@@ -5,6 +5,7 @@ import { useShareImage } from '../hooks/useShareImage.js'
 import { SHARE_CARDS } from './shareCards.js'
 import { PALETTE, resolveTheme } from '../lib/palette.js'
 import { FONT_STACKS } from '../lib/typography.js'
+import Icon from './Icon.jsx'
 
 /**
  * A token as rgba. Inline styles cannot use Tailwind's `/30` opacity syntax,
@@ -66,9 +67,9 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
         <button
           onClick={onClose}
           aria-label="Close"
-          style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: p.quiet, fontSize: 14, cursor: 'pointer', padding: 4, lineHeight: 1 }}
+          style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: p.quiet, display: 'flex', cursor: 'pointer', padding: 4, lineHeight: 1 }}
         >
-          ✕
+          <Icon name="close" size="md" />
         </button>
 
         <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>Share Dashboard</h2>
@@ -180,25 +181,20 @@ export default function ShareModal({ isOpen, onClose, cardData, sentimentSummary
 }
 
 function ShareIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
-    </svg>
-  )
+  return <Icon name="share" size="md" />
 }
 
+/**
+ * The keyframes are declared here rather than reached for from Tailwind because
+ * this modal is styled inline throughout — but the *rule* they are subject to
+ * is the blanket reduced-motion block in `index.css`, which is why this stays
+ * an ordinary CSS animation rather than a JS one.
+ */
 function SpinnerIcon() {
   return (
-    <svg
-      width="14" height="14" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-      style={{ animation: 'spin 0.8s linear infinite' }}
-      aria-hidden="true"
-    >
+    <>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-    </svg>
+      <Icon name="spinner" size="md" style={{ animation: 'spin 0.8s linear infinite' }} />
+    </>
   )
 }
