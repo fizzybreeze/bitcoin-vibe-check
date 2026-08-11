@@ -343,50 +343,39 @@ real and that environment cannot show the fix — the eight visual baselines
 passing this change proves nothing about how it renders on a phone, the same way
 v1.7.12 found them blind to contrast.
 
-**A full UI pass — the layout half of what v1.8.0 did for colour.** Colour is a
-system now; type and layout are still whatever each card decided at the time.
-It named three countable problems.
+**The layout pass is done, and two of its three complaints were resolved by
+looking rather than by changing anything.** The icons shipped in v1.8.6, the
+card label and the card shell in v1.8.7. The two questions left were held back
+deliberately as design rather than consolidation, and both are now settled:
 
-**The icon half shipped in v1.8.6; see the version-history row.** Thirteen
-inline `<svg>`s across eight files, at five sizes, five viewBoxes and five
-stroke weights, became `src/lib/icons.js` plus one `Icon` component on a single
-box at a single weight with three sizes — and the eight controls that were text
-glyphs (`✕`, `▾`, `▲`/`▼`) became icons, which was the one genuine defect in
-that list rather than an inconsistency. The four copies of the header button
-shell became `ICON_BUTTON`. `src/App.css` went with it.
+- **The `md:` versus `lg:` grid split is fine and stays.** The dashboard was
+  looked at in a browser at 820px — the width where `md:` is on and `lg:` is
+  off, so the first two rows are multi-column and the last two are stacked. That
+  reads correctly. The complaint was that the inconsistency *looked* like drift;
+  having actually been viewed, it is not worth a change that would repack the
+  network row into ~253px columns, where the four-across fee grid would be the
+  thing that broke.
+- **The uneven `h-full` was a false alarm, and the measurement is the useful
+  part.** The claim here was that "some rows have equal-height cards and others
+  do not". Measured at 1100px, *every* card row is level regardless: Network
+  Fees carries no `h-full` and renders at exactly the same 371px as the two
+  cards beside it that do, and Supply Issued and the halving strip match at
+  126px with neither carrying it. What does the work is CSS Grid's default
+  `align-items: stretch`, which makes `h-full` a **no-op on a direct grid
+  child** — it stays load-bearing one level down, where a card sits inside a
+  wrapper div. The classes are therefore left alone rather than swept out, and
+  `e2e/responsive.spec.js` now asserts the property the complaint actually
+  cared about (rows look level) instead of the mechanism it guessed at.
 
-**The label and shell halves shipped in v1.8.7; see the version-history row.**
-The card label became `CARD_LABEL` (36 hand-written copies, 16 files), the
-`text-[10px]` second scale became a named `CARD_LABEL_SM` rather than being
-flattened away, the five "big number" treatments became a four-role
-`CARD_VALUE` scale — which is where the 14px block height on a phone was found
-— and the four padding schemes became one `CARD`. Card roots gave their `mt-4`
-and their breakpoint visibility back to `App.jsx`.
-
-**What is left of this item is design rather than consolidation**, which is why
-it was deliberately not bundled with the above:
-
-- **The grid goes multi-column at `md:` in the first two rows and `lg:` in the
-  last two.** Picking one changes what a tablet sees, which is a decision about
-  the product rather than a tidy-up, and nobody has looked at the dashboard at
-  820px to make it.
-- **`h-full` is applied unevenly**, so some rows have equal-height cards and
-  others do not. Same argument: which rows *should* be equal-height is a design
-  question.
-- **Two responsive-duplicate pairs live as separate files**
-  (`NetworkHeartbeatCard`/`RecentBlocksCard`,
-  `SupporterTickerCard`/`MobileSupportersCard`) and carry duplicated
-  presentation classes between them. v1.8.7 found the concrete cost of this —
-  the two had drifted to different value treatments, and one of them was styling
-  a subtree that could never render — so the case for merging them is now
-  evidence rather than principle. It is still a real refactor with real
-  behaviour risk, not a pass.
-
-Both cheap deletions this item carried are now done: `public/icons.svg` went
-with the v1.8.1 mark, and the 0-byte-but-still-imported `src/App.css` went with
-v1.8.6's icons. Expect to regenerate all **eight** visual baselines (four cards × two themes as of v1.8.0) — that is what
-`visual-baselines.yml` exists for, and `CLAUDE.md` records the trap that follows
-it.
+**One thing is carried forward, and it is a refactor rather than a pass.** The
+two responsive-duplicate pairs — `NetworkHeartbeatCard`/`RecentBlocksCard` and
+`SupporterTickerCard`/`MobileSupportersCard` — are still separate files carrying
+duplicated presentation classes between them. v1.8.7 turned the case for merging
+them from principle into evidence: the two had drifted to *different* value
+treatments, and one of them was styling a subtree inside `hidden lg:block` that
+could never render. It is real behaviour risk (each pair swaps at a breakpoint
+and the swap is asserted in `responsive.spec.js`), so it wants its own change
+with its own tests rather than riding along with a class consolidation.
 
 **A character beside the Vibe Score, reacting to the reading.** Pixel art rather
 than another geometric SVG. The Vibe Score is the thing this dashboard has that

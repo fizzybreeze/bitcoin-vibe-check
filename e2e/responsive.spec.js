@@ -20,6 +20,57 @@ test.describe('Responsive layout', () => {
     await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
   })
 
+  test('every card row renders equal-height cards', async ({ page }) => {
+    // Measured rather than assumed, and the measurement corrected the roadmap.
+    // §5 claimed "`h-full` is applied unevenly, so some rows have equal-height
+    // cards and others do not". At 1100px every card row is equal-height
+    // regardless: Network Fees carries no `h-full` and renders at exactly the
+    // same 371px as the two cards beside it that do, and Supply Issued and the
+    // halving strip match at 126px with neither carrying it.
+    //
+    // What is actually doing the work is CSS Grid's default `align-items:
+    // stretch`, which makes `h-full` a no-op on a *direct* grid child. It stays
+    // load-bearing one level down — `PriceChartCard` and `RecentBlocksCard` sit
+    // inside wrapper divs, where the wrapper stretches and the card would not —
+    // which is why the classes are left alone rather than swept out.
+    //
+    // So this pins the property the roadmap cared about (rows look level)
+    // instead of the mechanism it guessed at (every card carries `h-full`).
+    const cardRows = await page.evaluate(() => {
+      const out = []
+      for (const grid of document.querySelectorAll('div.grid')) {
+        const kids = [...grid.children]
+        // A card row is one whose children are, or contain, card shells. The
+        // vibe-score breakdown is a grid too, and is deliberately not one —
+        // it is `grid-cols-2` even on a phone, which is what made an earlier
+        // version of the guard below fire at the mobile viewport.
+        const isCardRow = kids.some(k =>
+          k.matches('.rounded-2xl.bg-surface') || k.querySelector('.rounded-2xl.bg-surface'))
+        if (!isCardRow || kids.length < 2) continue
+        out.push({
+          columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          heights: kids.map(k => Math.round(k.getBoundingClientRect().height)),
+          label: kids[0].querySelector('h2')?.textContent?.trim()
+            ?? kids[0].textContent.trim().slice(0, 24),
+        })
+      }
+      return out
+    })
+
+    // Guard first, and at both viewports: a selector that matched nothing would
+    // pass every assertion below it, which is the failure `cardHeadings.test.jsx`
+    // met in v1.8.7.
+    expect(cardRows.length, 'found no card rows to measure').toBeGreaterThan(1)
+
+    // Only rows that actually *are* rows. At 390px every card grid is
+    // `grid-cols-1`, so the children stack into implicit rows of their own and
+    // differing heights are correct rather than ragged.
+    for (const { heights, label, columns } of cardRows.filter(r => r.columns > 1)) {
+      expect(new Set(heights).size,
+        `"${label}" row (${columns} cols) is ragged: ${heights.join(', ')}px`).toBe(1)
+    }
+  })
+
   test('page does not scroll horizontally', async ({ page }) => {
     // The failure mode this exists for: one long unbroken string — a block
     // hash, an address — widening the document past the viewport, so the whole
