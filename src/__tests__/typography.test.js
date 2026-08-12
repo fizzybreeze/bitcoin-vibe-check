@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
-  FONT_STACKS, FONT_ROLES, SATORI_FONT_FAMILY, TABULAR,
+  FONT_STACKS, FONT_ROLES, EMOJI_FAMILIES, SATORI_FONT_FAMILY, TABULAR,
   CARD, CARD_LABEL, CARD_LABEL_SM, CARD_VALUE, CARD_VALUE_TIERS, CARD_ROOT_FORBIDDEN,
 } from '../lib/typography.js'
 
@@ -46,6 +46,20 @@ describe('the stylesheet and the module agree', () => {
     const declared = css.match(new RegExp(`--font-${role}:([^;]+);`))
     expect(declared, `--font-${role} is not declared in index.css`).not.toBeNull()
     expect(normalise(declared[1])).toBe(normalise(FONT_STACKS[role]))
+  })
+
+  it.each(FONT_ROLES)('--font-%s keeps its emoji tail', (role) => {
+    // Not decoration in either stack. `⚡` is in the supporters card's heading
+    // and in its ticker, and that heading is `CARD_LABEL` — which is mono as of
+    // v1.16.0, so the register change moved the one emoji in the app onto a
+    // stack that named no emoji face. Asserted on the module *and* the mirror,
+    // because a stack that resolves the character in the browser and not in the
+    // rasterised share image is the drift this file exists to stop.
+    for (const family of EMOJI_FAMILIES) {
+      expect(FONT_STACKS[role], `${role} dropped ${family}`).toContain(family)
+    }
+    expect(normalise(css.match(new RegExp(`--font-${role}:([^;]+);`))[1]))
+      .toBe(normalise(FONT_STACKS[role]))
   })
 
   it('declares them inside @theme, where Tailwind will read them', () => {
@@ -257,5 +271,45 @@ describe('the card shell', () => {
       }
     }
     expect(offenders, 'a card root carrying its own margin or breakpoint').toEqual([])
+  })
+})
+
+describe('the label register is mono', () => {
+  it('sets both label tiers in it, and only the label tiers', () => {
+    // The figures deliberately stay in the UI face — these are the numbers the
+    // dashboard exists to show, and moving them would be a re-skin rather than
+    // a register. If a value tier ever wants mono it is a decision to argue
+    // for, not one to arrive by copying a label.
+    expect(CARD_LABEL).toContain('font-mono')
+    expect(CARD_LABEL_SM).toContain('font-mono')
+    for (const tier of CARD_VALUE_TIERS) {
+      expect(CARD_VALUE[tier], `${tier} should stay in the UI face`).not.toContain('font-mono')
+    }
+  })
+
+  it('resolves through the mono token the module already declares', () => {
+    // `font-mono` is only a class because `--font-mono` is in `@theme`. A tier
+    // written as a literal stack, or against a token that is not declared,
+    // produces no utility at all and the label silently inherits the UI face —
+    // the same trap the band ladders record for composed class names.
+    expect(FONT_ROLES).toContain('mono')
+    expect(readFileSync(INDEX_CSS, "utf8")).toMatch(/--font-mono:/)
+  })
+
+  it('carries the register onto the share image, which is a copy of the app', () => {
+    // The one export surface that *can* follow. Left in the UI face it would be
+    // the single place the image and the card disagree — invisible on either
+    // one alone, which is how the two brand oranges survived.
+    const body = readFileSync(join(COMPONENTS, 'ShareCanvas.jsx'), 'utf8')
+    expect(body).toMatch(/fontFamily:\s*FONT_STACKS\.mono/)
+  })
+
+  it('leaves the two preview cards out of it, and says why', () => {
+    // Neither can follow, for one reason: Satori ships a single face, and the
+    // static fallback exists to mirror the live card's header. Recorded so the
+    // absence reads as a decision rather than as a surface somebody missed.
+    const og = readFileSync(resolve('api/lib/ogView.js'), 'utf8')
+    expect(og).toContain(`fontFamily: '${SATORI_FONT_FAMILY}'`)
+    expect(og).not.toMatch(/FONT_STACKS\.mono/)
   })
 })

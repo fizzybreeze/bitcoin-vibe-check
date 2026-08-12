@@ -22,6 +22,12 @@ import Wordmark from './Wordmark.jsx'
 // disagreed with the live card's for the same five bands.
 import { congestionBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
 import { FONT_STACKS } from '../lib/typography.js'
+// The raster the chart and the sparklines wear, in the one form html2canvas can
+// actually draw — see `crt.js`, which records the measurement. A share image
+// that carries the palette and the wordmark but none of the screen is the
+// treatment stopping at the edge of the app.
+import { grainBackground } from '../lib/crt.js'
+import Mark from './Mark.jsx'
 
 /** The three text styles every share card is built from, at one theme. */
 function shareStyles(p) {
@@ -33,6 +39,11 @@ function shareStyles(p) {
       letterSpacing: '0.1em',
       color: p.quiet,
       margin: 0,
+      // The label register is mono across the app as of this version, and this
+      // surface is a copy of the app. Left in the UI face it would be the one
+      // place the two disagree, in an image whose whole job is to look like the
+      // card it was taken from.
+      fontFamily: FONT_STACKS.mono,
     },
     value: {
       fontSize: 22,
@@ -65,6 +76,10 @@ function CardWrapper({ children, style, theme }) {
   const p = PALETTE[theme]
   return (
     <div style={{
+      // Opaque, and deliberately *not* grained: the raster is on the ground
+      // behind these, so the cards read as panels sitting on a screen rather
+      // than as eight small screens. See `EXPORT_GRAIN_LAYERS` — it is also
+      // what keeps every figure in the image clear of the contrast budget.
       background: p.surface,
       border: `1px solid ${p.line}`,
       borderRadius: 12,
@@ -420,7 +435,11 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
     <div style={{ position: 'absolute', left: '-9999px', top: 0, width: 1080 }} ref={forwardedRef}>
       <div style={{
         width: '100%',
-        background: p.ground,
+        // `backgroundColor` plus the raster, never the `background` shorthand:
+        // the shorthand resets `background-image`, so whichever is written
+        // second silently removes the first.
+        backgroundColor: p.ground,
+        ...grainBackground(p.ink),
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
@@ -439,7 +458,13 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 28, color: p.accent, lineHeight: 1 }}>₿</span>
+              {/* Drawn, not typed. This was `<span>₿</span>` — a device-font
+                  glyph, next to a wordmark that has been a picture since
+                  v1.11.0, in an image somebody posts and cannot re-render.
+                  `theme` because that span took `p.accent` and this image
+                  follows the reader's theme; the mark's own default is the
+                  fixed one an icon needs, which is the wrong one here. */}
+              <Mark size={28} theme={t} />
               <div>
                 {/* Drawn, not set — the same wordmark the header and the link
                     preview render, so a posted image cannot carry a title in a

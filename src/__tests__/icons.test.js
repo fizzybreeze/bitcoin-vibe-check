@@ -37,6 +37,11 @@ const ARTWORK = [
   // Not a component: it builds standalone SVG strings for the three export
   // surfaces, which cannot render React and must not each redraw the alphabet.
   { path: join(SRC, 'lib', 'wordmark.js'),              from: 'GLYPHS' },
+  // Not a drawing either — one tile of the CRT raster, built as an SVG string
+  // because that is the only expression of it html2canvas and Satori both draw
+  // (both decline a repeating gradient, one of them silently). Geometry, not
+  // artwork, and nothing an `<Icon>` could express.
+  { path: join(SRC, 'lib', 'crt.js'),                   from: 'SCANLINE_PITCH_PX' },
 ]
 const ARTWORK_PATHS = new Set(ARTWORK.map(a => a.path))
 const ICONS_MODULE = join(SRC, 'lib', 'icons.js')

@@ -188,6 +188,171 @@ export const GRAIN_ALPHA = 0.12
 export const GRAIN_MIN_SERIES_CONTRAST = 4.5
 
 /**
+ * ── The export surfaces ─────────────────────────────────────────────────────
+ *
+ * The treatment above stops at the edge of the app. The share image, the live
+ * link preview and its static fallback all carry the wordmark and the palette
+ * and none of the screen, which means the three surfaces seen by people who
+ * have *not* visited the site are the three that do not look like it.
+ *
+ * **The raster below is the same raster, and it is expressed a third way
+ * because neither rasteriser can read the first two.** That is a measurement
+ * rather than a precaution — probed against html2canvas 1.4.1 in Chromium and
+ * against Satori, each with a positive and a negative control, counting mean
+ * luminance per pixel row of the actual output:
+ *
+ * | mechanism                                  | browser | html2canvas | Satori |
+ * |--------------------------------------------|---------|-------------|--------|
+ * | `repeating-linear-gradient`, shorthand      | correct | **nothing** | **wrong** |
+ * | `repeating-linear-gradient`, long-form      | correct | **nothing** | correct |
+ * | data-URI SVG tile + `background-repeat`     | correct | correct     | correct |
+ *
+ * Two of those cells are the reason this is a function and not a copied string.
+ * **html2canvas draws no repeating gradient at all** — the element is present,
+ * correctly sized, and empty, which is precisely the `color-mix` failure
+ * `crt.spec.js` already guards in the browser, met again one layer out. And
+ * **Satori draws the shorthand as something else entirely**: given
+ * `transparent 0 2px, ink 2px 3px` it discards the double-position stops and
+ * emits a *smooth two-pixel ramp*, measured as alternating rows of 16 and 143
+ * where the correct raster is 0 and 255. That is worse than drawing nothing,
+ * because a soft two-pixel wash looks like a deliberate texture and nothing
+ * anywhere reports that the picture is not the one this file describes.
+ *
+ * So the export surfaces get a 1×`SCANLINE_PITCH_PX` SVG tile, repeated — the
+ * one form all three agree on. The app keeps the `color-mix` shorthand in
+ * `index.css`, because that is the only form that can follow a theme without
+ * JavaScript, and `crt.test.js` asserts the two describe the same raster.
+ */
+
+/**
+ * Peak opacity of the raster on an export surface.
+ *
+ * **The chart's ceiling does not transfer here, and assuming it did was wrong
+ * in the direction that matters.** The two effects composite differently: the
+ * chart overlay sits *over* the text as well as the ground, so a scanline moves
+ * the glyph and the ground under it together and merely compresses the ratio.
+ * This raster is a `background-image` — it is *behind* the text, so the ground
+ * moves and the glyph does not. Measured on dark `quiet` over `surface` at this
+ * alpha: **4.95:1 when the layer is over both, 4.44:1 when it is behind the
+ * text.** The first clears AA and the second does not, from one number applied
+ * to two arrangements.
+ *
+ * So the placement was decided by the contrast rather than the contrast being
+ * tuned to a placement — see `EXPORT_GRAIN_LAYERS`. With the raster on the
+ * *ground* and the cards opaque on top of it, 0.08 clears AA at 4.56:1 and
+ * still bands at 1.16, both in the worse of the two themes.
+ *
+ * **The window is narrow and that is stated rather than smoothed over**: AA
+ * fails above ~0.084 and the banding floor fails below ~0.075. Both bounds are
+ * real and they point at each other, which is the same squeeze the scanlines
+ * and the band are already in. There is no headroom assertion for this one
+ * because there is no headroom; what protects it is that `crt.test.js` checks
+ * *both* bounds, so a nudge in either direction fails the build rather than
+ * either the reader or the effect.
+ *
+ * The band never reaches these surfaces, so this is the whole composite and
+ * `combinedAlpha` does not apply.
+ */
+export const EXPORT_GRAIN_ALPHA = SCANLINE_ALPHA
+
+/**
+ * Where the export raster is laid, and what sits on top of it there.
+ *
+ * **This is a table rather than a role list because the constraint is genuinely
+ * per surface**, and flattening it produces a false failure: `up` on a *light*
+ * ground measures 4.44:1 through the raster, which would rule the whole
+ * treatment out — except that nothing draws `up` on a light ground. The share
+ * card's ground carries only the header and footer lines; the preview card
+ * draws its values on the ground but is dark-only, by the same decision that
+ * has kept it dark since v1.8.0. A union across both would hold each surface to
+ * the other's worst case and neither to its own.
+ *
+ * **`ShareCanvas` grains the ground and not the card bodies**, which is the
+ * sparkline rule reached a second time: put the raster behind the content, not
+ * behind the reading. The cards are opaque `surface`, so they sit on the screen
+ * rather than each being one — which is also the better picture, since eight
+ * separately-grained boxes read as a texture applied to everything rather than
+ * as one piece of hardware.
+ *
+ * A role drawn on a grained ground without being listed here is a role this
+ * treatment is dimming with nothing checking it — the contract `CRT_INK_ROLES`
+ * holds for the chart, in a second place.
+ */
+export const EXPORT_GRAIN_LAYERS = Object.freeze([
+  Object.freeze({
+    what: 'ShareCanvas',
+    surface: 'ground',
+    themes: Object.freeze(['dark', 'light']),
+    // The header's tagline and summary, and the footer's domain and timestamp.
+    // Everything else in the image is inside an opaque card.
+    roles: Object.freeze(['quiet', 'muted']),
+  }),
+  Object.freeze({
+    what: 'ogView',
+    surface: 'ground',
+    themes: Object.freeze(['dark']),
+    // This card has no inner panel over most of its area, so its figures do sit
+    // on the raster — `ink` is the price, `accent` the rule, `up`/`down` the
+    // change and ATH lines.
+    roles: Object.freeze(['ink', 'muted', 'quiet', 'accent', 'up', 'down']),
+  }),
+])
+
+/** `#rrggbb` → `[r, g, b]`. */
+const rgbOf = hex =>
+  [0, 2, 4].map(i => parseInt(hex.replace('#', '').slice(i, i + 2), 16))
+
+/**
+ * One tile of the raster: `SCANLINE_LINE_PX` lit rows at the bottom of a
+ * `SCANLINE_PITCH_PX`-tall cell, the rest clear.
+ *
+ * The line sits at the *end* of the period so this tile and the stylesheet's
+ * gradient (`transparent 0 2px, ink 2px 3px`) put their lit row in the same
+ * place — a tile that led with the line would draw an identical-looking raster
+ * one pixel out of phase with the app, which is invisible on either surface
+ * alone and wrong when the two are seen together.
+ *
+ * `fill` plus `fill-opacity` rather than an `rgba()` fill: `rgba()` in a
+ * presentation attribute is CSS Color rather than SVG 1.1, and the failure mode
+ * if a rasteriser declines it is a raster at *full* opacity — a black bar every
+ * three pixels across a posted image.
+ */
+export function grainTileSvg(hex, alpha = EXPORT_GRAIN_ALPHA) {
+  const [r, g, b] = rgbOf(hex)
+  const y = SCANLINE_PITCH_PX - SCANLINE_LINE_PX
+  return '<svg xmlns="http://www.w3.org/2000/svg" ' +
+    `width="1" height="${SCANLINE_PITCH_PX}">` +
+    `<rect x="0" y="${y}" width="1" height="${SCANLINE_LINE_PX}" ` +
+    `fill="rgb(${r},${g},${b})" fill-opacity="${alpha}"/></svg>`
+}
+
+/**
+ * That tile as a `url(…)` value, ready for `background-image`.
+ *
+ * Percent-encoded rather than base64: `btoa` is a browser global that Node only
+ * carries as a deprecated shim, and this runs in a browser (`ShareCanvas`), in
+ * a serverless function (`ogView`) and in a build script. Both encodings were
+ * measured drawing the identical raster in both rasterisers, so the isomorphic
+ * one wins on having no environment to be wrong about.
+ */
+export const grainTileUri = (hex, alpha) =>
+  `url("data:image/svg+xml,${encodeURIComponent(grainTileSvg(hex, alpha))}")`
+
+/**
+ * The raster as inline-style properties, which is the only form `ShareCanvas`
+ * and `ogView` can take — both are styled with objects rather than classes.
+ *
+ * Returned as a pair rather than a single shorthand string because Satori reads
+ * individual properties and ignores the `background` shorthand.
+ */
+export function grainBackground(hex, alpha) {
+  return {
+    backgroundImage: grainTileUri(hex, alpha),
+    backgroundRepeat: 'repeat',
+  }
+}
+
+/**
  * The roles that actually render *inside* the chart box, and therefore the ones
  * the overlay is laid over. Derived from `PriceChartCard` rather than assumed:
  * `quiet` is both axes' tick labels, `up` and `down` are the high/low reference

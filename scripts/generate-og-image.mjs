@@ -42,6 +42,7 @@ import { writeFileSync } from 'node:fs'
 import { PALETTE } from '../src/lib/palette.js'
 import { MARK_COLS, MARK_ROWS, markRuns, markSvg } from './lib/mark.js'
 import { WORDMARK_LINES, lineSvg } from '../src/lib/wordmark.js'
+import { grainTileUri, EXPORT_GRAIN_ALPHA } from '../src/lib/crt.js'
 
 const C = PALETTE.dark
 const WIDTH = 1200
@@ -91,7 +92,13 @@ const card = `
   html, body { margin: 0; padding: 0; }
   body {
     width: ${WIDTH}px; height: ${HEIGHT}px; position: relative; overflow: hidden;
-    background: ${C.ground};
+    /* The same raster the live preview card and the share image wear, from the
+     * same builder — see src/lib/crt.js. Split into colour and image rather
+     * than written as the "background" shorthand, which resets the image.
+     * No backticks in here: this comment is inside a template literal. */
+    background-color: ${C.ground};
+    background-image: ${grainTileUri(C.ink, EXPORT_GRAIN_ALPHA)};
+    background-repeat: repeat;
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     color: ${C.ink};
   }

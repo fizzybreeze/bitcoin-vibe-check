@@ -14,6 +14,7 @@
 // browser reads, and nothing but an assertion across the pair keeps them saying
 // the same thing.
 import { describe, it, expect } from 'vitest'
+import { ogElement } from '../../api/lib/ogView.js'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PALETTE, THEMES } from '../lib/palette.js'
@@ -21,6 +22,7 @@ import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
   BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
   GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST,
+  EXPORT_GRAIN_ALPHA, EXPORT_GRAIN_LAYERS, grainTileSvg, grainTileUri,
   WOBBLE_PERIOD_S, BAND_PERIOD_S, SCANLINE_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
 } from '../lib/crt.js'
@@ -444,5 +446,146 @@ describe('the chart draws in the roles crt.js says it does', () => {
       expect(contrastRatio(P.line, P.surface), `${theme} gridline`).toBeLessThan(3)
     }
     expect(CRT_INK_ROLES).not.toContain('line')
+  })
+})
+
+// ── The export surfaces ──────────────────────────────────────────────────────
+//
+// The share image, the live preview card and its static fallback carry the same
+// raster as the chart. Two things make that a testable claim rather than a
+// styling note, and both are failures that look like success:
+//
+//   1. **Neither rasteriser draws the form `index.css` uses.** Measured against
+//      html2canvas 1.4.1 and Satori, with controls: html2canvas draws a
+//      repeating gradient as *nothing*, and Satori draws the shorthand as a
+//      smooth two-pixel ramp rather than a three-pixel hard raster. So the
+//      export surfaces use an SVG tile, and what has to be pinned is that they
+//      do not quietly revert to a gradient.
+//   2. **The raster sits behind text here, where the chart's overlay sits over
+//      it.** That is a different composite and a harsher one — the ground moves
+//      and the glyph does not — so the chart's own ceiling does not carry over
+//      and these ratios have to be computed separately.
+describe('the raster on the export surfaces', () => {
+  const shareCanvas = readFileSync(join(SRC, 'components/ShareCanvas.jsx'), 'utf8')
+  const ogView = readFileSync(resolve('api/lib/ogView.js'), 'utf8')
+  const staticOg = readFileSync(resolve('scripts/generate-og-image.mjs'), 'utf8')
+  const SURFACES = [
+    ['ShareCanvas', shareCanvas], ['ogView', ogView], ['generate-og-image', staticOg],
+  ]
+
+  it('draws one tile of the same raster the stylesheet does', () => {
+    const svg = grainTileSvg('#ffffff', 0.5)
+    // Same period, same line thickness, and the line at the *end* of the period
+    // — the stylesheet runs `transparent 0 2px, ink 2px 3px`, so a tile that
+    // led with its lit row would be one pixel out of phase with the app.
+    expect(svg).toContain(`height="${SCANLINE_PITCH_PX}"`)
+    expect(svg).toContain(`y="${SCANLINE_PITCH_PX - SCANLINE_LINE_PX}"`)
+    expect(svg).toContain(`height="${SCANLINE_LINE_PX}" fill=`)
+  })
+
+  it('carries the alpha as fill-opacity rather than baking it into the fill', () => {
+    // If a rasteriser declines an `rgba()` presentation attribute it falls back
+    // to opaque, which is a solid bar every three pixels across a posted image.
+    // `fill-opacity` is SVG 1.1 and degrades to nothing rather than to full.
+    const svg = grainTileSvg('#abcdef', 0.08)
+    expect(svg).toContain('fill="rgb(171,205,239)"')
+    expect(svg).toContain('fill-opacity="0.08"')
+    expect(svg).not.toMatch(/rgba\(/)
+  })
+
+  it('encodes to a URI with no raw quotes, which would end the CSS value early', () => {
+    // `generate-og-image.mjs` interpolates this straight into a stylesheet.
+    const uri = grainTileUri('#ffffff', EXPORT_GRAIN_ALPHA)
+    expect(uri.startsWith('url("data:image/svg+xml,')).toBe(true)
+    expect(uri.slice('url("'.length, -2)).not.toMatch(/["']/)
+  })
+
+  it.each(SURFACES)('%s does not use the form the rasterisers mis-draw', (_name, body) => {
+    // The whole reason the builder exists. A gradient copied out of `index.css`
+    // renders correctly in a browser and wrongly — or not at all — here.
+    expect(body).not.toMatch(/repeating-linear-gradient/)
+  })
+
+  // The first draft of the three assertions below scanned each file for
+  // `grainBackground|grainTileUri` — which matches the **import line**, so
+  // deleting the actual call left every one of them green. Four mutations
+  // walked through it. They assert the rendered style now, which also covers
+  // the `background:` shorthand silently resetting `background-image`: with the
+  // shorthand in play `backgroundImage` comes back empty rather than wrong.
+  // ShareCanvas needs JSX to render, so its half lives in `ShareCanvas.test.jsx`.
+  it('ogView paints the raster on the card Satori rasterises', () => {
+    expect(ogElement({}).props.style.backgroundImage).toContain('data:image/svg+xml')
+  })
+
+  it('the static fallback paints it too, from the same builder', () => {
+    expect(staticOg).toMatch(/background-image:\s*\$\{grainTileUri\(/)
+  })
+
+  it('covers every role ogView actually draws on the grained ground', () => {
+    // The `CRT_INK_ROLES` contract, in a second place: a role added to the card
+    // without being added to the layer is a role this raster dims with nothing
+    // checking it. Derived from the source rather than restated — dropping five
+    // of the six from the layer left the AA check passing on the one that was
+    // left, which is a suite grading its own homework.
+    const alias = Object.fromEntries(
+      [...ogView.matchAll(/^const (\w+)\s*=\s*C\.([\w-]+)$/gm)].map(m => [m[1], m[2]])
+    )
+    // **Every identifier in the whole value, not a shape the value is assumed
+    // to take.** The first version matched `color: X` and `color: ident ? A :
+    // B` and nothing else — which silently missed `RED`, because the 24h line
+    // is coloured `priceChange24h >= 0 ? GREEN : RED` and a comparison sits
+    // between the identifier and the `?`. So `down` was never derived, and
+    // dropping it from the layer left all 65 tests green while the negative
+    // change line went on being drawn straight onto the grained ground. A
+    // derivation that only understands two syntaxes is a restatement wearing a
+    // derivation's clothes.
+    const drawn = [...new Set(
+      [...ogView.matchAll(/(?<![A-Za-z])color:\s*([^,\n}]+)/g)]
+        .flatMap(m => m[1].match(/[A-Za-z_$][\w$]*/g) ?? [])
+        .filter(name => alias[name])
+        .map(name => alias[name])
+    )]
+    expect(drawn.length, 'no roles found — has the card stopped reading the palette?')
+      .toBeGreaterThan(2)
+    expect(drawn, 'the negative-change colour is chosen behind a comparison — see above')
+      .toContain('down')
+    const layer = EXPORT_GRAIN_LAYERS.find(l => l.what === 'ogView')
+    expect([...drawn].sort()).toEqual(
+      drawn.filter(r => layer.roles.includes(r)).sort()
+    )
+  })
+
+  describe.each(EXPORT_GRAIN_LAYERS)('$what', ({ surface, themes, roles }) => {
+    it.each(themes)('keeps every role it draws above AA through the raster, %s', (theme) => {
+      const P = PALETTE[theme]
+      const lit = composite(P[surface], P[CRT_SCANLINE_ROLE], EXPORT_GRAIN_ALPHA)
+      for (const role of roles) {
+        // Worst case: the glyph against the lit row, not against an average of
+        // the two. A scanline covers a third of the box but covers those pixels
+        // fully, and a glyph stem is one pixel wide.
+        const worst = Math.min(contrastRatio(P[role], P[surface]), contrastRatio(P[role], lit))
+        expect(worst, `${theme} ${role} on grained ${surface}`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
+      }
+    })
+
+    it.each(themes)('still bands visibly, so the raster is not decoration that does not render, %s', (theme) => {
+      // v1.13.0's lesson: "is it a palette token" and "does the text still
+      // clear AA" are both true of an effect nobody can see.
+      const P = PALETTE[theme]
+      const lit = composite(P[surface], P[CRT_SCANLINE_ROLE], EXPORT_GRAIN_ALPHA)
+      expect(contrastRatio(P[surface], lit), `${theme} banding`).toBeGreaterThanOrEqual(MIN_BANDING_RATIO)
+    })
+  })
+
+  it('is the chart raster rather than the sparklines, which would fail the above', () => {
+    // Recorded as an assertion because the reasoning that picked it was wrong
+    // first time: `GRAIN_ALPHA` is legal on a sparkline precisely because
+    // nothing sits over it, and illegal here for the same reason inverted.
+    expect(EXPORT_GRAIN_ALPHA).toBe(SCANLINE_ALPHA)
+    const { surface, roles } = EXPORT_GRAIN_LAYERS[0]
+    const P = PALETTE.light
+    const tooStrong = composite(P[surface], P[CRT_SCANLINE_ROLE], GRAIN_ALPHA)
+    const worst = Math.min(...roles.map(r => contrastRatio(P[r], tooStrong)))
+    expect(worst).toBeLessThan(AA_NORMAL_TEXT)
   })
 })

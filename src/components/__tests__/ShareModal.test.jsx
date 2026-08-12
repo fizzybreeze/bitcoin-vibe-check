@@ -121,12 +121,14 @@ describe('ShareModal', () => {
       .toBe(rgb(PALETTE.light.surface))
     // The off-screen capture target is the modal's last child.
     const canvasSheet = container.querySelector('[style*="-9999px"]').firstChild
-    expect(canvasSheet.style.background).toBe(rgb(PALETTE.light.ground))
+    // `backgroundColor`, not `background`: the sheet carries the CRT raster as
+    // a `background-image` and the shorthand would reset it.
+    expect(canvasSheet.style.backgroundColor).toBe(rgb(PALETTE.light.ground))
   })
 
   it('defaults to the dark theme when given none', () => {
     const { container } = renderModal()
-    expect(container.querySelector('[style*="-9999px"]').firstChild.style.background)
+    expect(container.querySelector('[style*="-9999px"]').firstChild.style.backgroundColor)
       .toBe(rgb(PALETTE.dark.ground))
   })
 

@@ -94,6 +94,12 @@ export const MARK_ROWS = MARK.length
  * visitor picked, and a home screen does not repaint when they switch. So the
  * mark is always drawn from the dark theme's values, which is the same call
  * `api/lib/ogView.js` makes for the link preview.
+ *
+ * **That reasoning is about surfaces with no visitor to ask, and `ShareCanvas`
+ * is not one of them** — it follows the theme the reader is actually looking
+ * at, so `markSvg` takes a theme and defaults to this rather than pinning it.
+ * A light card drawn with the dark tile puts two different brand pinks side by
+ * side in the same image, permanently, in something somebody has posted.
  */
 export const MARK_THEME = 'dark'
 
@@ -188,9 +194,13 @@ export const MASK_SAFE_ZONE = 0.8
  *   guarantees only the central 80%, so a maskable icon is full-bleed — corners
  *   of its own would be visibly clipped — and the caller passes a smaller
  *   `coverage` to keep the mark inside that safe zone.
+ * @param {string} [opts.theme]         Which half of the palette to draw from.
+ *   Every icon target leaves this alone — see `MARK_THEME`. `ShareCanvas` does
+ *   not, because that image follows the reader's theme and a fixed tile there
+ *   is a second accent colour beside the one the rest of the card uses.
  */
-export function markSvg({ size, coverage, maskable = false }) {
-  const colours = PALETTE[MARK_THEME]
+export function markSvg({ size, coverage, maskable = false, theme = MARK_THEME }) {
+  const colours = PALETTE[theme]
   const { cell, x, y } = markGeometry(size, coverage)
   // The corner radius is snapped to the cell grid rather than left as a
   // fraction of the canvas. It is the only curve in the artwork, and a curve

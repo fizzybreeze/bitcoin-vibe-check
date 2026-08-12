@@ -11,6 +11,7 @@ import { vibeLabelHex, fngLabelHex, fngScoreHex } from '../../src/lib/scales.js'
 import {
   WORDMARK_LINES, GLYPH_HEIGHT, LINE_GAP, lineWidth, lineDataUri,
 } from '../../src/lib/wordmark.js'
+import { grainBackground } from '../../src/lib/crt.js'
 
 export const OG_WIDTH  = 1200
 export const OG_HEIGHT = 630
@@ -208,7 +209,15 @@ export function ogElement(model) {
   return col({
     width: '100%',
     height: '100%',
-    background: BG,
+    // `backgroundColor` plus the raster, never the `background` shorthand —
+    // the shorthand resets `background-image` and would remove one of the two.
+    //
+    // **Satori draws the stylesheet's own shorthand gradient as something
+    // else** — a smooth two-pixel ramp rather than a three-pixel hard raster,
+    // measured — which is why this comes from `grainBackground` rather than
+    // from a string copied out of `index.css`. See `crt.js`.
+    backgroundColor: BG,
+    ...grainBackground(WHITE),
     fontFamily: 'Geist',
     color: WHITE,
   }, [
