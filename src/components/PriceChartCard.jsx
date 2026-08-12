@@ -8,8 +8,10 @@ import ChartTooltip from './ChartTooltip.jsx'
 import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
 import { CARD, CARD_LABEL } from '../lib/typography.js'
+import { CURRENCY_META } from '../utils.js'
 
-const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/USD pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable."
+const chartVolumeTooltip = pair =>
+  `Volume bars show trading activity on Kraken's BTC/${pair} pair only. The 24H Volume card shows global volume aggregated across all exchanges by CoinPaprika — the two figures are not directly comparable.`
 
 /**
  * The price chart and its range toggles.
@@ -21,10 +23,17 @@ const CHART_VOLUME_TOOLTIP = "Volume bars show trading activity on Kraken's BTC/
  * The y-axis bounds and the x-axis tick interval are derived here rather than
  * in App. They are presentation, they are used nowhere else, and deriving them
  * beside the axes they configure is what keeps the prop list honest.
+ *
+ * **Two currencies, on purpose.** `currency` is what the header's selector says;
+ * `chartCurrency` is what the candles are actually denominated in, which
+ * `fetchChartSeries` reports and which differs only when Kraken has no market
+ * for the selection. Every mark on the chart reads the second — because the
+ * defect this card shipped with was the heading reading the first while the
+ * axis, the reference lines and the tooltip were hard-coded to dollars.
  */
 export default function PriceChartCard({
   chart, chartLoading, chartError, chartChange,
-  range, setRange, refreshChart, ranges, currency,
+  range, setRange, refreshChart, ranges, currency, chartCurrency,
 }) {
   // recharts takes colours as props, not classes, so it cannot read the
   // stylesheet — every hex below comes from the palette for the theme that is
@@ -33,6 +42,21 @@ export default function PriceChartCard({
   // look like one.
   const { theme } = useTheme()
   const colors = PALETTE[theme]
+
+  // Falling back to the selection when the parent passes nothing keeps a wiring
+  // mistake from throwing during render — this app has no error boundary, so a
+  // throw here takes the whole page rather than the card. `e2e/chartCurrency.spec.js`
+  // is what stops that tolerance hiding the bug it tolerates.
+  const served       = String(chartCurrency ?? currency).toLowerCase()
+  const meta         = CURRENCY_META[served] ?? CURRENCY_META.usd
+  const servedUpper  = served.toUpperCase()
+  const fellBackFrom = served !== String(currency).toLowerCase() ? String(currency).toUpperCase() : null
+  // The two currencies also disagree while a fetch for the new one is still
+  // outstanding or has just failed — the series on screen is the previous one,
+  // or none. Claiming "no market" there would be a confident wrong answer to a
+  // dropped packet, so the note waits until there are candles that the fallback
+  // actually produced. The error states below explain themselves.
+  const showFallbackNote = fellBackFrom != null && chart != null && chartError == null
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
@@ -45,7 +69,7 @@ export default function PriceChartCard({
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <h2 className={`${CARD_LABEL} flex items-center`}>
-            Price · {currency.toUpperCase()}<CardTooltip text={CHART_VOLUME_TOOLTIP} />
+            Price · {servedUpper}<CardTooltip text={chartVolumeTooltip(servedUpper)} />
           </h2>
           {chartChange != null && !chartLoading && (
             <span
@@ -81,7 +105,15 @@ export default function PriceChartCard({
             <Icon name="refresh" size="md" className={chartLoading ? 'animate-spin' : ''} />
           </button>
         </div>
-        <p className="text-xs text-quiet">Chart in USD</p>
+        {/* Only when the two disagree. The heading already names the currency
+          * the chart is in, so a permanent caption restating it is noise — and
+          * the caption this replaces was worse than noise, since it contradicted
+          * a heading that followed the selector. */}
+        {showFallbackNote && (
+          <p data-testid="chart-currency-fallback" className="text-xs text-quiet">
+            No Kraken {fellBackFrom} market · chart in {servedUpper}
+          </p>
+        )}
         </div>
       </div>
 
@@ -131,11 +163,11 @@ export default function PriceChartCard({
                     domain={[lo - pad, hi + pad]}
                     tick={{ fill: colors.quiet, fontSize: 11 }}
                     axisLine={false} tickLine={false}
-                    tickFormatter={v => `$${Math.round(v / 1000)}k`}
+                    tickFormatter={v => `${meta.sym}${Math.round(v / 1000)}k`}
                     width={52}
                   />
                   <YAxis yAxisId="volume" hide />
-                  <Tooltip content={<ChartTooltip currency="usd" />} />
+                  <Tooltip content={<ChartTooltip currency={served} />} />
                   <Bar
                     yAxisId="volume" dataKey="volume"
                     fill={colors.support} fillOpacity={0.15}
@@ -157,7 +189,7 @@ export default function PriceChartCard({
                         stroke={colors.up}
                         strokeDasharray="3 3"
                         strokeWidth={1}
-                        label={{ value: `H: $${Math.round(hi).toLocaleString('en-US')}`, position: 'insideTopRight', fill: colors.up, fontSize: 10 }}
+                        label={{ value: `H: ${meta.sym}${Math.round(hi).toLocaleString(meta.locale)}`, position: 'insideTopRight', fill: colors.up, fontSize: 10 }}
                       />
                       <ReferenceLine
                         yAxisId="price"
@@ -165,7 +197,7 @@ export default function PriceChartCard({
                         stroke={colors.down}
                         strokeDasharray="3 3"
                         strokeWidth={1}
-                        label={{ value: `L: $${Math.round(lo).toLocaleString('en-US')}`, position: 'insideBottomRight', fill: colors.down, fontSize: 10 }}
+                        label={{ value: `L: ${meta.sym}${Math.round(lo).toLocaleString(meta.locale)}`, position: 'insideBottomRight', fill: colors.down, fontSize: 10 }}
                       />
                     </>
                   )}

@@ -37,6 +37,55 @@ export function krakenOhlcUrl(interval, pair = 'XBTUSD') {
   return `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${interval}`
 }
 
+// Kraken quotes XBT against every currency the header offers, which is what
+// makes a chart in the selected currency real market data rather than a USD
+// series multiplied by today's FX rate — that version would redraw history at a
+// rate that did not apply on the day, which is a fabricated series wearing the
+// same shape as a true one.
+//
+// These five pairs are the same five the app already asks Kraken's Ticker
+// endpoint for on every load, so a currency in this map is one the live price
+// header is already being served.
+export const KRAKEN_PAIR_BY_CURRENCY = {
+  usd: 'XBTUSD',
+  gbp: 'XBTGBP',
+  eur: 'XBTEUR',
+  cad: 'XBTCAD',
+  chf: 'XBTCHF',
+}
+
+/**
+ * The Kraken pair for a currency, or null when there is no market for it.
+ *
+ * Null rather than a quiet fall back to XBTUSD: defaulting here is precisely the
+ * bug this replaced — dollar candles drawn under another currency's label — and
+ * a caller that has to name the fallback is a caller that can also say so on
+ * screen.
+ */
+export function krakenPairForCurrency(currency) {
+  return KRAKEN_PAIR_BY_CURRENCY[String(currency ?? '').toLowerCase()] ?? null
+}
+
+/**
+ * Does this failure mean Kraken has no such market, rather than having a bad
+ * minute?
+ *
+ * The distinction is what decides between falling back to USD and retrying. A
+ * missing market is permanent, so a fallback is the only way to draw anything at
+ * all; a transport failure is transient, and falling back on one would move the
+ * reader to dollars over a dropped packet — and it would *stick*, because the
+ * result is cached for the session.
+ *
+ * Kraken reports an unknown pair inside a 200 response, which `extractKrakenOhlc`
+ * turns into a throw carrying their text. A pair that exists but has never
+ * traded comes back with no candles, which is equally undrawable and is treated
+ * the same way.
+ */
+export function isUnsupportedPairError(err) {
+  const message = String(err?.message ?? '')
+  return message.includes('Unknown asset pair') || message.includes('no candles in response')
+}
+
 /**
  * Pull the candle array out of Kraken's response envelope.
  *

@@ -55,9 +55,54 @@ describe('PriceChartCard', () => {
     expect(setRange).toHaveBeenCalledWith('1Y')
   })
 
-  it('labels the chart with the selected currency', () => {
-    renderCard({ currency: 'gbp' })
+  it('labels the chart with the currency the candles are in', () => {
+    renderCard({ currency: 'gbp', chartCurrency: 'gbp' })
     expect(screen.getByText(/Price · GBP/)).toBeInTheDocument()
+  })
+
+  it('labels the chart in dollars when the selection fell back, and says so', () => {
+    // The defect this card shipped with, from the other side: the heading used
+    // to follow the selector while the data stayed in dollars. It must never
+    // name a currency the candles are not in, and when the two differ the reader
+    // is owed the reason — otherwise a GBP selection silently draws dollars.
+    renderCard({ currency: 'chf', chartCurrency: 'usd' })
+    expect(screen.getByText(/Price · USD/)).toBeInTheDocument()
+    expect(screen.queryByText(/Price · CHF/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('chart-currency-fallback')).toHaveTextContent(/No Kraken CHF market · chart in USD/)
+  })
+
+  it('says nothing when the chart is in the currency that was asked for', () => {
+    // The heading already names it. The caption this replaced was permanent and
+    // read "Chart in USD" under a heading that said GBP.
+    renderCard({ currency: 'eur', chartCurrency: 'eur' })
+    expect(screen.queryByTestId('chart-currency-fallback')).not.toBeInTheDocument()
+  })
+
+  it('does not blame a missing market for a fetch that merely failed', () => {
+    // A transient failure leaves the previous currency's candles on screen, so
+    // the two currencies disagree for a reason that has nothing to do with
+    // Kraken's markets. "No Kraken GBP market" would be a confident wrong answer
+    // to a dropped packet — and the retry notice already explains itself.
+    renderCard({ currency: 'gbp', chartCurrency: 'usd', chartError: 'temp' })
+    expect(screen.queryByTestId('chart-currency-fallback')).not.toBeInTheDocument()
+    expect(screen.getByText(/Retrying/)).toBeInTheDocument()
+  })
+
+  it('waits for candles before claiming a fallback', () => {
+    // On a cold load with GBP stored from a previous visit, the selection is GBP
+    // and nothing has been fetched yet. Without this the card would flash a
+    // "no market" notice at every such visitor before the chart arrived.
+    renderCard({ currency: 'gbp', chartCurrency: 'usd', chart: null, chartLoading: true })
+    expect(screen.queryByTestId('chart-currency-fallback')).not.toBeInTheDocument()
+  })
+
+  it('names the traded pair in the volume caveat', () => {
+    // The tooltip explains why these bars disagree with the 24H Volume card. It
+    // named BTC/USD unconditionally, which is a wrong statement of provenance
+    // once the chart can be drawn off another pair.
+    renderCard({ currency: 'gbp', chartCurrency: 'gbp' })
+    fireEvent.click(screen.getByRole('button', { name: /volume|info|more/i }))
+    expect(screen.getByText(/BTC\/GBP pair only/)).toBeInTheDocument()
   })
 
   it('colours the range change by direction', () => {

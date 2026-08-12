@@ -64,10 +64,10 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Four time ranges: **1D · 7D · 1M · 1Y**
 - Range percentage change displayed alongside the chart label
 - **High and low reference lines** for the selected period
-- **Chart locked to USD** with a clear "Chart in USD" label
-- **Volume bars show Kraken BTC/USD pair volume only** — a tooltip in the chart header explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
+- **Follows the currency selector** — the chart is redrawn from Kraken's market for the selected currency (XBT/USD, GBP, EUR, CAD, CHF), so the axis, the reference lines and the tooltip all quote real trades in that currency rather than a converted dollar series. If Kraken has no market for a selection the chart falls back to USD, labels itself USD, and says which market was missing
+- **Volume bars show one Kraken pair only** — a tooltip in the chart header names the pair and explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
-- Chart data is memoised per range for the session, and the three inactive ranges are prefetched in the background once the active one loads, so switching range is instant
+- Chart data is memoised per range *and currency* for the session, and the three inactive ranges are prefetched in the background once the active one loads, so switching range is instant
 
 ### Network Fees & Mempool
 - **Fee tiers** — Slow (~1 hour), Medium (~30 min), and Fast (~10 min) in sat/vB

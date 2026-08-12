@@ -136,6 +136,29 @@ export function makeKrakenCandles(count, stepSeconds = DAY_S) {
 // Seconds per Kraken interval value (which is in minutes).
 export const KRAKEN_INTERVAL_SECONDS = { 60: 3_600, 240: 14_400, 1440: DAY_S }
 
+// A distinct price level per Kraken pair, so a chart drawn off the *wrong* pair
+// is visible on screen rather than merely mislabelled. Roughly the real FX
+// relationships, which is not load-bearing — what matters is that no two of them
+// round to the same axis tick.
+export const PAIR_BASE_PRICE = {
+  XBTUSD: 100_000,
+  XBTGBP:  79_000,
+  XBTEUR:  92_000,
+  XBTCAD: 137_000,
+  XBTCHF:  88_000,
+}
+
+/** `makeKrakenCandles`, at the price level that pair trades at. */
+export function makeKrakenCandlesForPair(pair, count, stepSeconds = DAY_S) {
+  const base = PAIR_BASE_PRICE[pair] ?? PAIR_BASE_PRICE.XBTUSD
+  return Array.from({ length: count }, (_, i) =>
+    krakenCandle(nowS - (count - i) * stepSeconds, base + i * 10)
+  )
+}
+
+/** Kraken's real answer for a pair that does not exist — HTTP 200, error array. */
+export const krakenUnknownPairResponse = { error: ['EQuery:Unknown asset pair'], result: {} }
+
 /** Wrap candles in Kraken's response envelope, under the canonical pair key. */
 export function krakenOhlcResponse(candles) {
   return { error: [], result: { XXBTZUSD: candles, last: nowS } }

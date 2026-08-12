@@ -8,7 +8,8 @@ import {
   feesFixture, blockHeightFixture, fngFixture,
   difficultyFixture, mempoolFixture, blocksFixture, lightningFixture,
   hashrate3dFixture, hashrate1mFixture, chainDataFixture,
-  ohlc200dFixture, makeKrakenCandles, KRAKEN_INTERVAL_SECONDS, krakenOhlcResponse,
+  ohlc200dFixture, makeKrakenCandles, makeKrakenCandlesForPair,
+  KRAKEN_INTERVAL_SECONDS, krakenOhlcResponse,
   paprikaTickerFixture, paprikaGlobalFixture, krakenTickerFixture, makeBlocksFixture,
 } from './fixtures.js'
 
@@ -68,12 +69,20 @@ export async function mockApis(page, { nowMs } = {}) {
   // parameter, so the app slices client-side; the daily request therefore serves
   // both the 1M/1Y toggles and the 200DMA. Return the 200 fixed-close candles
   // for the daily interval so the cycle-indicator assertions stay deterministic.
+  //
+  // The pair matters since the chart follows the selected currency. XBTUSD keeps
+  // exactly the fixtures it had — the 200DMA and every existing assertion hang
+  // off them — while the other four answer at their own price level, so a chart
+  // drawn off the wrong pair fails visibly rather than passing under a relabelled
+  // axis.
   await page.route('https://api.kraken.com/0/public/OHLC*', route => {
     const url      = new URL(route.request().url())
     const interval = parseInt(url.searchParams.get('interval')) || 1440
-    const candles  = interval === 1440
-      ? ohlc200dFixture
-      : makeKrakenCandles(200, KRAKEN_INTERVAL_SECONDS[interval] ?? 86_400)
+    const stepS    = KRAKEN_INTERVAL_SECONDS[interval] ?? 86_400
+    const pair     = url.searchParams.get('pair') ?? 'XBTUSD'
+    const candles  = pair === 'XBTUSD'
+      ? (interval === 1440 ? ohlc200dFixture : makeKrakenCandles(200, stepS))
+      : makeKrakenCandlesForPair(pair, 200, stepS)
     route.fulfill({ json: krakenOhlcResponse(candles) })
   })
 
