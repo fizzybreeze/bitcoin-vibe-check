@@ -201,12 +201,6 @@ implementation work.
 
 Directionally right, not yet specified. Listed so they are not forgotten.
 
-**A personal layer that never leaves the device.** Enter a cost basis and a stack
-size in `localStorage`; see position value, personal break-even against the
-Power Law and the 200-day, "your MVRV". No account, no wallet connect, no upload
-— and say so loudly on the card itself, because the trust claim *is* the feature.
-`usePersistedState` already does the storage half.
-
 **Vibe history replay.** Once the table has a year: "this day last year", cycle
 overlays, "the last time the vibe was this low". Gated purely on data age, which
 is why §3.2 matters now rather than later.
@@ -388,7 +382,8 @@ considered and rejected on the thesis, not on effort.
 | Not doing | Why |
 |---|---|
 | Accounts and logins | The no-login constraint is the product, not a limitation to grow out of. Every feature here is designed to work without one. |
-| Wallet connect / exchange API keys | Asking a Bitcoiner to connect a wallet to a dashboard is asking for trust that a dashboard has no business requesting. The local-only personal layer gets most of the value at none of the risk. |
+| Wallet connect / exchange API keys | Asking a Bitcoiner to connect a wallet to a dashboard is asking for trust that a dashboard has no business requesting. Note this rejection stands **on its own** and no longer leans on a local-only alternative: the personal layer that used to be offered as the safer version of this is itself rejected in the row below, so there is no "do it this way instead" to fall back on. Holdings are out of scope in every form. |
+| A personal layer (cost basis, stack size, "your MVRV") | Held in `localStorage` only, no account, no upload — and rejected anyway, which is the point worth recording. **The usual objections were granted and did not save it**: it is simple, `usePersistedState` already does the storage half, and being device-local it carries no meaningful security risk. It was rejected on *product* grounds by the owner. This dashboard reads **the market**, not the holder — a cost basis turns a room-reading page into a portfolio tracker, which is a different product with a different reason to exist, and the moment a visitor's position is on screen every other number starts being read against it. Keeping the page clean is worth more than the feature. **Do not re-propose it on the grounds that it is local-only, cheap, or that the storage already exists** — all three were already true when it was turned down. Reopen only if the owner's view of what the product is changes. |
 | Altcoin coverage | BTC dominance is the one altcoin-adjacent number that tells you something about Bitcoin. Everything past that is a different product. |
 | Price predictions or buy/sell signals | Power Law and Mayer Multiple are *models with published formulas*, presented as such. A signal is advice, and advice is a liability. |
 | Native App Store apps | The PWA installs on iOS, Android and desktop today. App-store review, two more build pipelines and a 30% cut buy nothing the install prompt does not already provide. |
