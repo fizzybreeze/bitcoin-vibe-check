@@ -36,7 +36,7 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
       {fngHistory && (
         <div className="mt-3">
           <div
-            className="h-20"
+            className="crt-grain h-20"
             role="img"
             aria-label={describeTrend('Fear and Greed', fngHistory.map(d => d.v), { period: '30 days' })}
           >

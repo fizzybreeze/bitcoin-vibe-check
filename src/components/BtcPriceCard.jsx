@@ -60,7 +60,7 @@ function VibeHistorySparkline({ points }) {
   return (
     <div data-testid="vibe-sparkline" className="mt-3">
       <div
-        className="h-10"
+        className="crt-grain h-10"
         role="img"
         aria-label={describeTrend('Vibe Score', points.map(p => p.score), { period: vibeHistoryLabel(points) })}
       >

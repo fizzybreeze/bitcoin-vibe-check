@@ -118,3 +118,47 @@ describe('PriceChartCard', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 })
+
+// The CRT treatment. What the *rules* do is `crt.test.js`'s job — these cover
+// the wiring, which is the half a stylesheet cannot state: that the overlay is
+// rendered at all, that it is announced to nobody, and that it and the wobble
+// are attached to the elements the design argument depends on.
+describe('PriceChartCard CRT treatment', () => {
+  it('lays the scanlines over the chart', () => {
+    renderCard()
+    expect(screen.getByTestId('chart-crt')).toHaveClass('crt-overlay')
+  })
+
+  it('announces them to nobody', () => {
+    // Pure decoration sitting over a chart that already carries its own
+    // labelling. A screen reader stopping on an empty div here is noise.
+    renderCard()
+    expect(screen.getByTestId('chart-crt')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('wobbles the chart wrapper, not the card', () => {
+    // The correctness rule from `crt.js`: the axes and gridlines have to move
+    // with the series, or a decorative effect is shifting a reading against its
+    // own scale. Putting the class on the card root would also wobble the range
+    // toggles, which is a different bug with the same cause.
+    const { container } = renderCard()
+    const wobbling = container.querySelector('.crt-wobble')
+    expect(wobbling).not.toBeNull()
+    expect(container.firstChild).not.toHaveClass('crt-wobble')
+    expect(wobbling.querySelector('.recharts-responsive-container')).not.toBeNull()
+  })
+
+  it('puts the scanlines inside the wobbling wrapper', () => {
+    // Outside it they would sit still in front of a moving picture, and they
+    // would keep full strength while the chart dims under a range change.
+    const { container } = renderCard()
+    expect(container.querySelector('.crt-wobble .crt-overlay')).not.toBeNull()
+  })
+
+  it('draws no scanlines over the first-load skeleton', () => {
+    // There is no chart to be a CRT of yet, and the skeleton has a pulse of its
+    // own for the overlay to fight with.
+    renderCard({ chart: null, chartLoading: true })
+    expect(screen.queryByTestId('chart-crt')).not.toBeInTheDocument()
+  })
+})

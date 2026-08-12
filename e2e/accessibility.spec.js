@@ -9,11 +9,24 @@ import { mockApis } from './mocks.js'
 // animated elements, or that Tailwind emitted the custom token at all. Those
 // are questions only a browser answers.
 
-/** Every distinct animation-duration currently in force on the page, in ms. */
+/**
+ * Every distinct animation-duration currently in force on the page, in ms.
+ *
+ * **Pseudo-elements are swept too, and leaving them out was a real hole.** The
+ * reduced-motion rule in `index.css` is deliberately blanket — it names
+ * `*, *::before, *::after` — but this check queried only elements, so any
+ * animation on a `::before` or `::after` was invisible to it. The chart's CRT
+ * treatment is exactly that shape: measured in Chromium, the overlay element
+ * reports `0s` while its `::before` runs the 1.2s scanline roll and its
+ * `::after` the 9s band. Narrowing the stylesheet's selector would have left a
+ * reduced-motion visitor with a rolling raster and a sweeping hum bar, and every
+ * assertion here would still have passed.
+ */
 async function animationDurations(page) {
   return page.evaluate(() =>
     [...document.querySelectorAll('*')]
-      .map(el => getComputedStyle(el).animationDuration)
+      .flatMap(el => [null, '::before', '::after']
+        .map(pseudo => getComputedStyle(el, pseudo).animationDuration))
       .filter(d => d && d !== 'none' && d !== '0s')
       .map(d => (d.endsWith('ms') ? parseFloat(d) : parseFloat(d) * 1000))
   )

@@ -208,3 +208,154 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* The CRT treatment on the price chart.
+ *
+ * **These rules mirror `src/lib/crt.js`, which carries the reasoning**;
+ * `crt.test.js` parses this file and fails if the two disagree. The short
+ * version of why each number is what it is:
+ *
+ * **Everything moves `transform` and nothing else.** Both animations run on the
+ * compositor — no layout, no repaint, no React render, no rAF. The obvious way
+ * to roll a scanline gradient is to animate `background-position`, which draws
+ * the identical picture while repainting the layer every frame. Translating by
+ * exactly one gradient period instead is free, seamless at any height, and needs
+ * only one period of headroom rather than a doubled element.
+ *
+ * **The opacities are a measured ceiling, not a taste.** They shift the axis
+ * labels and the ground under them together, which compresses their contrast
+ * rather than preserving it — and the two layers stack, so the figure held to AA
+ * is the *combination*, `1 − (1 − a)(1 − b)`, not either alpha alone. That
+ * combined ceiling is 0.1168, where the quiet tier holds 4.61:1 in dark and
+ * 4.87:1 in light; the scanlines are 8% and the band 4% to sit under it. The
+ * scanlines were 10% before the band existed, and came down rather than the band
+ * being made too faint to see. `crt.test.js` recomputes all of it through the
+ * composite, so turning either up to taste fails the build instead of the
+ * reader.
+ *
+ * **`ink` rather than a fixed dark, and that is not a cosmetic choice.** Drawn
+ * in `scrim` — the obvious pick, since a scanline is the unlit gap between rows
+ * — the banding measured 1.013 in dark mode, where 1.000 is a flat field: there
+ * is no luminance room below a near-black plot area, and no alpha rescues it.
+ * `ink` opposes the surface in both themes, so it darkens a light chart and
+ * brightens a dark one, which is also what a phosphor raster actually looks
+ * like. In the light theme the two tokens are the same value, so only dark mode
+ * moved — from 1.013 to 1.329.
+ *
+ * **The wobble is applied to the chart wrapper, so the axes and gridlines move
+ * with the series** — displacing the line alone would shift a reading against
+ * its own scale. Whole pixels, and `steps(1, end)` so nothing interpolates
+ * between them: a fractional transform on a composited layer resamples the 11px
+ * tick labels inside it, and soft text is a real cost where jerk is not.
+ *
+ * Reduced motion needs no rule of its own. The blanket block above stops both of
+ * these, and they degrade the way it assumes — the scanlines stop rolling and
+ * remain a static texture, so only the movement goes.
+ */
+@keyframes crt-scanline-roll {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, 3px, 0); }
+}
+
+/* One displacement per cycle. Three of them read as a nervous tic rather than as
+ * an occasional tracking fault, on a chart someone is trying to read a number
+ * off. With `steps(1, end)` each segment holds its opening value, so this is
+ * 6.09s still, 70ms one pixel left, then still again. */
+@keyframes crt-wobble {
+  0%   { transform: translate3d(0, 0, 0); }
+  87%  { transform: translate3d(-1px, 0, 0); }
+  88%  { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* The band parks above the plot area for most of the cycle and then sweeps
+ * through it, so the chart is undisturbed roughly 60% of the time. Both ends of
+ * the travel are outside the clipping frame, which is what makes the loop
+ * seamless without a fade. */
+@keyframes crt-band-roll {
+  0%, 60% { transform: translate3d(0, 0, 0); }
+  100%    { transform: translate3d(0, 700%, 0); }
+}
+
+/* The clipping frame, carrying both artifacts as pseudo-elements: `::before` is
+ * the scanline raster, `::after` is the rolling band. One node and one clip for
+ * the pair, and neither can escape the plot area.
+ *
+ * `pointer-events: none` is load-bearing rather than tidy: this sits over the
+ * whole plot area, and without it the chart's hover tooltip is unreachable —
+ * the effect would silently take a feature away. */
+.crt-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.crt-overlay::before {
+  content: '';
+  position: absolute;
+  /* One period of headroom at the top, since the roll travels downward. */
+  inset: -3px 0 0 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    color-mix(in srgb, var(--color-ink) 8%, transparent) 2px 3px
+  );
+  animation: crt-scanline-roll 1.2s linear infinite;
+  will-change: transform;
+}
+
+/* The rolling band — a soft luminance bar, the hum bar of a mistuned terrestrial
+ * picture. Deliberately untextured: the scanlines show through it and supply the
+ * grain, which costs nothing and stacks one fewer layer into the contrast
+ * budget. The feather is asymmetric rather than a symmetrical box — the band
+ * travels downward, so it ramps up over its top 22% and falls away across the
+ * lower 62%, arriving faster than it leaves. */
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -44px;
+  height: 44px;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 22%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 38%,
+    transparent 100%
+  );
+  animation: crt-band-roll 9s linear infinite;
+  will-change: transform;
+}
+
+.crt-wobble {
+  animation: crt-wobble 7s steps(1, end) infinite;
+  will-change: transform;
+}
+
+/* Steady while it is being read. The ticker does the same on hover, and a chart
+ * you are pointing at to read a tooltip has a stronger claim to holding still. */
+.crt-wobble:hover {
+  animation-play-state: paused;
+}
+
+/* The sparklines' raster ground.
+ *
+ * A `background-image` rather than an overlay, which is the whole reason these
+ * can have a raster at all: the series is 1.5px in a 40px box, and a 1px dark
+ * line every 3px laid *over* it would chop it into dashes. Behind it, the SVG
+ * paints on top at full strength and the box reads as a small screen.
+ *
+ * Same pitch and token as the chart so the three read as one piece of hardware,
+ * and deliberately not animated — the chart carries the movement, and a rolling
+ * raster on two always-visible cards would compete with the one place motion
+ * means something. Nothing here is composited, promoted or on the reduced-motion
+ * path; it is a gradient painted once. */
+.crt-grain {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    color-mix(in srgb, var(--color-ink) 12%, transparent) 2px 3px
+  );
+}
