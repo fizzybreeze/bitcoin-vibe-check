@@ -17,8 +17,14 @@ const ok = candles => ({ error: [], result: { XXBTZUSD: candles, last: 1 } })
 
 // Kraken's real shape for a pair that does not exist: HTTP 200, error array.
 const unknownPair = { error: ['EQuery:Unknown asset pair'], result: {} }
-// A pair that exists but has never traded — 200, no error, no series.
-const noCandles = { error: [], result: { last: 1 } }
+// A pair Kraken lists but nobody has traded in the window: 200, no error, and an
+// **empty array** under the pair key. This is the shape the first version of
+// this module got wrong — an empty array is truthy, so nothing threw, and the
+// chart resolved `{ points: null }` with no fallback and no error: a blank plot
+// under the selected currency's name, cached for the session.
+const emptySeries = { error: [], result: { XBTCHF: [], last: 1 } }
+// A 200 this module cannot make sense of at all. Not a missing market.
+const unparseable = { error: [], result: {} }
 
 /** Route by the `pair` query parameter, so a test can answer each pair differently. */
 function routeByPair(bodies) {
@@ -77,11 +83,55 @@ describe('fetchChartSeries', () => {
     expect(series.points).toHaveLength(3)
   })
 
-  it('treats a market with no candles as one that cannot be drawn', async () => {
-    // A pair Kraken lists but nobody has traded returns a 200 with no series.
-    // There is nothing to plot, so it falls back rather than erroring.
-    vi.stubGlobal('fetch', routeByPair({ XBTCAD: noCandles, XBTUSD: ok(CANDLES) }))
-    await expect(fetchChartSeries(30, 'cad')).resolves.toMatchObject({ currency: 'usd' })
+  it('treats a listed pair with no candles as one that cannot be drawn', async () => {
+    // The bug this file shipped with. There is nothing to plot and there never
+    // will be, so it must fall back — and, critically, it must actually *draw*
+    // something rather than resolving with null points and no complaint.
+    const fetchMock = routeByPair({ XBTCHF: emptySeries, XBTUSD: ok(CANDLES) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const series = await fetchChartSeries(30, 'chf')
+
+    expect(series.currency).toBe('usd')
+    expect(series.points).toHaveLength(3)
+    // The dollar request was actually made — the first version never got here.
+    expect(fetchMock.mock.calls.map(c => new URL(c[0]).searchParams.get('pair')))
+      .toEqual(['XBTCHF', 'XBTUSD'])
+  })
+
+  it('never resolves with no points to draw', async () => {
+    // Whatever happens, a resolved series has candles in it. `App` sets
+    // `chartLoading` false on a resolution, so null points render as an empty
+    // plot area with no skeleton, no error and nothing to explain it.
+    vi.stubGlobal('fetch', routeByPair({ XBTCHF: emptySeries, XBTUSD: ok(CANDLES) }))
+    const series = await fetchChartSeries(30, 'chf')
+    expect(series.points?.length).toBeGreaterThan(0)
+  })
+
+  it('retries a body it cannot parse rather than calling it a missing market', async () => {
+    // "No candles in the response" used to be the message for *any* unreadable
+    // body, so this took the silent USD fallback and printed a fabricated
+    // "No Kraken GBP market" — the exact failure the narrow fallback prevents,
+    // arriving through the other half of the predicate.
+    const fetchMock = routeByPair({ XBTGBP: unparseable, XBTUSD: ok(CANDLES) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchChartSeries(30, 'gbp')).rejects.toThrow(/unrecognised response body/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports what was asked for alongside what was served', async () => {
+    // Both travel with the points. The card compares them against each other
+    // rather than against the live selector, which is what stops a currency
+    // switch painting a fallback notice for a frame before the fetch lands.
+    vi.stubGlobal('fetch', routeByPair({ XBTCHF: emptySeries, XBTUSD: ok(CANDLES) }))
+    await expect(fetchChartSeries(30, 'chf'))
+      .resolves.toMatchObject({ requested: 'chf', currency: 'usd' })
+
+    _resetInFlight()
+    vi.stubGlobal('fetch', routeByPair({ XBTGBP: ok(CANDLES) }))
+    await expect(fetchChartSeries(30, 'gbp'))
+      .resolves.toMatchObject({ requested: 'gbp', currency: 'gbp' })
   })
 
   it('throws on a transport failure rather than quietly moving the reader to dollars', async () => {

@@ -159,6 +159,16 @@ export function makeKrakenCandlesForPair(pair, count, stepSeconds = DAY_S) {
 /** Kraken's real answer for a pair that does not exist — HTTP 200, error array. */
 export const krakenUnknownPairResponse = { error: ['EQuery:Unknown asset pair'], result: {} }
 
+/**
+ * A pair Kraken lists but which has no candles in the window — 200, no error,
+ * and an **empty array** under the pair key.
+ *
+ * Its own fixture because it is not the same thing as the response above and was
+ * handled as though it were: an empty array is truthy, so nothing threw and the
+ * chart resolved with no points, no error and no fallback.
+ */
+export const krakenEmptySeriesResponse = pair => ({ error: [], result: { [pair]: [], last: nowS } })
+
 /** Wrap candles in Kraken's response envelope, under the canonical pair key. */
 export function krakenOhlcResponse(candles) {
   return { error: [], result: { XXBTZUSD: candles, last: nowS } }

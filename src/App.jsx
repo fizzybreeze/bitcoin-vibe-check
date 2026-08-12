@@ -208,11 +208,11 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [range, setRange]             = usePersistedState('btc-vibe-chart-timeframe', '7D')
   const [currency, setCurrency]       = usePersistedState('btc-vibe-currency', 'usd')
-  const [chart, setChart]             = useState(null)
-  // What the candles on screen are denominated in, which is the selected
-  // currency unless Kraken had no market for it. Separate state rather than
-  // derived from `currency`, because the whole point is that the two can differ.
-  const [chartCurrency, setChartCurrency] = useState('usd')
+  // `{ points, currency, requested }` or null. One state rather than three,
+  // because the card compares the last two against each other to decide whether
+  // to say a fallback happened — and any of them updating a render before the
+  // others is a frame reporting a fallback that did not occur.
+  const [chartSeries, setChartSeries] = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
   const [chartNonce, setChartNonce]   = useState(0)
@@ -473,13 +473,12 @@ export default function App() {
     const prevCacheKey = prevCacheKeyRef.current
     prevCacheKeyRef.current = cacheKey
 
-    // One place to apply a result, because the currency the candles came back in
-    // has to be adopted at exactly the same moment as the candles themselves —
-    // set apart, a slow render could pair one range's points with another's
-    // label, which is the class of bug this whole change is about.
+    // One place to apply a result. The series carries its own currencies, so
+    // there is nothing here that can be adopted a render out of step with the
+    // candles it describes — which is the class of bug this whole change is
+    // about, met once more inside the fix for it.
     function showSeries(series) {
-      setChart(series.points)
-      setChartCurrency(series.currency)
+      setChartSeries(series)
       setChartChange(computeChartChange(series.points))
     }
 
@@ -502,7 +501,7 @@ export default function App() {
 
     // Clear stale chart when switching to an uncached range so skeleton shows.
     // On refresh (same cacheKey), keep old chart visible behind the opacity overlay.
-    if (prevCacheKey !== cacheKey) setChart(null)
+    if (prevCacheKey !== cacheKey) setChartSeries(null)
     setChartLoading(true)
     setChartChange(null)
 
@@ -750,7 +749,11 @@ export default function App() {
               aria-label="Display currency"
               className="appearance-none cursor-pointer rounded-full bg-raised pl-3 pr-7 py-1 text-xs font-semibold uppercase text-accent"
             >
-              {['usd', 'gbp', 'eur', 'cad', 'chf'].map(c => (
+              {/* Derived, not listed. This was a third hard-coded copy of the
+                * currency set beside `CURRENCY_META` and the Kraken pair map, so
+                * a sixth currency added here alone would have offered a chart
+                * with no market behind it while every test stayed green. */}
+              {Object.keys(CURRENCY_META).map(c => (
                 <option key={c} value={c}>{c.toUpperCase()}</option>
               ))}
             </select>
@@ -787,7 +790,7 @@ export default function App() {
         </div>
         <div className="md:col-span-2 h-full">
           <PriceChartCard
-            chart={chart}
+            chart={chartSeries?.points ?? null}
             chartLoading={chartLoading}
             chartError={chartError}
             chartChange={chartChange}
@@ -796,7 +799,8 @@ export default function App() {
             refreshChart={refreshChart}
             ranges={RANGES}
             currency={currency}
-            chartCurrency={chartCurrency}
+            chartCurrency={chartSeries?.currency}
+            chartRequestedCurrency={chartSeries?.requested}
           />
         </div>
       </div>

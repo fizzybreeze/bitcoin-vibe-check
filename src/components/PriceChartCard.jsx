@@ -33,7 +33,7 @@ const chartVolumeTooltip = pair =>
  */
 export default function PriceChartCard({
   chart, chartLoading, chartError, chartChange,
-  range, setRange, refreshChart, ranges, currency, chartCurrency,
+  range, setRange, refreshChart, ranges, currency, chartCurrency, chartRequestedCurrency,
 }) {
   // recharts takes colours as props, not classes, so it cannot read the
   // stylesheet — every hex below comes from the palette for the theme that is
@@ -47,16 +47,20 @@ export default function PriceChartCard({
   // mistake from throwing during render — this app has no error boundary, so a
   // throw here takes the whole page rather than the card. `e2e/chartCurrency.spec.js`
   // is what stops that tolerance hiding the bug it tolerates.
-  const served       = String(chartCurrency ?? currency).toLowerCase()
-  const meta         = CURRENCY_META[served] ?? CURRENCY_META.usd
-  const servedUpper  = served.toUpperCase()
-  const fellBackFrom = served !== String(currency).toLowerCase() ? String(currency).toUpperCase() : null
-  // The two currencies also disagree while a fetch for the new one is still
-  // outstanding or has just failed — the series on screen is the previous one,
-  // or none. Claiming "no market" there would be a confident wrong answer to a
-  // dropped packet, so the note waits until there are candles that the fallback
-  // actually produced. The error states below explain themselves.
-  const showFallbackNote = fellBackFrom != null && chart != null && chartError == null
+  const served      = String(chartCurrency ?? currency).toLowerCase()
+  const meta        = CURRENCY_META[served] ?? CURRENCY_META.usd
+  const servedUpper = served.toUpperCase()
+
+  // Both halves come off the *series*, never off the live selector. Comparing
+  // against `currency` looks equivalent and is not: the selector updates in the
+  // render that follows the change event, while the new candles arrive an effect
+  // later — so a switch from a drawn USD chart to GBP would paint "No Kraken GBP
+  // market" for a frame, on a currency that has one. The series compared with
+  // itself has no such window, and needs no gating on the error or loading state
+  // to get there.
+  const requested        = String(chartRequestedCurrency ?? served).toLowerCase()
+  const showFallbackNote = requested !== served
+  const fellBackFrom     = requested.toUpperCase()
 
   const chartPrices = chart?.map(d => d.price) ?? []
   const lo  = chartPrices.length ? Math.min(...chartPrices) : 0

@@ -36,23 +36,28 @@ import {
 export const FALLBACK_CURRENCY = 'usd'
 
 /**
- * Candles for a range, in a currency, as `{ points, currency }`.
+ * Candles for a range, in a currency, as `{ points, currency, requested }`.
  *
- * `currency` on the way out is what the points are actually denominated in,
- * which is the requested currency unless Kraken has no market for it.
+ * `currency` is what the points are actually denominated in; `requested` is what
+ * was asked for. They differ only on a fallback, and **both travel with the
+ * points** rather than one of them being read off the live selector at render
+ * time — otherwise the moment between the selector changing and the new series
+ * landing is a frame in which the old chart is compared against the new currency
+ * and reported as a fallback that never happened.
  *
  * Throws on transport failure, on a Kraken-reported error other than an unknown
  * pair, and on the request timing out. The caller's retry path wants the throw.
  */
 export async function fetchChartSeries(days, currency) {
   const { interval, count } = krakenParamsForDays(days)
+  const wanted = String(currency ?? '').toLowerCase()
 
   const draw = async (served) => ({
     points: parseKrakenOhlc(await fetchKrakenCandles(interval, krakenPairForCurrency(served)), days, count),
     currency: served,
+    requested: wanted,
   })
 
-  const wanted = String(currency ?? '').toLowerCase()
   // An unknown currency is a caller bug rather than a missing market, but it
   // arrives here the same way a missing one would and gets the same honest
   // answer: dollar candles, labelled as dollars.

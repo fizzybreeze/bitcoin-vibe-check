@@ -67,6 +67,22 @@ export function krakenPairForCurrency(currency) {
 }
 
 /**
+ * Marker for "Kraken has no drawable market for this pair".
+ *
+ * Exactly two conditions earn it, and both are set where they are *known*:
+ * Kraken answering `EQuery:Unknown asset pair` inside a 200, and a pair that is
+ * listed but returns an empty candle array. Everything else — a transport
+ * failure, a timeout, a body this module cannot parse — is a bad minute.
+ */
+const UNSUPPORTED_PAIR = 'kraken-unsupported-pair'
+
+function unsupportedPairError(message) {
+  const err = new Error(message)
+  err.code = UNSUPPORTED_PAIR
+  return err
+}
+
+/**
  * Does this failure mean Kraken has no such market, rather than having a bad
  * minute?
  *
@@ -76,14 +92,14 @@ export function krakenPairForCurrency(currency) {
  * reader to dollars over a dropped packet — and it would *stick*, because the
  * result is cached for the session.
  *
- * Kraken reports an unknown pair inside a 200 response, which `extractKrakenOhlc`
- * turns into a throw carrying their text. A pair that exists but has never
- * traded comes back with no candles, which is equally undrawable and is treated
- * the same way.
+ * A tag rather than a message match. The first version of this read the message
+ * for `'no candles in response'`, which is the text thrown for **any** body that
+ * cannot be parsed — so an unrecognised 200 for XBTGBP would have taken the
+ * silent fallback and printed a fabricated "No Kraken GBP market", which is the
+ * precise failure the narrow fallback exists to prevent.
  */
 export function isUnsupportedPairError(err) {
-  const message = String(err?.message ?? '')
-  return message.includes('Unknown asset pair') || message.includes('no candles in response')
+  return err?.code === UNSUPPORTED_PAIR
 }
 
 /**
@@ -104,7 +120,14 @@ export function isUnsupportedPairError(err) {
 export function extractKrakenOhlc(raw) {
   if (!raw || typeof raw !== 'object') return null
   if (Array.isArray(raw.error) && raw.error.length > 0) {
-    throw new Error(`Kraken: ${raw.error.join(', ')}`)
+    const message = `Kraken: ${raw.error.join(', ')}`
+    // Tagged here rather than recognised by the caller, because this is the one
+    // place Kraken's own text is in hand. A caller matching on the message would
+    // be matching a string this module composes, which is how "no candles"
+    // — a *generic* parse failure — came to be read as a missing market.
+    throw raw.error.some(code => String(code).includes('Unknown asset pair'))
+      ? unsupportedPairError(message)
+      : new Error(message)
   }
 
   const result = raw.result
@@ -179,7 +202,13 @@ export function fetchKrakenCandles(interval, pair = 'XBTUSD') {
       const res = await fetch(url, { signal: controller.signal })
       if (!res.ok) throw new Error(`Kraken OHLC: HTTP ${res.status}`)
       const candles = extractKrakenOhlc(await res.json())
-      if (!candles) throw new Error('Kraken OHLC: no candles in response')
+      // Two different failures, deliberately not collapsed. A body with no
+      // series in it at all is something this module could not read, so it is a
+      // bad minute and the caller should retry. An *empty* series is a pair
+      // Kraken lists and nobody has traded — there is nothing to plot and there
+      // never will be, so it is a missing market.
+      if (!candles) throw new Error('Kraken OHLC: unrecognised response body')
+      if (candles.length === 0) throw unsupportedPairError(`Kraken OHLC: ${pair} has no candles`)
       return candles
     } catch (err) {
       // An abort surfaces as a bare "operation was aborted"; say what actually

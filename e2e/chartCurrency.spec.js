@@ -14,7 +14,7 @@
 // these assert the *numbers on the chart* changed rather than only the label.
 import { test, expect } from '@playwright/test'
 import { mockApis } from './mocks.js'
-import { krakenUnknownPairResponse, PAIR_BASE_PRICE } from './fixtures.js'
+import { krakenUnknownPairResponse, krakenEmptySeriesResponse, PAIR_BASE_PRICE } from './fixtures.js'
 
 const TIMEOUT = 10_000
 // A currency switch costs a 400ms debounce plus a fetch, on top of whatever the
@@ -68,6 +68,17 @@ async function waitForChart(page) {
 }
 
 test.describe('the price chart follows the selected currency', () => {
+  // The newsletter modal opens five seconds into a first visit and covers the
+  // chart. Several tests here switch currency and then reach for the plot area,
+  // which straddles that threshold — the tooltip case failed on a `<p>` inside
+  // the modal rather than on anything about the chart. Suppressed the way
+  // `screenshot.spec.js` and `visual.spec.js` do.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem('btc-vibe-newsletter-prompted', 'true')
+    )
+  })
+
   test('redraws from that currency’s Kraken pair', async ({ page }) => {
     const pairs = []
     page.on('request', req => {
@@ -116,9 +127,18 @@ test.describe('the price chart follows the selected currency', () => {
     await waitForChart(page)
     await selectCurrency(page, 'gbp')
     await expect(chartHeading(page)).toHaveText(/GBP/, { timeout: SLOW_TIMEOUT })
+    // Wait for the redrawn chart before reaching for it. The heading flips in
+    // the commit the new series lands in, while `ResponsiveContainer` still has
+    // to measure itself — hovering into that gap fires the one mousemove at a
+    // chart that re-renders immediately afterwards and drops the active point.
+    await expect.poll(() => page.locator('.recharts-bar-rectangle').count(), { timeout: SLOW_TIMEOUT })
+      .toBeGreaterThan(0)
 
     const box = await page.locator('.recharts-surface').first().boundingBox()
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    // A second move a few pixels along, so a render landing between the two
+    // cannot swallow the hover entirely.
+    await page.mouse.move(box.x + box.width / 2 + 24, box.y + box.height / 2)
 
     const tooltip = page.locator('.recharts-tooltip-wrapper')
     await expect(tooltip).toBeVisible({ timeout: SLOW_TIMEOUT })
@@ -193,6 +213,68 @@ test.describe('the price chart follows the selected currency', () => {
       .toHaveText(/No Kraken CHF market · chart in USD/, { timeout: SLOW_TIMEOUT })
     // And it drew something rather than erroring out.
     await expect(page.getByText(/Unable to load chart data/)).toHaveCount(0)
+  })
+
+  test('draws something for a listed pair that has never traded', async ({ page }) => {
+    // The shape the fallback originally missed, and the one this change could
+    // not exercise against real Kraken: 200, no error, an empty candle array.
+    // An empty array is truthy, so nothing threw — the chart resolved with null
+    // points and rendered an empty plot area under `Price · CHF`, with no
+    // skeleton, no error and nothing to explain it, cached for the session.
+    await mockApis(page)
+    await page.route('https://api.kraken.com/0/public/OHLC*', route => {
+      const pair = new URL(route.request().url()).searchParams.get('pair')
+      if (pair !== 'XBTCHF') return route.fallback()
+      route.fulfill({ json: krakenEmptySeriesResponse('XBTCHF') })
+    })
+
+    await page.goto('/')
+    await waitForChart(page)
+    await selectCurrency(page, 'chf')
+
+    await expect(page.getByTestId('chart-currency-fallback'))
+      .toHaveText(/No Kraken CHF market · chart in USD/, { timeout: SLOW_TIMEOUT })
+    // The point of the fallback: there are candles on screen, not an empty box.
+    await expectHighLine(page, '$', 'XBTUSD')
+    await expect(page.locator('.recharts-bar-rectangle').first()).toBeVisible({ timeout: SLOW_TIMEOUT })
+  })
+
+  test('never announces a fallback for a currency that has a market', async ({ page }) => {
+    // The frame between the selector updating and the new candles landing. The
+    // note is drawn from the series' own two currencies, so there is no render
+    // in which an old USD chart is described as a failed GBP one.
+    //
+    // A `MutationObserver` rather than polling from the test, and that is the
+    // whole reason this assertion works: the wrong version paints the note for a
+    // *single frame*, and polling over the wire at 16ms misses it — measured,
+    // the polled version stayed green against the defect. The observer sees any
+    // node that was ever committed, however briefly.
+    await mockApis(page)
+    await page.goto('/')
+    await waitForChart(page)
+
+    await page.evaluate(() => {
+      window.__fallbackNoteSeen = 0
+      new MutationObserver(records => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node.nodeType !== 1) continue
+            if (node.matches?.('[data-testid="chart-currency-fallback"]')
+              || node.querySelector?.('[data-testid="chart-currency-fallback"]')) {
+              window.__fallbackNoteSeen += 1
+            }
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true })
+    })
+
+    await selectCurrency(page, 'gbp')
+    await expect(chartHeading(page)).toHaveText(/GBP/, { timeout: SLOW_TIMEOUT })
+    await expect.poll(() => page.locator('.recharts-bar-rectangle').count(), { timeout: SLOW_TIMEOUT })
+      .toBeGreaterThan(0)
+
+    expect(await page.evaluate(() => window.__fallbackNoteSeen),
+      'fallback note appeared during a switch to a currency Kraken trades').toBe(0)
   })
 
   test('retries a failed fetch instead of quietly moving the reader to dollars', async ({ page }) => {
