@@ -132,8 +132,27 @@ export const TABULAR = 'tabular-nums'
  * The colour is part of it because it does not vary — all 36 were `text-quiet`,
  * byte-identical. That is the opposite of `ICON_BUTTON`, which deliberately
  * leaves colour out because settings and actions genuinely differ there.
+ *
+ * **`font-mono` is the label register, and it is the cheapest retro move the
+ * app had left.** The product's idiom is a pixel wordmark, a pixel mark, a
+ * pixel character and a phosphor raster; the mono voice was already in the
+ * repo — the genesis hash and the supporter names — and used in exactly two
+ * files, which is what an accidental register looks like rather than a chosen
+ * one. Setting a card's labels in it reads as a readout under a figure, which
+ * is what these are.
+ *
+ * It costs **nothing**: `--font-mono` is a platform stack, so there is no file
+ * to download, no `tnum` table to verify and no obligation to supply a face to
+ * Satori and html2canvas — the three requirements that kept a display face out
+ * of the body copy (see `FONT_STACKS` above). And being one constant, being
+ * wrong about it is a one-line revert, which is what v1.8.7 built this for.
+ *
+ * The figures are deliberately **not** included. `CARD_VALUE` stays in the UI
+ * face: those are the numbers the dashboard exists to show, they already carry
+ * `tabular-nums` where they tick, and moving them would be a re-skin rather
+ * than a register.
  */
-export const CARD_LABEL = 'text-xs font-semibold uppercase tracking-widest text-quiet'
+export const CARD_LABEL = 'font-mono text-xs font-semibold uppercase tracking-widest text-quiet'
 
 /**
  * The smaller label tier, for a label inside a grid that is already inside a
@@ -145,8 +164,13 @@ export const CARD_LABEL = 'text-xs font-semibold uppercase tracking-widest text-
  * to `CARD_LABEL` would relayout a five-row two-column grid to remove a
  * distinction that is actually doing something. A tier that is written down is
  * a decision; the same tier used once and unnamed is drift.
+ *
+ * It follows `CARD_LABEL` into the mono register, because it is the same
+ * register one size down. Treating the two differently would put two faces on
+ * labels that sit inside each other in the Vibe Score breakdown — which is the
+ * drift this module exists to stop, arriving through the file that names it.
  */
-export const CARD_LABEL_SM = 'text-[10px] uppercase tracking-wider text-quiet'
+export const CARD_LABEL_SM = 'font-mono text-[10px] uppercase tracking-wider text-quiet'
 
 /**
  * The figure a card exists to show. Five treatments served this role across

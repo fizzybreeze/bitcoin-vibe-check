@@ -259,3 +259,43 @@ describe('the card shell', () => {
     expect(offenders, 'a card root carrying its own margin or breakpoint').toEqual([])
   })
 })
+
+describe('the label register is mono', () => {
+  it('sets both label tiers in it, and only the label tiers', () => {
+    // The figures deliberately stay in the UI face — these are the numbers the
+    // dashboard exists to show, and moving them would be a re-skin rather than
+    // a register. If a value tier ever wants mono it is a decision to argue
+    // for, not one to arrive by copying a label.
+    expect(CARD_LABEL).toContain('font-mono')
+    expect(CARD_LABEL_SM).toContain('font-mono')
+    for (const tier of CARD_VALUE_TIERS) {
+      expect(CARD_VALUE[tier], `${tier} should stay in the UI face`).not.toContain('font-mono')
+    }
+  })
+
+  it('resolves through the mono token the module already declares', () => {
+    // `font-mono` is only a class because `--font-mono` is in `@theme`. A tier
+    // written as a literal stack, or against a token that is not declared,
+    // produces no utility at all and the label silently inherits the UI face —
+    // the same trap the band ladders record for composed class names.
+    expect(FONT_ROLES).toContain('mono')
+    expect(readFileSync(INDEX_CSS, "utf8")).toMatch(/--font-mono:/)
+  })
+
+  it('carries the register onto the share image, which is a copy of the app', () => {
+    // The one export surface that *can* follow. Left in the UI face it would be
+    // the single place the image and the card disagree — invisible on either
+    // one alone, which is how the two brand oranges survived.
+    const body = readFileSync(join(COMPONENTS, 'ShareCanvas.jsx'), 'utf8')
+    expect(body).toMatch(/fontFamily:\s*FONT_STACKS\.mono/)
+  })
+
+  it('leaves the two preview cards out of it, and says why', () => {
+    // Neither can follow, for one reason: Satori ships a single face, and the
+    // static fallback exists to mirror the live card's header. Recorded so the
+    // absence reads as a decision rather than as a surface somebody missed.
+    const og = readFileSync(resolve('api/lib/ogView.js'), 'utf8')
+    expect(og).toContain(`fontFamily: '${SATORI_FONT_FAMILY}'`)
+    expect(og).not.toMatch(/FONT_STACKS\.mono/)
+  })
+})

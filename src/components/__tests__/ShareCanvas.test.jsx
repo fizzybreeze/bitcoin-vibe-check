@@ -3,6 +3,10 @@ import { render, screen } from '@testing-library/react'
 import ShareCanvas from '../ShareCanvas.jsx'
 import { PALETTE } from '../../lib/palette.js'
 import { mvrvBand } from '../../lib/scales.js'
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+const COMPONENTS = resolve('src/components')
 
 // jsdom serialises an inline colour as `rgb(r, g, b)`, so the palette hex has
 // to be converted before it can be compared with what was rendered.
@@ -60,9 +64,12 @@ describe('ShareCanvas — theme', () => {
   // The share image follows the theme the visitor is looking at. `forwardedRef`
   // is the capture target, so its child is the sheet whose background becomes
   // the image's background.
+  // `backgroundColor` rather than `background`: the sheet also carries the CRT
+  // raster as a `background-image`, and the shorthand resets it — so the two
+  // have to be written as separate properties and read as separate properties.
   function sheetBackground(props) {
     const { container } = renderCycleCard({ value: 2.15, source: 'live' }, props)
-    return container.firstChild.firstChild.style.background
+    return container.firstChild.firstChild.style.backgroundColor
   }
 
   it('renders light when asked to', () => {
@@ -103,5 +110,90 @@ describe('the header', () => {
     // `md:` class that ever resolved would change the size of an exported image.
     expect(mark.getAttribute('class')).not.toMatch(/md:/)
     expect(screen.queryByText('Bitcoin Vibe Check')).toBeNull()
+  })
+})
+
+describe('the header mark', () => {
+  function renderHeader() {
+    return render(
+      <ShareCanvas
+        selectedCards={['btcPrice']}
+        sentimentSummary=""
+        cardData={{ priceUsd: 100_000 }}
+        currency="usd"
+        forwardedRef={null}
+      />
+    )
+  }
+
+  it('is drawn rather than typed', () => {
+    // This was `<span>₿</span>` — a device-font glyph beside a wordmark that has
+    // been a picture since v1.11.0. A device without U+20BF rasterises a tofu
+    // box into an image somebody has already posted, which is exactly the risk
+    // v1.8.1 removed from the icons and left behind on this one surface.
+    const { container } = renderHeader()
+    const mark = container.querySelector('[data-testid="app-mark"]')
+    expect(mark).toBeTruthy()
+    expect(mark.querySelector('svg')).toBeTruthy()
+    // Rects, not text: proof it is the pixel grid rather than a glyph in a box.
+    expect(mark.querySelectorAll('rect').length).toBeGreaterThan(1)
+    expect(mark.querySelector('text')).toBeNull()
+  })
+
+  it('leaves no ₿ character anywhere in the exported tree', () => {
+    // The assertion that would have caught the original: the glyph renders
+    // perfectly on the machine that draws it and fails only on somebody else's.
+    const { container } = renderHeader()
+    expect(container.textContent).not.toContain('₿')
+  })
+
+  it('draws the mark from the shared artwork rather than a second copy of it', () => {
+    // `markSvg` makes three geometry decisions — whole-pixel cells, the grid
+    // centred on the remainder, the corner radius snapped to the cell. A
+    // component that redrew the mark in JSX would have to make them again.
+    const body = readFileSync(join(COMPONENTS, 'Mark.jsx'), 'utf8')
+    expect(body).toMatch(/markSvg/)
+    expect(body).not.toMatch(/<svg/)
+  })
+})
+
+describe('the CRT raster on the exported sheet', () => {
+  // The other half of this claim is in `crt.test.js`, which owns the geometry
+  // and the contrast; this is the part that needs JSX to render.
+  //
+  // It asserts the *rendered style* rather than scanning the source, because
+  // the first draft scanned for `grainBackground` — which matches the import
+  // line, so deleting the actual call left the test green and four mutations
+  // walked through it.
+  function sheet() {
+    const { container } = render(
+      <ShareCanvas
+        selectedCards={['btcPrice']}
+        sentimentSummary=""
+        cardData={{ priceUsd: 100_000 }}
+        currency="usd"
+        forwardedRef={null}
+      />
+    )
+    return container
+  }
+
+  it('paints the raster on the sheet html2canvas captures', () => {
+    // `backgroundImage` also catches the `background:` shorthand coming back —
+    // the shorthand resets the image, so it reads empty rather than wrong.
+    expect(sheet().firstChild.firstChild.style.backgroundImage)
+      .toContain('data:image/svg+xml')
+  })
+
+  it('leaves the cards themselves clear of it', () => {
+    // Deliberate: the cards are opaque panels sitting on one screen rather than
+    // eight small screens, which is also what keeps every figure in the image
+    // out of the contrast budget. See `EXPORT_GRAIN_LAYERS`.
+    const card = sheet().querySelector('[style*="border-radius: 12px"]')
+    expect(card, 'no card found to check').not.toBeNull()
+    // Not `toBe('')`: setting the `background` shorthand expands every longhand,
+    // so jsdom reports `initial` here rather than nothing. The claim is that the
+    // card carries no raster, which is what this says.
+    expect(card.style.backgroundImage).not.toContain('data:image/svg+xml')
   })
 })
