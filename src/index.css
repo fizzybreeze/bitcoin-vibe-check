@@ -222,12 +222,16 @@ body {
  * exactly one gradient period instead is free, seamless at any height, and needs
  * only one period of headroom rather than a doubled element.
  *
- * **The scanline opacity is a measured ceiling, not a taste.** It shifts the
- * axis labels and the ground under them together, which compresses their
- * contrast rather than preserving it. 10% holds every role drawn inside the
- * chart above 4.8:1 in both themes and 12% is the last value that clears the
- * headroom bar. `crt.test.js` recomputes that through the composite, so turning
- * this up to taste fails the build instead of the reader.
+ * **The opacities are a measured ceiling, not a taste.** They shift the axis
+ * labels and the ground under them together, which compresses their contrast
+ * rather than preserving it — and the two layers stack, so the figure held to AA
+ * is the *combination*, `1 − (1 − a)(1 − b)`, not either alpha alone. That
+ * combined ceiling is 0.1168, where the quiet tier holds 4.61:1 in dark and
+ * 4.87:1 in light; the scanlines are 8% and the band 4% to sit under it. The
+ * scanlines were 10% before the band existed, and came down rather than the band
+ * being made too faint to see. `crt.test.js` recomputes all of it through the
+ * composite, so turning either up to taste fails the build instead of the
+ * reader.
  *
  * **`ink` rather than a fixed dark, and that is not a cosmetic choice.** Drawn
  * in `scrim` — the obvious pick, since a scanline is the unlit gap between rows
@@ -304,8 +308,9 @@ body {
 /* The rolling band — a soft luminance bar, the hum bar of a mistuned terrestrial
  * picture. Deliberately untextured: the scanlines show through it and supply the
  * grain, which costs nothing and stacks one fewer layer into the contrast
- * budget. The feather is asymmetric, sharper at the leading edge than the
- * trailing one, which is how head-switching noise actually falls off. */
+ * budget. The feather is asymmetric rather than a symmetrical box — the band
+ * travels downward, so it ramps up over its top 22% and falls away across the
+ * lower 62%, arriving faster than it leaves. */
 .crt-overlay::after {
   content: '';
   position: absolute;

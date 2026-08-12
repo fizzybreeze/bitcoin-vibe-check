@@ -21,7 +21,7 @@ import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
   BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
   GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST,
-  WOBBLE_PERIOD_S, BAND_PERIOD_S, MAX_WOBBLE_OFFSETS,
+  WOBBLE_PERIOD_S, BAND_PERIOD_S, SCANLINE_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
 } from '../lib/crt.js'
 
@@ -195,8 +195,12 @@ describe('the two cadences', () => {
   const bandRule = css.slice(css.indexOf('.crt-overlay::after'), css.indexOf('.crt-wobble {'))
 
   it('runs each at the period crt.js declares', () => {
+    const scanlineRule = css.slice(css.indexOf('.crt-overlay::before'), css.indexOf('.crt-overlay::after'))
     expect(wobbleRule).toContain(`crt-wobble ${WOBBLE_PERIOD_S}s`)
     expect(bandRule).toContain(`crt-band-roll ${BAND_PERIOD_S}s`)
+    // All three, not just the two that beat against each other: the raster's
+    // own period was the one timing in the effect with no constant behind it.
+    expect(scanlineRule).toContain(`crt-scanline-roll ${SCANLINE_PERIOD_S}s`)
   })
 
   it('does not let the two land on a common beat', () => {
@@ -416,7 +420,15 @@ describe('the chart draws in the roles crt.js says it does', () => {
   // watching — so the list is compared against the call site rather than
   // maintained beside it.
   it('accounts for every palette role PriceChartCard renders with', () => {
-    const used = [...chartCard.matchAll(/\bcolors\.([a-zA-Z]+)/g)].map(m => m[1])
+    // Bracket access as well as dot access: a hyphenated token — `ink-dim`,
+    // `line-soft`, `accent-fill` — cannot be written `colors.x` and has to be
+    // `colors['x']`, so a dot-only pattern skipped exactly the roles most likely
+    // to be added later. That is the rot this guard exists to prevent, walking
+    // straight past it.
+    const used = [
+      ...[...chartCard.matchAll(/\bcolors\.([a-zA-Z]+)/g)].map(m => m[1]),
+      ...[...chartCard.matchAll(/\bcolors\[['"]([a-z-]+)['"]\]/g)].map(m => m[1]),
+    ]
     expect(used.length, 'no colours found — has the card stopped reading the palette?')
       .toBeGreaterThan(0)
     expect([...new Set(used)].sort())

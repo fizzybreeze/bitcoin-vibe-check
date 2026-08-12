@@ -27,8 +27,11 @@ test.describe('CRT chart treatment', () => {
   test.beforeEach(async ({ page }) => {
     // The scanlines are motion, so the control state for the rest of this file
     // is a visitor who has not asked for less of it. The reduced-motion half is
-    // covered generically in accessibility.spec.js, which sweeps every animation
-    // on the page and therefore picks these two up without naming them.
+    // covered generically in accessibility.spec.js — but only since that sweep
+    // learned to read pseudo-elements. It called `getComputedStyle(el)` with no
+    // second argument, and both chart animations live on a `::before` and an
+    // `::after`, so the claim made here was false when it was written: the
+    // overlay element reports `0s` and the sweep saw nothing.
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     await mockApis(page)
     await page.goto('/')

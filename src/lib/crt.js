@@ -30,12 +30,14 @@
  * that.** `palette.test.js` proves every token clears 4.5:1 on the surface it
  * sits on; it computes those ratios from the tokens themselves, so a translucent
  * layer composited *over* the text is completely invisible to it. A scanline
- * darkens the glyph and the ground under it by the same amount, which does not
- * preserve the ratio — it compresses it. `SCANLINE_ALPHA` is the measured answer
- * rather than a chosen one: at 0.15 the quiet tier drops to 4.30:1 in dark mode
- * and fails, and 0.10 leaves every role that renders inside the chart box above
- * 4.7:1 in both themes. `crt.test.js` recomputes that through the composite, so
- * darkening the effect to taste fails the build rather than the reader.
+ * shifts the glyph and the ground under it by the same amount, which does not
+ * preserve the ratio — it compresses it. The alphas are measured answers rather
+ * than chosen ones, and **the figure that matters is the two layers combined**,
+ * since the band rolls over the scanlines: `combinedAlpha` is 0.1168 here, where
+ * the quiet tier holds 4.61:1 in dark and 4.87:1 in light. `SCANLINE_ALPHA` is
+ * 0.08 rather than the 0.10 it started at for exactly that reason — see its own
+ * docblock. `crt.test.js` recomputes all of it through the composite, so
+ * strengthening the effect to taste fails the build rather than the reader.
  *
  * **3. The wobble moves the whole chart, never the series alone.** Displacing
  * the price line relative to its own gridlines and the high/low reference lines
@@ -114,6 +116,18 @@ export const BAND_TRAVEL_PCT = 700
  */
 export const WOBBLE_PERIOD_S = 7
 export const BAND_PERIOD_S = 9
+
+/**
+ * How long the scanline raster takes to travel one period — the third cadence,
+ * and the only one that is not a *fault*: the raster drifts continuously the way
+ * a real one does, where the wobble and the band are occasional disturbances.
+ *
+ * It is declared here for the same reason as the other two rather than because
+ * it interacts with them. Left in the stylesheet alone it was the one timing in
+ * the effect with no constant and no assertion behind it, which is how a number
+ * ends up being changed by whoever is nearest.
+ */
+export const SCANLINE_PERIOD_S = 1.2
 
 /**
  * How many times per cycle the wobble is allowed to displace the chart.
