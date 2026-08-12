@@ -14,7 +14,7 @@ import useVibeHistory from './hooks/useVibeHistory.js'
 import useTheme from './hooks/useTheme.js'
 import ThemeToggle from './components/ThemeToggle.jsx'
 import { supabase } from './lib/supabase.js'
-import { createChartCache } from './lib/chartCache.js'
+import { createChartCache, chartCacheKey } from './lib/chartCache.js'
 import { mergeMarketData, krakenTickerUpdates } from './lib/marketData.js'
 import {
   CURRENCY_META, fmtCurrency, computeChartChange,
@@ -24,10 +24,8 @@ import {
   computeVibeDimensions, computeVibeSummary, vibeDimensionValues,
 } from './lib/calculations.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
-import {
-  KRAKEN_INTERVAL, krakenParamsForDays,
-  fetchKrakenCandles, parseKrakenOhlc,
-} from './lib/ohlc.js'
+import { KRAKEN_INTERVAL, fetchKrakenCandles } from './lib/ohlc.js'
+import { fetchChartSeries } from './lib/chartSeries.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import BtcPriceCard from './components/BtcPriceCard.jsx'
 import NetworkPulseCard from './components/NetworkPulseCard.jsx'
@@ -100,20 +98,20 @@ async function loadData() {
   })
 }
 
-async function fetchChart(days) {
-  const { interval, count } = krakenParamsForDays(days)
-  // fetchKrakenCandles throws on a transport failure, on a Kraken error (which
-  // arrives inside a 200, so res.ok sails past it) and on a body with no
-  // candles. The caller already retries. It also shares a request in flight for
-  // the same URL, which is what stops 1M and 1Y — identical URLs since Kraken
-  // dropped `limit` — being fetched twice in the same prefetch burst (#24).
-  const candles = await fetchKrakenCandles(interval)
-  return parseKrakenOhlc(candles, days, count)
-}
-
-/** Chart data for a range label — the fetch sitting behind the per-range cache. */
-function fetchChartForRange(label) {
-  return fetchChart(RANGES.find(r => r.label === label)?.days ?? 7)
+/**
+ * Chart data for a `range:currency` key — the fetch sitting behind the store.
+ *
+ * Resolves to `{ points, currency }`, where the currency is what the candles are
+ * actually in; `fetchChartSeries` owns that distinction and the fallback that
+ * makes it necessary. It throws on everything but a missing market, which is
+ * what the effect's retry path below is for. Sharing a request in flight for the
+ * same URL happens a layer down in `fetchKrakenCandles`, which is what stops 1M
+ * and 1Y — identical URLs since Kraken dropped `limit` — being fetched twice in
+ * the same prefetch burst (#24).
+ */
+function fetchChartForKey(key) {
+  const [label, currency] = key.split(':')
+  return fetchChartSeries(RANGES.find(r => r.label === label)?.days ?? 7, currency)
 }
 
 function readCache() {
@@ -210,7 +208,11 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [range, setRange]             = usePersistedState('btc-vibe-chart-timeframe', '7D')
   const [currency, setCurrency]       = usePersistedState('btc-vibe-currency', 'usd')
-  const [chart, setChart]             = useState(null)
+  // `{ points, currency, requested }` or null. One state rather than three,
+  // because the card compares the last two against each other to decide whether
+  // to say a fallback happened — and any of them updating a render before the
+  // others is a frame reporting a fallback that did not occur.
+  const [chartSeries, setChartSeries] = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
   const [chartChange, setChartChange] = useState(null)
   const [chartNonce, setChartNonce]   = useState(0)
@@ -222,7 +224,10 @@ export default function App() {
   // fresh store on every render, and this component re-renders on every price
   // tick.
   const chartCache       = useRef(null)
-  if (chartCache.current == null) { chartCache.current = createChartCache(fetchChartForRange) }
+  if (chartCache.current == null) { chartCache.current = createChartCache(fetchChartForKey) }
+  // The currency at mount, for the prefetch below. `usePersistedState` reads
+  // localStorage synchronously, so the first render already holds the real one.
+  const initialCurrency  = useRef(currency)
   const debounceRef      = useRef(null)
   const retryRef         = useRef(null)
   const fetchIdRef       = useRef(0)
@@ -311,8 +316,17 @@ export default function App() {
   // — the store dedupes both against the cache and against a request in flight,
   // which is what stops the active range being fetched twice (#41). That same
   // dedupe absorbs StrictMode's second invocation.
+  //
+  // Deliberately the mount currency rather than the live one: re-running this on
+  // every currency change would fire four loads per switch with no debounce in
+  // front of them, so arrowing through the selector would burst at Kraken. A
+  // switch is warmed by `startBackgroundPrefetch` instead, which runs after the
+  // active range has landed and is therefore already behind the 400ms debounce.
   useEffect(() => {
-    RANGES.forEach(({ label }) => { chartCache.current.load(label).catch(() => {}) })
+    const currencyAtMount = initialCurrency.current
+    RANGES.forEach(({ label }) => {
+      chartCache.current.load(chartCacheKey(label, currencyAtMount)).catch(() => {})
+    })
   }, [])
 
   // 60-second refresh cycle for KPI data (prices handled by WebSocket)
@@ -455,9 +469,18 @@ export default function App() {
 
   // Fix 1+2+3+4: debounced fetch (400ms), in-memory cache, error handling with auto-retry, loading overlay
   useEffect(() => {
-    const cacheKey = range
+    const cacheKey = chartCacheKey(range, currency)
     const prevCacheKey = prevCacheKeyRef.current
     prevCacheKeyRef.current = cacheKey
+
+    // One place to apply a result. The series carries its own currencies, so
+    // there is nothing here that can be adopted a render out of step with the
+    // candles it describes — which is the class of bug this whole change is
+    // about, met once more inside the fix for it.
+    function showSeries(series) {
+      setChartSeries(series)
+      setChartChange(computeChartChange(series.points))
+    }
 
     // Cancel any pending debounce or retry timer
     clearTimeout(debounceRef.current)
@@ -471,16 +494,14 @@ export default function App() {
 
     // Serve immediately from cache if available
     if (chartCache.current.has(cacheKey)) {
-      const cached = chartCache.current.get(cacheKey)
-      setChart(cached)
-      setChartChange(computeChartChange(cached))
+      showSeries(chartCache.current.get(cacheKey))
       setChartLoading(false)
       return
     }
 
     // Clear stale chart when switching to an uncached range so skeleton shows.
     // On refresh (same cacheKey), keep old chart visible behind the opacity overlay.
-    if (prevCacheKey !== cacheKey) setChart(null)
+    if (prevCacheKey !== cacheKey) setChartSeries(null)
     setChartLoading(true)
     setChartChange(null)
 
@@ -495,7 +516,7 @@ export default function App() {
     function startBackgroundPrefetch() {
       RANGES
         .filter(r => r.label !== range)
-        .forEach(({ label }) => { chartCache.current.load(label).catch(() => {}) })
+        .forEach(({ label }) => { chartCache.current.load(chartCacheKey(label, currency)).catch(() => {}) })
     }
 
     async function doFetch() {
@@ -505,8 +526,7 @@ export default function App() {
         // prefetch to have landed this very range (#41).
         const result = await chartCache.current.load(cacheKey)
         if (fetchIdRef.current !== myId) return
-        setChart(result)
-        setChartChange(computeChartChange(result))
+        showSeries(result)
         setChartLoading(false)
         startBackgroundPrefetch()
       } catch {
@@ -518,8 +538,7 @@ export default function App() {
           try {
             const result = await chartCache.current.load(cacheKey)
             if (fetchIdRef.current !== myId) return
-            setChart(result)
-            setChartChange(computeChartChange(result))
+            showSeries(result)
             setChartError(null)
             startBackgroundPrefetch()
           } catch {
@@ -536,7 +555,7 @@ export default function App() {
       clearTimeout(debounceRef.current)
       clearTimeout(retryRef.current)
     }
-  }, [range, chartNonce])
+  }, [range, currency, chartNonce])
 
   // Initialise AudioContext on first user interaction when sound is enabled
   useEffect(() => {
@@ -586,7 +605,7 @@ export default function App() {
     // Disowns a request for this range still in flight as well as the stored
     // candles — otherwise Refresh could be answered by the very fetch it was
     // pressed to replace.
-    chartCache.current.invalidate(range)
+    chartCache.current.invalidate(chartCacheKey(range, currency))
     setChartNonce(n => n + 1)
   }
 
@@ -730,7 +749,11 @@ export default function App() {
               aria-label="Display currency"
               className="appearance-none cursor-pointer rounded-full bg-raised pl-3 pr-7 py-1 text-xs font-semibold uppercase text-accent"
             >
-              {['usd', 'gbp', 'eur', 'cad', 'chf'].map(c => (
+              {/* Derived, not listed. This was a third hard-coded copy of the
+                * currency set beside `CURRENCY_META` and the Kraken pair map, so
+                * a sixth currency added here alone would have offered a chart
+                * with no market behind it while every test stayed green. */}
+              {Object.keys(CURRENCY_META).map(c => (
                 <option key={c} value={c}>{c.toUpperCase()}</option>
               ))}
             </select>
@@ -767,7 +790,7 @@ export default function App() {
         </div>
         <div className="md:col-span-2 h-full">
           <PriceChartCard
-            chart={chart}
+            chart={chartSeries?.points ?? null}
             chartLoading={chartLoading}
             chartError={chartError}
             chartChange={chartChange}
@@ -776,6 +799,8 @@ export default function App() {
             refreshChart={refreshChart}
             ranges={RANGES}
             currency={currency}
+            chartCurrency={chartSeries?.currency}
+            chartRequestedCurrency={chartSeries?.requested}
           />
         </div>
       </div>

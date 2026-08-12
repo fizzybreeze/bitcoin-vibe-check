@@ -3,7 +3,11 @@ import {
   KRAKEN_INTERVAL, KRAKEN_MAX_CANDLES,
   krakenParamsForDays, krakenOhlcUrl, extractKrakenOhlc, parseKrakenOhlc,
   fetchKrakenCandles, _resetInFlight, KRAKEN_FETCH_TIMEOUT_MS,
+  KRAKEN_PAIR_BY_CURRENCY, krakenPairForCurrency, isUnsupportedPairError,
 } from '../ohlc.js'
+import { CURRENCY_META } from '../../utils.js'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 // Kraken candle: [time_s, open, high, low, close, vwap, volume_base, count]
 function candle(timeSeconds, close, { vwap = close, volumeBtc = 10 } = {}) {
@@ -40,6 +44,74 @@ describe('krakenOhlcUrl', () => {
     expect(url).not.toContain('binance')
     expect(url).toContain('interval=1440')
     expect(url).toContain('pair=XBTUSD')
+  })
+
+  it('carries whichever pair it was given', () => {
+    expect(krakenOhlcUrl(KRAKEN_INTERVAL.DAY, 'XBTGBP')).toContain('pair=XBTGBP')
+  })
+})
+
+describe('krakenPairForCurrency', () => {
+  it('covers every currency the header offers', () => {
+    // Derived from CURRENCY_META rather than restated, so a sixth currency added
+    // to the selector fails here instead of silently drawing a dollar chart
+    // under its name. That claim only holds because `App` builds the selector's
+    // options from `CURRENCY_META` too — it was a third hard-coded copy of this
+    // list until the review found it, and this test was green either way.
+    for (const currency of Object.keys(CURRENCY_META)) {
+      expect(krakenPairForCurrency(currency), currency).toBeTruthy()
+    }
+    expect(Object.keys(KRAKEN_PAIR_BY_CURRENCY).sort()).toEqual(Object.keys(CURRENCY_META).sort())
+  })
+
+  it('is the list the header actually renders', () => {
+    // Read out of App's source, because the selector is JSX in a file with no
+    // unit test — and a literal array there is exactly how the three lists came
+    // apart in the first place.
+    const app = readFileSync(resolve('src/App.jsx'), 'utf8')
+    expect(app).toContain('{Object.keys(CURRENCY_META).map(c => (')
+    expect(app).not.toMatch(/\[\s*'usd'\s*,\s*'gbp'/)
+  })
+
+  it('answers null for a currency with no market, rather than defaulting to dollars', () => {
+    // A quiet default here is the bug this replaced: USD candles under another
+    // currency's label. The caller has to name the fallback, which is what lets
+    // it say so on screen.
+    expect(krakenPairForCurrency('jpy')).toBeNull()
+    expect(krakenPairForCurrency(undefined)).toBeNull()
+    expect(krakenPairForCurrency('')).toBeNull()
+  })
+
+  it('does not care how the currency is cased', () => {
+    expect(krakenPairForCurrency('GBP')).toBe('XBTGBP')
+  })
+})
+
+describe('isUnsupportedPairError', () => {
+  it('recognises the error Kraken really sends for a pair that does not exist', () => {
+    // Composed the way the app composes it — Kraken reports this inside a 200,
+    // so it arrives via extractKrakenOhlc rather than as an HTTP status.
+    let thrown
+    try { extractKrakenOhlc({ error: ['EQuery:Unknown asset pair'], result: {} }) } catch (err) { thrown = err }
+    expect(isUnsupportedPairError(thrown)).toBe(true)
+  })
+
+  it('does not mistake a bad minute for a missing market', () => {
+    // The distinction the fallback rests on: these must retry, not silently
+    // redraw the chart in dollars.
+    expect(isUnsupportedPairError(new Error('Kraken OHLC: HTTP 502'))).toBe(false)
+    expect(isUnsupportedPairError(new Error('Kraken: EGeneral:Temporary lockout'))).toBe(false)
+    expect(isUnsupportedPairError(new Error(`Kraken OHLC: no response within ${KRAKEN_FETCH_TIMEOUT_MS}ms`))).toBe(false)
+    expect(isUnsupportedPairError(undefined)).toBe(false)
+  })
+
+  it('cannot be satisfied by a message alone', () => {
+    // It reads a tag set where the condition is known, not the text. The first
+    // version matched `'no candles in response'`, which is what this module
+    // throws for *any* unreadable body — so an unrecognised 200 for a pair that
+    // exists would have been reported to the reader as a missing market.
+    expect(isUnsupportedPairError(new Error('Kraken: EQuery:Unknown asset pair'))).toBe(false)
+    expect(isUnsupportedPairError(new Error('Kraken OHLC: no candles in response'))).toBe(false)
   })
 })
 
@@ -304,8 +376,44 @@ describe('fetchKrakenCandles', () => {
     await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow(/Temporary lockout/)
   })
 
-  it('throws when the body carries no candles', async () => {
+  it('throws a retryable error for a body it cannot read', async () => {
+    // Not a missing market: this module could not find a series, which is a
+    // statement about the response rather than about Kraken's listings. Tagging
+    // it would send the chart silently to dollars for the session.
     fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ error: [], result: {} }) })
-    await expect(fetchKrakenCandles(KRAKEN_INTERVAL.DAY)).rejects.toThrow(/no candles/)
+    const err = await fetchKrakenCandles(KRAKEN_INTERVAL.DAY).catch(e => e)
+    expect(err.message).toMatch(/unrecognised response body/)
+    expect(isUnsupportedPairError(err)).toBe(false)
+  })
+
+  it('throws a missing-market error for a listed pair with an empty series', async () => {
+    // The shape that shipped broken: an empty array is truthy, so nothing threw,
+    // the caller resolved with null points, and the chart drew an empty plot
+    // area under the selected currency with no error and no fallback.
+    fetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ error: [], result: { XBTCHF: [], last: 1 } }),
+    })
+    const err = await fetchKrakenCandles(KRAKEN_INTERVAL.DAY, 'XBTCHF').catch(e => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(isUnsupportedPairError(err)).toBe(true)
+  })
+
+  it('tags Kraken’s own unknown-pair error', async () => {
+    fetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ error: ['EQuery:Unknown asset pair'], result: {} }),
+    })
+    const err = await fetchKrakenCandles(KRAKEN_INTERVAL.DAY, 'XBTZZZ').catch(e => e)
+    expect(isUnsupportedPairError(err)).toBe(true)
+  })
+
+  it('leaves every other Kraken error retryable', async () => {
+    fetch.mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ error: ['EGeneral:Temporary lockout'], result: {} }),
+    })
+    const err = await fetchKrakenCandles(KRAKEN_INTERVAL.DAY, 'XBTGBP').catch(e => e)
+    expect(isUnsupportedPairError(err)).toBe(false)
   })
 })

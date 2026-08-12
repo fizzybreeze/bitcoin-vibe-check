@@ -26,6 +26,23 @@
 // dies with the page.
 
 /**
+ * The store's key.
+ *
+ * The currency is in it because the candles differ by it — the chart is drawn
+ * from Kraken's market for the selected currency, so a store keyed by range
+ * alone would answer a switch to GBP with whatever the USD chart had already
+ * put there, and answering without going back to the network is the store's
+ * entire job.
+ *
+ * Here rather than in `App.jsx` so it can be exported at all: a non-component
+ * export from that file breaks fast refresh, the same rule that put
+ * `shareCards.js` in its own module.
+ */
+export function chartCacheKey(range, currency) {
+  return `${range}:${currency}`
+}
+
+/**
  * A per-key cache over an async fetcher, which joins a request in flight rather
  * than issuing a second one.
  *

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createChartCache } from '../chartCache.js'
+import { createChartCache, chartCacheKey } from '../chartCache.js'
 
 /** A fetcher whose promises are resolved by hand, so overlap is exact. */
 function deferredFetcher() {
@@ -11,6 +11,30 @@ function deferredFetcher() {
 }
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
+
+describe('chartCacheKey', () => {
+  it('separates the same range in two currencies', async () => {
+    // The candles differ by currency — the chart is drawn off Kraken's market
+    // for the selected one. A key that dropped it would hand the GBP chart the
+    // dollar candles already stored, which renders perfectly and is wrong by an
+    // exchange rate.
+    const fetcher = vi.fn(key => Promise.resolve(`candles:${key}`))
+    const cache = createChartCache(fetcher)
+
+    await cache.load(chartCacheKey('7D', 'usd'))
+    await cache.load(chartCacheKey('7D', 'gbp'))
+
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(cache.get(chartCacheKey('7D', 'gbp'))).not.toBe(cache.get(chartCacheKey('7D', 'usd')))
+  })
+
+  it('keeps the range and the currency both readable back out', () => {
+    // App splits the key to build the fetch. A separator either side of it would
+    // silently make the range unfindable and fall back to 7D for every request.
+    const [range, currency] = chartCacheKey('1Y', 'chf').split(':')
+    expect([range, currency]).toEqual(['1Y', 'chf'])
+  })
+})
 
 describe('createChartCache', () => {
   it('fetches a key once and serves the stored result afterwards', async () => {
