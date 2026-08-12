@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
-  FONT_STACKS, FONT_ROLES, SATORI_FONT_FAMILY, TABULAR,
+  FONT_STACKS, FONT_ROLES, EMOJI_FAMILIES, SATORI_FONT_FAMILY, TABULAR,
   CARD, CARD_LABEL, CARD_LABEL_SM, CARD_VALUE, CARD_VALUE_TIERS, CARD_ROOT_FORBIDDEN,
 } from '../lib/typography.js'
 
@@ -46,6 +46,20 @@ describe('the stylesheet and the module agree', () => {
     const declared = css.match(new RegExp(`--font-${role}:([^;]+);`))
     expect(declared, `--font-${role} is not declared in index.css`).not.toBeNull()
     expect(normalise(declared[1])).toBe(normalise(FONT_STACKS[role]))
+  })
+
+  it.each(FONT_ROLES)('--font-%s keeps its emoji tail', (role) => {
+    // Not decoration in either stack. `⚡` is in the supporters card's heading
+    // and in its ticker, and that heading is `CARD_LABEL` — which is mono as of
+    // v1.16.0, so the register change moved the one emoji in the app onto a
+    // stack that named no emoji face. Asserted on the module *and* the mirror,
+    // because a stack that resolves the character in the browser and not in the
+    // rasterised share image is the drift this file exists to stop.
+    for (const family of EMOJI_FAMILIES) {
+      expect(FONT_STACKS[role], `${role} dropped ${family}`).toContain(family)
+    }
+    expect(normalise(css.match(new RegExp(`--font-${role}:([^;]+);`))[1]))
+      .toBe(normalise(FONT_STACKS[role]))
   })
 
   it('declares them inside @theme, where Tailwind will read them', () => {

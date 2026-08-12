@@ -460,8 +460,11 @@ export default function ShareCanvas({ selectedCards, sentimentSummary, cardData,
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {/* Drawn, not typed. This was `<span>₿</span>` — a device-font
                   glyph, next to a wordmark that has been a picture since
-                  v1.11.0, in an image somebody posts and cannot re-render. */}
-              <Mark size={28} />
+                  v1.11.0, in an image somebody posts and cannot re-render.
+                  `theme` because that span took `p.accent` and this image
+                  follows the reader's theme; the mark's own default is the
+                  fixed one an icon needs, which is the wrong one here. */}
+              <Mark size={28} theme={t} />
               <div>
                 {/* Drawn, not set — the same wordmark the header and the link
                     preview render, so a posted image cannot carry a title in a

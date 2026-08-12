@@ -530,14 +530,25 @@ describe('the raster on the export surfaces', () => {
     const alias = Object.fromEntries(
       [...ogView.matchAll(/^const (\w+)\s*=\s*C\.([\w-]+)$/gm)].map(m => [m[1], m[2]])
     )
+    // **Every identifier in the whole value, not a shape the value is assumed
+    // to take.** The first version matched `color: X` and `color: ident ? A :
+    // B` and nothing else — which silently missed `RED`, because the 24h line
+    // is coloured `priceChange24h >= 0 ? GREEN : RED` and a comparison sits
+    // between the identifier and the `?`. So `down` was never derived, and
+    // dropping it from the layer left all 65 tests green while the negative
+    // change line went on being drawn straight onto the grained ground. A
+    // derivation that only understands two syntaxes is a restatement wearing a
+    // derivation's clothes.
     const drawn = [...new Set(
-      [...ogView.matchAll(/color:\s*(?:[\w.]+\s*\?\s*)?(\w+)(?:\s*:\s*(\w+))?/g)]
-        .flatMap(m => [m[1], m[2]])
-        .filter(name => name && alias[name])
+      [...ogView.matchAll(/(?<![A-Za-z])color:\s*([^,\n}]+)/g)]
+        .flatMap(m => m[1].match(/[A-Za-z_$][\w$]*/g) ?? [])
+        .filter(name => alias[name])
         .map(name => alias[name])
     )]
     expect(drawn.length, 'no roles found — has the card stopped reading the palette?')
       .toBeGreaterThan(2)
+    expect(drawn, 'the negative-change colour is chosen behind a comparison — see above')
+      .toContain('down')
     const layer = EXPORT_GRAIN_LAYERS.find(l => l.what === 'ogView')
     expect([...drawn].sort()).toEqual(
       drawn.filter(r => layer.roles.includes(r)).sort()

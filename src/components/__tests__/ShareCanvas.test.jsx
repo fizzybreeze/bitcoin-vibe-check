@@ -114,7 +114,7 @@ describe('the header', () => {
 })
 
 describe('the header mark', () => {
-  function renderHeader() {
+  function renderHeader(props = {}) {
     return render(
       <ShareCanvas
         selectedCards={['btcPrice']}
@@ -122,6 +122,7 @@ describe('the header mark', () => {
         cardData={{ priceUsd: 100_000 }}
         currency="usd"
         forwardedRef={null}
+        {...props}
       />
     )
   }
@@ -154,6 +155,30 @@ describe('the header mark', () => {
     const body = readFileSync(join(COMPONENTS, 'Mark.jsx'), 'utf8')
     expect(body).toMatch(/markSvg/)
     expect(body).not.toMatch(/<svg/)
+  })
+
+  // `markSvg` draws from `MARK_THEME` unless it is told otherwise, which is
+  // right for an icon — an OS has no visitor to ask — and wrong here, because
+  // this image follows the reader's theme and the glyph it replaced took
+  // `p.accent`. Left on the default, a light card carries the dark theme's
+  // `accent-fill` beside the light theme's `accent` rule and wordmark: two
+  // different brand pinks in one picture, permanent once it is posted.
+  it.each(['dark', 'light'])('is drawn in the theme the image is exported in, %s', (theme) => {
+    const { container } = renderHeader({ theme })
+    const tile = container.querySelector('[data-testid="app-mark"] rect')
+    expect(tile.getAttribute('fill')).toBe(PALETTE[theme]['accent-fill'])
+  })
+
+  it('draws the letterform in the tone that pairs with that tile', () => {
+    // `accent-ink` is the token whose whole job is being readable on the accent
+    // fill, and the two invert between themes — near-black on dark, white on
+    // light. Following one without the other is an unreadable mark.
+    const { container } = renderHeader({ theme: 'light' })
+    const rects = [...container.querySelectorAll('[data-testid="app-mark"] rect')]
+    expect(rects.length).toBeGreaterThan(1)
+    for (const r of rects.slice(1)) {
+      expect(r.getAttribute('fill')).toBe(PALETTE.light['accent-ink'])
+    }
   })
 })
 

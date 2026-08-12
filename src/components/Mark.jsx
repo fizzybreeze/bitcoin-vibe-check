@@ -1,4 +1,4 @@
-import { markSvg } from '../../scripts/lib/mark.js'
+import { markSvg, MARK_THEME } from '../../scripts/lib/mark.js'
 
 /**
  * The app mark — the pixel-art ₿ on its accent tile, the same drawing the
@@ -22,17 +22,27 @@ import { markSvg } from '../../scripts/lib/mark.js'
  * reason. The markup is ours and carries no input from anywhere, so the
  * `innerHTML` is a rendering detail rather than a hole.
  *
+ * **It takes a theme, and that is not a nicety.** The glyph this replaced was
+ * `<span style={{ color: p.accent }}>₿</span>` — it followed the exported
+ * image's theme, as everything else in that header does. `markSvg` defaults to
+ * `MARK_THEME` because an *icon* has no visitor to ask; a share image does, so
+ * a caller that follows the theme has to say so or the light card carries the
+ * dark theme's `accent-fill` next to the light theme's `accent` rule and
+ * wordmark — two brand pinks in one picture, baked into something somebody has
+ * posted. (The two are declared to different values; `palette.test.js` will not
+ * let this comment name them, which is the rule working.)
+ *
  * `aria-hidden` because the `<h1>` beside it already names the product; the
  * mark says the same thing a second time in pictures.
  */
-export default function Mark({ size = 28, coverage = 0.625, className = '' }) {
+export default function Mark({ size = 28, coverage = 0.625, theme = MARK_THEME, className = '' }) {
   return (
     <span
       className={className}
       style={{ display: 'flex', flexShrink: 0, lineHeight: 0 }}
       aria-hidden="true"
       data-testid="app-mark"
-      dangerouslySetInnerHTML={{ __html: markSvg({ size, coverage }) }}
+      dangerouslySetInnerHTML={{ __html: markSvg({ size, coverage, theme }) }}
     />
   )
 }

@@ -62,6 +62,16 @@
  * are load-bearing rather than decorative — the supporter cards render "⚡" and
  * the share image rasterises whatever the document resolves for it, and both
  * hand-written stacks this replaces had dropped them.
+ *
+ * **`mono` carries the same tail, and it stopped being optional the moment
+ * `CARD_LABEL` went mono.** That constant is what the supporters card sets
+ * `Supporters ⚡` in, so the one heading in the app with an emoji in it moved
+ * from a stack that names an emoji face to one that did not — leaving U+26A1 to
+ * whatever the browser's last-resort fallback happens to be, which on some
+ * platforms is a monochrome text-presentation glyph rather than the colour
+ * emoji every other rendering of that character gets. The families sit *after*
+ * `monospace`, exactly as they sit after `sans-serif` above, so nothing latin
+ * resolves any differently than it did.
  */
 export const FONT_STACKS = {
   sans:
@@ -70,8 +80,18 @@ export const FONT_STACKS = {
     "'Segoe UI Symbol', 'Noto Color Emoji'",
   mono:
     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, " +
-    "'Liberation Mono', 'Courier New', monospace",
+    "'Liberation Mono', 'Courier New', monospace, 'Apple Color Emoji', " +
+    "'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
 }
+
+/**
+ * The emoji families both stacks end with. Named so the rule that *both* carry
+ * them is assertable rather than a thing two string literals happen to agree
+ * about — the sans stack lost them twice before this module existed.
+ */
+export const EMOJI_FAMILIES = [
+  'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji',
+]
 
 export const FONT_ROLES = Object.keys(FONT_STACKS)
 
