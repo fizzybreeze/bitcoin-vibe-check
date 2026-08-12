@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import CardTooltip from './CardTooltip.jsx'
+import NetworkHeartbeat from './NetworkHeartbeat.jsx'
 import Skeleton from './Skeleton.jsx'
-import { blockTimeBand } from '../lib/scales.js'
-import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
+import { CARD, CARD_LABEL } from '../lib/typography.js'
 
 const RECENT_BLOCKS_TOOLTIP = 'Shows the last few blocks added to the Bitcoin blockchain. The target interval between blocks is 10 minutes. Blocks arriving significantly faster or slower than that indicate a recent change in hash rate or an imminent difficulty adjustment.'
 
@@ -45,58 +45,19 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
     return `${Math.floor(mins / 60)}h ago`
   }
 
-  const avgBlockMins = difficulty?.timeAvg != null ? difficulty.timeAvg / 60000 : null
-  const colors = blockTimeBand(avgBlockMins)
-  // Derived from the ticking `now` state (same source as timeAgo) rather than
-  // Date.now(), so this stays pure and updates on the same 1s cadence.
-  const lastBlockMinsAgo = lastBlockTs != null
-    ? Math.max(0, Math.floor((now / 1000 - lastBlockTs) / 60))
-    : null
-
   return (
     <div data-testid="card-recent-blocks" className={`${CARD} h-full`}>
       <h2 className={`${CARD_LABEL} flex items-center`}>Recent Blocks<CardTooltip text={RECENT_BLOCKS_TOOLTIP} /></h2>
 
-      {/* Heartbeat header — desktop only, merged above the block list */}
+      {/* Heartbeat header — desktop only, merged above the block list. Same
+          markup as the standalone mobile card, from the same module. */}
       <div className="hidden lg:block">
-        <div className="mt-3 flex gap-3">
-          <div className="flex-1 min-w-0">
-            <p className={CARD_LABEL}>Block Height</p>
-            <div className="mt-1">
-              {loading || blockHeight == null
-                ? <Skeleton className="h-7 w-16" />
-                : <p className={`${CARD_VALUE.dense} text-accent tabular-nums`}>
-                    {blockHeight.toLocaleString('en-US')}
-                  </p>
-              }
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className={CARD_LABEL}>Avg Block Time</p>
-            <div className="mt-1">
-              {loading || avgBlockMins == null
-                ? <Skeleton className="h-7 w-12" />
-                : <p className={`${CARD_VALUE.dense} tabular-nums ${colors.text}`}>
-                    {avgBlockMins.toFixed(1)} min
-                  </p>
-              }
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-center gap-1.5">
-          {!loading && (
-            <span key={blockHeight ?? 'init'} className="relative inline-flex h-2 w-2 shrink-0">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colors.bg}`} />
-              <span className={`relative inline-flex h-2 w-2 rounded-full ${colors.bg}`} />
-            </span>
-          )}
-          <p className="text-xs text-quiet">
-            {lastBlockMinsAgo != null
-              ? `Last block: ${lastBlockMinsAgo} min ago`
-              : 'Last block: unknown'
-            }
-          </p>
-        </div>
+        <NetworkHeartbeat
+          blockHeight={blockHeight}
+          difficulty={difficulty}
+          lastBlockTs={lastBlockTs}
+          loading={loading}
+        />
         <div className="mt-3 border-t border-line" />
       </div>
 
@@ -115,11 +76,11 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
                     href={`https://mempool.space/block/${block.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-base font-bold text-accent hover:text-accent-hover transition-colors"
+                    className="text-base font-bold text-accent hover:text-accent-hover transition-colors tabular-nums"
                   >
                     {block.height.toLocaleString('en-US')}
                   </a>
-                  <p className="mt-0.5 text-xs text-quiet flex flex-wrap items-center gap-x-1">
+                  <p className="mt-0.5 text-xs text-quiet flex flex-wrap items-center gap-x-1 tabular-nums">
                     <span>{block.tx_count.toLocaleString('en-US')} txs</span>
                     <span className="text-quiet">·</span>
                     <span>
@@ -135,7 +96,12 @@ export default function RecentBlocksCard({ blockHeight, difficulty, lastBlockTs,
                     )}
                   </p>
                 </div>
-                <p className="text-xs text-quiet shrink-0 pt-0.5">{timeAgo(block.timestamp)}</p>
+                {/* Re-rendered every second by the tick below, and every width
+                    of digit passes through it — this is the fastest-moving
+                    figure on the card and it had no tabular figures at all
+                    while the card's entry in `typography.test.js` was being
+                    satisfied by the `hidden lg:block` header above. */}
+                <p className="text-xs text-quiet shrink-0 pt-0.5 tabular-nums">{timeAgo(block.timestamp)}</p>
               </div>
             </div>
           ))}

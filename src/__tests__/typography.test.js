@@ -102,7 +102,13 @@ describe('live figures have tabular figures', () => {
     'BtcPriceCard.jsx',
     'PriceChartCard.jsx',
     'HalvingCountdown.jsx',
-    'NetworkHeartbeatCard.jsx',
+    // The heartbeat's figures moved out of `NetworkHeartbeatCard` into the
+    // interior both it and `RecentBlocksCard` now render, so this is where they
+    // are held. That move also showed the `RecentBlocksCard` entry below had
+    // been satisfied by the *heartbeat header* all along — a `hidden lg:block`
+    // subtree — while the block list's own "12s ago", which is re-rendered
+    // every second, had no tabular figures at all. It does now.
+    'NetworkHeartbeat.jsx',
     'RecentBlocksCard.jsx',
   ]
 

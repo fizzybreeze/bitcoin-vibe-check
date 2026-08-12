@@ -9,8 +9,7 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import MarketSentimentCard from '../MarketSentimentCard.jsx'
 import NetworkFeesCard from '../NetworkFeesCard.jsx'
 import SupplyIssuedCard from '../SupplyIssuedCard.jsx'
-import SupporterTickerCard from '../SupporterTickerCard.jsx'
-import MobileSupportersCard from '../MobileSupportersCard.jsx'
+import SupportersCard from '../SupportersCard.jsx'
 import ChartTooltip from '../ChartTooltip.jsx'
 import SatoshiQuote from '../SatoshiQuote.jsx'
 import NewsletterModal from '../NewsletterModal.jsx'
@@ -133,31 +132,39 @@ describe('SupplyIssuedCard', () => {
   })
 })
 
-describe('supporter cards', () => {
+describe('SupportersCard', () => {
   const donors = [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
-
-  it('invites the first supporter when the list is empty', () => {
-    render(<SupporterTickerCard donors={[]} />)
-    expect(screen.getByText(/Be the first to support/)).toBeInTheDocument()
-  })
 
   it('duplicates the ticker content so the marquee has no visible gap', () => {
     // The scroll animation translates a single span by its own width, so the
     // names have to appear twice or the strip runs out mid-loop.
-    render(<SupporterTickerCard donors={donors} />)
-    expect(screen.getAllByText(/⚡ Alice/)).toHaveLength(1)
+    render(<SupportersCard donors={donors} />)
     expect(screen.getByText(/⚡ Alice.*⚡ Alice/s)).toBeInTheDocument()
   })
 
-  it('renders one pill per donor on mobile', () => {
-    render(<MobileSupportersCard donors={donors} />)
+  it('renders one pill per donor for the narrow layout', () => {
+    render(<SupportersCard donors={donors} />)
+    // jsdom applies no Tailwind, so `md:hidden` hides nothing here and both
+    // layouts are queryable — the pills are the exact-match nodes, the marquee
+    // is one long string.
     expect(screen.getByText('Alice')).toBeInTheDocument()
     expect(screen.getByText('Bob')).toBeInTheDocument()
   })
 
-  it('invites the first supporter on mobile too', () => {
-    render(<MobileSupportersCard donors={[]} />)
+  it('invites the first supporter exactly once when the list is empty', () => {
+    // The sentence used to exist twice, byte-identical, in two components of
+    // which only one is ever on screen — so the two could disagree for as long
+    // as anyone liked and nothing would ever show both. One card, one sentence:
+    // `getByText` throws on a second occurrence, which is the assertion.
+    render(<SupportersCard donors={[]} />)
     expect(screen.getByText(/Be the first to support/)).toBeInTheDocument()
+  })
+
+  it('renders neither layout when there is nobody to list', () => {
+    // An empty marquee still animates, and an empty pill row still takes its
+    // margin. The empty state replaces both rather than sitting under them.
+    const { container } = render(<SupportersCard donors={[]} />)
+    expect(container.querySelector('[style*="ticker-scroll"]')).toBeNull()
   })
 })
 

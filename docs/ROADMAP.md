@@ -289,15 +289,16 @@ deliberately as design rather than consolidation, and both are now settled:
   `e2e/responsive.spec.js` now asserts the property the complaint actually
   cared about (rows look level) instead of the mechanism it guessed at.
 
-**One thing is carried forward, and it is a refactor rather than a pass.** The
-two responsive-duplicate pairs — `NetworkHeartbeatCard`/`RecentBlocksCard` and
-`SupporterTickerCard`/`MobileSupportersCard` — are still separate files carrying
-duplicated presentation classes between them. v1.8.7 turned the case for merging
-them from principle into evidence: the two had drifted to *different* value
-treatments, and one of them was styling a subtree inside `hidden lg:block` that
-could never render. It is real behaviour risk (each pair swaps at a breakpoint
-and the swap is asserted in `responsive.spec.js`), so it wants its own change
-with its own tests rather than riding along with a class consolidation.
+**The item this section carried forward is closed. Shipped in v1.15.0; see the
+version-history row.** What is worth keeping here is that its own instruction
+was half wrong: it said to merge the two responsive-duplicate pairs "into one
+component each", and only one of them is that shape. The supporters pair is one
+card at two widths and became one card. The heartbeat pair is two cards at two
+grid positions — a card of its own on mobile, a header merged into Recent Blocks
+on desktop — so what was duplicated was the *interior*, and collapsing the two
+cards into one component would have meant one component rendering two cards.
+Read a "merge these" note as a claim about the duplication, not about the file
+count.
 
 **What the accessibility passes still do not cover**, so nobody reads them as
 "accessible, done". Two of the four caveats that used to sit here are closed.
