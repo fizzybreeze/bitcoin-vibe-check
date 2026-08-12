@@ -36,8 +36,7 @@ import VolumeCard from './components/VolumeCard.jsx'
 import MarketSentimentCard from './components/MarketSentimentCard.jsx'
 import NetworkFeesCard from './components/NetworkFeesCard.jsx'
 import SupplyIssuedCard from './components/SupplyIssuedCard.jsx'
-import SupporterTickerCard from './components/SupporterTickerCard.jsx'
-import MobileSupportersCard from './components/MobileSupportersCard.jsx'
+import SupportersCard from './components/SupportersCard.jsx'
 import DonationCard from './components/DonationCard.jsx'
 import NewsletterCard from './components/NewsletterCard.jsx'
 import NewsletterModal from './components/NewsletterModal.jsx'
@@ -875,14 +874,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* Supporters ticker. The breakpoint lives here rather than inside the two
-          cards: a card that hides itself cannot be reused at another width, and
-          both roots carried their own `mt-4` besides. */}
-      <div className="mt-4 hidden md:block">
-        <SupporterTickerCard donors={donors} />
-      </div>
-      <div className="mt-4 md:hidden">
-        <MobileSupportersCard donors={donors} />
+      {/* Supporters. One card at every width — the marquee and the pills are
+          two interiors of it, not two cards taking turns. The breakpoint that
+          used to live here moved inside with them; what stays true is that the
+          card does not hide itself and does not carry its own margin. */}
+      <div className="mt-4">
+        <SupportersCard donors={donors} />
       </div>
 
       {/* Newsletter signup */}

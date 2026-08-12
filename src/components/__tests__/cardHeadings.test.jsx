@@ -7,7 +7,6 @@ import BtcPriceCard from '../BtcPriceCard.jsx'
 import CycleIndicatorsCard from '../CycleIndicatorsCard.jsx'
 import DonationCard from '../DonationCard.jsx'
 import MarketSentimentCard from '../MarketSentimentCard.jsx'
-import MobileSupportersCard from '../MobileSupportersCard.jsx'
 import NetworkFeesCard from '../NetworkFeesCard.jsx'
 import NetworkHeartbeatCard from '../NetworkHeartbeatCard.jsx'
 import NetworkPulseCard from '../NetworkPulseCard.jsx'
@@ -15,7 +14,7 @@ import NewsletterCard from '../NewsletterCard.jsx'
 import PriceChartCard from '../PriceChartCard.jsx'
 import RecentBlocksCard from '../RecentBlocksCard.jsx'
 import SupplyIssuedCard from '../SupplyIssuedCard.jsx'
-import SupporterTickerCard from '../SupporterTickerCard.jsx'
+import SupportersCard from '../SupportersCard.jsx'
 import VolumeCard from '../VolumeCard.jsx'
 
 // The heading outline (roadmap §5).
@@ -41,7 +40,6 @@ const TITLED_CARDS = [
   ['Cycle Indicators',           <CycleIndicatorsCard chainData={null} price={100000} ma200={90000} />],
   ['Support Bitcoin Vibe Check', <DonationCard />],
   ['Market Sentiment',           <MarketSentimentCard fng={{ value: '55', value_classification: 'Greed' }} />],
-  ['Our Supporters ⚡',          <MobileSupportersCard donors={[]} />],
   ['Network Fees',               <NetworkFeesCard fees={null} mempool={null} lightning={null} price={100000} currency="usd" />],
   ['Network Heartbeat',          <NetworkHeartbeatCard blockHeight={900000} difficulty={null} lastBlockTs={null} />],
   ['Network Health',             <NetworkPulseCard difficulty={null} hashrate={null} hashrateHistory={[]} />],
@@ -49,7 +47,7 @@ const TITLED_CARDS = [
   ['Price · USD',                <PriceChartCard chart={null} ranges={[{ label: '1D', days: 1 }]} range="1D" setRange={() => {}} refreshChart={() => {}} currency="usd" />],
   ['Recent Blocks',              <RecentBlocksCard blockHeight={900000} difficulty={null} lastBlockTs={null} />],
   ['Supply Issued',              <SupplyIssuedCard blockHeight={900000} />],
-  ['Supporters ⚡',              <SupporterTickerCard donors={[]} />],
+  ['Supporters ⚡',              <SupportersCard donors={[]} />],
   ['24h Volume',                 <VolumeCard volume={1e9} dominance={54} currency="usd" />],
 ]
 

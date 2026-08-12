@@ -113,6 +113,18 @@ test.describe('Responsive layout', () => {
     }
   })
 
+  test('the heartbeat readings appear exactly once, whichever frame draws them', async ({ page }) => {
+    // The interior is now one module rendered in two frames, so the risk moved:
+    // it is no longer that the two drift apart, it is that both frames show at
+    // once or neither does. "Block Height" is in the DOM twice at every width —
+    // the standalone card and the merged header — and exactly one of them is
+    // ever visible. Counting is what a `.first()` locator cannot do.
+    const visible = await page.getByText('Block Height', { exact: true }).evaluateAll(
+      els => els.filter(el => el.checkVisibility()).length
+    )
+    expect(visible).toBe(1)
+  })
+
   test('the halving countdown renders exactly one of its two layouts', async ({ page }) => {
     // Both the mobile and desktop arrangements are in the DOM at all times,
     // gated only by `md:hidden` / `hidden md:flex`. If a Tailwind class is
@@ -191,3 +203,45 @@ test.describe('Tablet band (md: on, lg: off)', () => {
   })
 })
 
+
+// The supporters card is the one place in the suite where the mocked data is
+// deliberately *not* the empty case. `mocks.js` answers every Supabase read
+// with `[]`, which is the right deterministic default — but an empty list
+// renders one shared sentence and no layout at all, so the thing under test
+// here would not exist. These two tests seed a donor first.
+test.describe('Supporters card', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApis(page)
+    // Registered after `mockApis`, so it wins: Playwright matches the most
+    // recently added route first.
+    await page.route('https://e2e.supabase.invalid/rest/v1/donors**', route =>
+      route.fulfill({ json: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }] })
+    )
+    await page.goto('/')
+    await expect(page.getByTestId('vibe-score')).toBeVisible({ timeout: TIMEOUT })
+  })
+
+  test('renders exactly one of its two layouts', async ({ page }, testInfo) => {
+    // Both are in the DOM at all times, gated only by `hidden md:block` and
+    // `md:hidden`. Two components hiding *themselves* could never show at once
+    // by accident; one card holding both interiors can, if a class is typo'd —
+    // so this is a new risk that arrives with the merge and is pinned with it.
+    const pills = page.getByText('Alice', { exact: true })
+    const marquee = page.getByText(/Proudly supported by Bitcoiners/).first()
+
+    if (testInfo.project.name === 'mobile') {
+      await expect(pills.first()).toBeVisible()
+      await expect(marquee).toBeHidden()
+    } else {
+      await expect(marquee).toBeVisible()
+      await expect(pills.first()).toBeHidden()
+    }
+  })
+
+  test('the card itself is present at every width', async ({ page }) => {
+    // The half of v1.8.7's rule that survives the merge: the card does not hide
+    // itself, so it can be moved or reused without editing it. Only its
+    // interior swaps.
+    await expect(page.getByRole('heading', { name: /^Supporters/, level: 2 })).toBeVisible()
+  })
+})

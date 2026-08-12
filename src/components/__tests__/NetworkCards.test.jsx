@@ -113,6 +113,48 @@ describe('NetworkHeartbeatCard', () => {
   })
 })
 
+describe('the heartbeat interior is drawn once, not twice', () => {
+  // It is rendered in two frames — as its own card on mobile, and merged into
+  // the top of `RecentBlocksCard` on desktop — and it used to be *written* in
+  // both. Because each is hidden at the width where the other shows, a class
+  // that drifted in one was invisible from either side: v1.8.7 found exactly
+  // that, with the mobile copy at `text-sm` and the desktop copy carrying the
+  // same class in a subtree that could never render at that width.
+  //
+  // Comparing the rendered markup rather than asserting a class each is what
+  // makes this survive the next change to it: any divergence at all, in any
+  // element, fails — including one nobody thought to name.
+  const props = { blockHeight: 912345, difficulty: { timeAvg: 642000 }, lastBlockTs: 1_700_000_000, loading: false }
+
+  function heartbeatOf(element) {
+    const { container } = render(element)
+    const node = container.querySelector('[data-testid="network-heartbeat"]')
+    expect(node, 'no heartbeat rendered').toBeTruthy()
+    return node.outerHTML
+  }
+
+  it('renders byte-identical markup in the standalone card and the merged header', () => {
+    stubFetch([])
+    const standalone = heartbeatOf(<NetworkHeartbeatCard {...props} />)
+    const merged = heartbeatOf(<RecentBlocksCard {...props} />)
+    expect(merged).toBe(standalone)
+    // Non-vacuous: the comparison is worthless if it is comparing two empty
+    // shells, so pin that the markup actually carries the readings.
+    expect(standalone).toContain('912,345')
+    expect(standalone).toContain('10.7 min')
+  })
+
+  it('carries the same skeletons through the loading state in both frames', () => {
+    // The loading branch is the half a happy-path comparison never reaches, and
+    // it is three separate conditionals deep in the markup.
+    stubFetch([])
+    const standalone = heartbeatOf(<NetworkHeartbeatCard {...props} loading />)
+    const merged = heartbeatOf(<RecentBlocksCard {...props} loading />)
+    expect(merged).toBe(standalone)
+    expect(standalone).not.toContain('912,345')
+  })
+})
+
 describe('RecentBlocksCard', () => {
   // The card renders the chain tip twice: once in the desktop heartbeat header
   // it merges in, and once per fetched block. jsdom applies no Tailwind, so
