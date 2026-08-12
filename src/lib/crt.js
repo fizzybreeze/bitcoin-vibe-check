@@ -60,14 +60,80 @@
  * Peak opacity of a scanline, as a fraction. Mirrors the `color-mix` percentage
  * in `index.css`. This is a ceiling established by measurement — see the header,
  * and see `crt.test.js`, which will not let it rise past what AA allows.
+ *
+ * **It came down from 0.10 when the rolling band was added, and that is the
+ * shared-budget rule below doing its job rather than a retune.** A pixel can be
+ * under a scanline *and* under the band at once, so what has to clear AA is the
+ * combination — and at 0.10 the largest band that fits is 0.03, which is too
+ * faint to read as an artifact. The scanlines gave up about a fifth of their
+ * strength to buy a band worth having.
  */
-export const SCANLINE_ALPHA = 0.1
+export const SCANLINE_ALPHA = 0.08
 
 /** Gradient period in CSS pixels: one lit row plus one dark line. */
 export const SCANLINE_PITCH_PX = 3
 
 /** How much of that period is the dark line. */
 export const SCANLINE_LINE_PX = 1
+
+/**
+ * Peak opacity of the rolling band — the soft luminance bar that sweeps down the
+ * chart, the hum bar of a mistuned terrestrial picture.
+ *
+ * **It carries no texture of its own on purpose.** The obvious way to draw
+ * "static" is a fine noise pattern inside the band, and that is a third layer
+ * stacking into the same budget as the scanlines and the band wash. Left plain,
+ * the base scanlines show *through* the band and supply the texture for free —
+ * which is both cheaper and the more faithful artifact, since a hum bar is a
+ * brightness disturbance rolling over the picture rather than a patch of noise
+ * pasted onto it.
+ */
+export const BAND_ALPHA = 0.04
+
+/** How tall the band is, in CSS pixels, before its edges are feathered away. */
+export const BAND_HEIGHT_PX = 44
+
+/**
+ * How far the band travels, as a percentage of its own height — a `translateY`
+ * percentage resolves against the element, not its container, so this is the one
+ * unit that does not silently assume a chart height.
+ *
+ * It still has to *exceed* the plot area plus the band, or the band stops short
+ * of the bottom and the pass never completes. `crt.test.js` reads the chart's
+ * height out of `PriceChartCard` and checks that, rather than leaving the two
+ * numbers to agree by memory.
+ */
+export const BAND_TRAVEL_PCT = 700
+
+/**
+ * The two cycle lengths, in seconds. **Deliberately different, and deliberately
+ * not multiples of each other**: at 7 and 9 they realign only once every 63
+ * seconds, so the wobble and the band drift in and out of phase instead of
+ * arriving together on a beat the eye can learn. Equal periods — or 6 and 12 —
+ * would read as one mechanism firing twice rather than as two faults.
+ */
+export const WOBBLE_PERIOD_S = 7
+export const BAND_PERIOD_S = 9
+
+/**
+ * How many times per cycle the wobble is allowed to displace the chart.
+ *
+ * One. The first version fired three times in seven seconds, which stopped
+ * reading as an occasional tracking fault and started reading as a nervous tic
+ * on a chart someone is trying to read a number off.
+ */
+export const MAX_WOBBLE_OFFSETS = 1
+
+/**
+ * Two source-over layers at these alphas, as the compositor resolves them.
+ *
+ * This exists as a function rather than a constant because it is the thing the
+ * AA check actually has to be run against: neither `SCANLINE_ALPHA` nor
+ * `BAND_ALPHA` is the number that lands on a glyph when the band rolls over a
+ * scanline, and checking them separately would clear both while the overlap
+ * fails.
+ */
+export const combinedAlpha = (a, b) => 1 - (1 - a) * (1 - b)
 
 /**
  * The roles that actually render *inside* the chart box, and therefore the ones

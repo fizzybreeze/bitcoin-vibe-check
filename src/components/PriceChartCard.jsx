@@ -174,7 +174,7 @@ export default function PriceChartCard({
               {/* Inside the wobbling wrapper on purpose, so the scanlines travel
                 * with the picture rather than sitting in front of a moving one,
                 * and so they dim with the chart while a range is loading. */}
-              <div className="crt-scanlines" data-testid="chart-scanlines" aria-hidden="true" />
+              <div className="crt-overlay" data-testid="chart-crt" aria-hidden="true" />
             </div>
             {chartLoading && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

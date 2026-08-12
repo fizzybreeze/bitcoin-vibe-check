@@ -19,6 +19,8 @@ import { join, resolve } from 'node:path'
 import { PALETTE, THEMES } from '../lib/palette.js'
 import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
+  BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
+  WOBBLE_PERIOD_S, BAND_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
 } from '../lib/crt.js'
 
@@ -64,24 +66,32 @@ describe('the compositing model itself', () => {
   })
 })
 
-describe.each(THEMES)('%s theme, read through the scanlines', (theme) => {
+describe.each(THEMES)('%s theme, read through the overlay', (theme) => {
   const at = name => PALETTE[theme][name]
-  // Worst case rather than average: a scanline covers a third of the box, but
-  // the pixels it does cover are covered fully, and a glyph stem is one pixel
-  // wide. Averaging the coverage would model a reader who never looks at the
-  // dark rows.
-  const dim = hex => composite(hex, at(CRT_SCANLINE_ROLE), SCANLINE_ALPHA)
+  // **The worst case is both layers at once, not either one.** The band rolls
+  // over the scanlines, so a glyph pixel can be under a scanline *and* under the
+  // band's peak, and the two composite to more than either alone. Checking them
+  // separately would clear both while the overlap fails — which is the whole
+  // reason `combinedAlpha` is a function in `crt.js` rather than two constants
+  // that happen to sit near each other.
+  //
+  // Worst case rather than average within each layer, too: a scanline covers a
+  // third of the box, but the pixels it does cover are covered fully, and a
+  // glyph stem is one pixel wide.
+  const WORST = combinedAlpha(SCANLINE_ALPHA, BAND_ALPHA)
+  const dim = hex => composite(hex, at(CRT_SCANLINE_ROLE), WORST)
   const ground = dim(at(CRT_SURFACE_ROLE))
 
-  it.each(CRT_INK_ROLES)('%s still clears AA under the darkest scanline', (role) => {
-    expect(contrastRatio(dim(at(role)), ground), `${role} under the overlay`)
+  it.each(CRT_INK_ROLES)('%s still clears AA under a scanline inside the band', (role) => {
+    expect(contrastRatio(dim(at(role)), ground), `${role} under both layers`)
       .toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
   })
 
-  it('keeps headroom, so a nudge to the opacity cannot silently cross the line', () => {
+  it('keeps headroom, so a nudge to either opacity cannot silently cross the line', () => {
     // The same argument `palette.test.js` makes for the quiet tier: landing on
     // exactly 4.5 makes the next tweak a coin toss. Measured, the binding
-    // constraint is `quiet` in dark mode — 4.71:1 at this alpha, 4.30:1 at 0.15.
+    // constraint is `quiet` in dark mode — 4.61:1 at the combined alpha, and it
+    // is what forced the scanlines down from 0.10 when the band was added.
     const worst = Math.min(...CRT_INK_ROLES.map(r => contrastRatio(dim(at(r)), ground)))
     expect(worst).toBeGreaterThan(4.6)
   })
@@ -119,7 +129,11 @@ describe('one alpha serving both themes', () => {
 })
 
 describe('the stylesheet mirrors crt.js', () => {
-  const scanlineRule = css.slice(css.indexOf('.crt-scanlines::before'))
+  // Bounded to the `::before` rule: the band's `::after` sits directly below it
+  // and carries a `color-mix` of its own, so an unbounded slice would let the
+  // scanline assertions pass by matching the band's numbers.
+  const scanlineRule = css.slice(css.indexOf('.crt-overlay::before'), css.indexOf('.crt-overlay::after'))
+  const bandRule = css.slice(css.indexOf('.crt-overlay::after'))
 
   it('mixes the scanline to the alpha the contrast check was run against', () => {
     // If these two separate, every ratio proved above is a ratio of a colour
@@ -140,6 +154,102 @@ describe('the stylesheet mirrors crt.js', () => {
     expect(period).toBe(SCANLINE_PITCH_PX)
     expect(period - lineStart).toBe(SCANLINE_LINE_PX)
     expect(lit).toBe(SCANLINE_PITCH_PX - SCANLINE_LINE_PX)
+  })
+
+  it('mixes the band to the alpha the combined contrast check was run against', () => {
+    const pcts = [...bandRule.matchAll(/var\(--color-[a-z-]+\) (\d+)%, transparent\)/g)].map(m => Number(m[1]))
+    expect(pcts.length, 'no color-mix found in the band gradient').toBeGreaterThan(0)
+    // Every stop at one value: a band whose peak differs from what `crt.js`
+    // declares is a band the AA maths above does not describe.
+    expect([...new Set(pcts)]).toEqual([BAND_ALPHA * 100])
+  })
+
+  it('gives the band the height crt.js declares, in both places it is stated', () => {
+    // `height` and the parked `top` have to agree, or the band starts partly on
+    // screen and the loop shows a seam at the top of every cycle.
+    expect(Number(bandRule.match(/height: (\d+)px;/)?.[1])).toBe(BAND_HEIGHT_PX)
+    expect(Number(bandRule.match(/top: -(\d+)px;/)?.[1])).toBe(BAND_HEIGHT_PX)
+  })
+
+  it('draws every band stop in the same token as the scanlines', () => {
+    // Two artifacts on one screen lit by two different colours reads as a bug
+    // rather than as a fault in the same signal — and a gradient is several
+    // stops, so "contains the right token" is not the same claim as "uses only
+    // the right token". Recolouring one stop and leaving the other passed the
+    // first version of this while drawing a two-tone band.
+    const tokens = [...bandRule.matchAll(/var\(--color-([a-z-]+)\)/g)].map(m => m[1])
+    expect(tokens.length, 'no tokens found in the band gradient').toBeGreaterThan(0)
+    expect([...new Set(tokens)]).toEqual([CRT_SCANLINE_ROLE])
+  })
+})
+
+describe('the two cadences', () => {
+  const wobbleRule = css.slice(css.indexOf('.crt-wobble {'), css.indexOf('.crt-wobble:hover'))
+  const bandRule = css.slice(css.indexOf('.crt-overlay::after'))
+
+  it('runs each at the period crt.js declares', () => {
+    expect(wobbleRule).toContain(`crt-wobble ${WOBBLE_PERIOD_S}s`)
+    expect(bandRule).toContain(`crt-band-roll ${BAND_PERIOD_S}s`)
+  })
+
+  it('does not let the two land on a common beat', () => {
+    // Equal periods, or one a multiple of the other, would make the wobble and
+    // the band arrive together every cycle and read as a single mechanism firing
+    // twice. At 7 and 9 they realign once a minute.
+    expect(WOBBLE_PERIOD_S).not.toBe(BAND_PERIOD_S)
+    const [lo, hi] = [WOBBLE_PERIOD_S, BAND_PERIOD_S].sort((a, b) => a - b)
+    expect(hi % lo, 'one period is a multiple of the other').not.toBe(0)
+  })
+
+  it('displaces the chart at most once per wobble cycle', () => {
+    // Three flicks in seven seconds stopped reading as an occasional tracking
+    // fault and started reading as a tic. Counted as *runs* of non-zero
+    // keyframes rather than as non-zero keyframes, because one disturbance may
+    // legitimately overshoot through two adjacent frames before settling.
+    //
+    // The `(?:px)?` is load-bearing and the first draft did not have it: a
+    // resting keyframe is written `translate3d(0, 0, 0)` with a bare zero, so a
+    // px-only pattern matched the displacements and none of the rests. With no
+    // zeros in the array no run could ever begin, the count was 0 whatever the
+    // stylesheet said, and restoring all three twitches left the suite green.
+    const frames = [...css
+      .slice(css.indexOf('@keyframes crt-wobble'), css.indexOf('@keyframes crt-band-roll'))
+      .matchAll(/translate3d\((-?[\d.]+)(?:px)?, 0, 0\)/g)].map(m => Number(m[1]))
+    expect(frames.length, 'no wobble keyframes found').toBeGreaterThan(0)
+    expect(frames, 'no resting keyframes matched — the pattern is too strict').toContain(0)
+
+    const runs = frames.filter((v, i) => v !== 0 && (i === 0 || frames[i - 1] === 0)).length
+    expect(runs, `the wobble fires ${runs} times per cycle`).toBeLessThanOrEqual(MAX_WOBBLE_OFFSETS)
+  })
+
+  it('keeps the declared budget to one displacement per seven seconds', () => {
+    // The bound above is only as good as its constant, and a test cannot defend
+    // its own oracle: raising `MAX_WOBBLE_OFFSETS` would let three twitches back
+    // in with everything still green. This pins the *rate* that was actually
+    // asked for, so a higher count is legal only on a proportionally longer
+    // cycle — which is the same request, not a louder one.
+    expect(MAX_WOBBLE_OFFSETS / WOBBLE_PERIOD_S).toBeLessThanOrEqual(1 / 7)
+  })
+
+  it('sweeps the band clear across the plot area', () => {
+    // A `translateY` percentage resolves against the element, so the travel is
+    // stated in band-heights — and it has to exceed the chart plus the band or
+    // the pass stops short and never reaches the bottom. The chart's height is
+    // read from the card rather than restated, since that is the number that
+    // would move.
+    const chartHeight = Number(chartCard.match(/ResponsiveContainer width="100%" height=\{(\d+)\}/)?.[1])
+    expect(chartHeight, 'could not read the chart height from PriceChartCard').toBeGreaterThan(0)
+    const travelPx = (BAND_TRAVEL_PCT / 100) * BAND_HEIGHT_PX
+    expect(travelPx).toBeGreaterThanOrEqual(chartHeight + BAND_HEIGHT_PX)
+    expect(css).toContain(`translate3d(0, ${BAND_TRAVEL_PCT}%, 0)`)
+  })
+
+  it('parks the band off screen at both ends of its cycle', () => {
+    // Both endpoints outside the clipping frame is what makes the loop seamless
+    // without a fade. A band that is still visible at 100% snaps back to the top
+    // in full view once every cycle.
+    const roll = css.slice(css.indexOf('@keyframes crt-band-roll'))
+    expect(roll).toMatch(/0%,\s*\d+%\s*\{ transform: translate3d\(0, 0, 0\); \}/)
   })
 })
 
@@ -172,7 +282,7 @@ describe('the effect is composited rather than repainted', () => {
   it('gives the scanline layer one period of headroom in the direction it travels', () => {
     // Without it the roll exposes an unpainted strip at the top of the chart on
     // every cycle — which reads as a flicker, not as a missing rule.
-    const inset = css.slice(css.indexOf('.crt-scanlines::before')).match(/inset: (-?\d+)px 0 0 0;/)?.[1]
+    const inset = css.slice(css.indexOf('.crt-overlay::before')).match(/inset: (-?\d+)px 0 0 0;/)?.[1]
     expect(Number(inset)).toBe(-SCANLINE_PITCH_PX)
   })
 
@@ -180,7 +290,7 @@ describe('the effect is composited rather than repainted', () => {
     // A fractional transform on a composited layer resamples the 11px axis
     // labels inside it. `steps(1, end)` is what keeps the keyframe values the
     // only positions the layer is ever drawn at.
-    const wobble = css.slice(css.indexOf('@keyframes crt-wobble'), css.indexOf('.crt-scanlines {'))
+    const wobble = css.slice(css.indexOf('@keyframes crt-wobble'), css.indexOf('.crt-overlay {'))
     for (const [, px] of wobble.matchAll(/translate3d\((-?[\d.]+)px, 0, 0\)/g)) {
       expect(Number.isInteger(Number(px)), `wobble offset ${px}px is fractional`).toBe(true)
     }
@@ -193,12 +303,12 @@ describe('the overlay does not take anything away', () => {
     // It covers the entire plot area. Without this the hover tooltip is
     // unreachable — a decorative layer silently removing a feature, and one
     // nothing else in the suite would notice, since the chart still draws.
-    const rule = css.slice(css.indexOf('.crt-scanlines {'), css.indexOf('.crt-scanlines::before'))
+    const rule = css.slice(css.indexOf('.crt-overlay {'), css.indexOf('.crt-overlay::before'))
     expect(rule).toMatch(/pointer-events:\s*none/)
   })
 
   it('clips the travelling layer to the chart box', () => {
-    const rule = css.slice(css.indexOf('.crt-scanlines {'), css.indexOf('.crt-scanlines::before'))
+    const rule = css.slice(css.indexOf('.crt-overlay {'), css.indexOf('.crt-overlay::before'))
     expect(rule).toMatch(/overflow:\s*hidden/)
   })
 

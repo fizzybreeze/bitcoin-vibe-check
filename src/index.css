@@ -253,29 +253,41 @@ body {
   to   { transform: translate3d(0, 3px, 0); }
 }
 
+/* One displacement per cycle. Three of them read as a nervous tic rather than as
+ * an occasional tracking fault, on a chart someone is trying to read a number
+ * off. With `steps(1, end)` each segment holds its opening value, so this is
+ * 6.09s still, 70ms one pixel left, then still again. */
 @keyframes crt-wobble {
   0%   { transform: translate3d(0, 0, 0); }
-  28%  { transform: translate3d(-1px, 0, 0); }
-  29%  { transform: translate3d(0, 0, 0); }
-  61%  { transform: translate3d(1px, 0, 0); }
-  62%  { transform: translate3d(-1px, 0, 0); }
-  63%  { transform: translate3d(0, 0, 0); }
-  92%  { transform: translate3d(-1px, 0, 0); }
-  93%  { transform: translate3d(0, 0, 0); }
+  87%  { transform: translate3d(-1px, 0, 0); }
+  88%  { transform: translate3d(0, 0, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
 
-/* The clipping frame. `pointer-events: none` is load-bearing rather than tidy:
- * this sits over the whole plot area, and without it the chart's hover tooltip
- * is unreachable — the effect would silently take a feature away. */
-.crt-scanlines {
+/* The band parks above the plot area for most of the cycle and then sweeps
+ * through it, so the chart is undisturbed roughly 60% of the time. Both ends of
+ * the travel are outside the clipping frame, which is what makes the loop
+ * seamless without a fade. */
+@keyframes crt-band-roll {
+  0%, 60% { transform: translate3d(0, 0, 0); }
+  100%    { transform: translate3d(0, 700%, 0); }
+}
+
+/* The clipping frame, carrying both artifacts as pseudo-elements: `::before` is
+ * the scanline raster, `::after` is the rolling band. One node and one clip for
+ * the pair, and neither can escape the plot area.
+ *
+ * `pointer-events: none` is load-bearing rather than tidy: this sits over the
+ * whole plot area, and without it the chart's hover tooltip is unreachable —
+ * the effect would silently take a feature away. */
+.crt-overlay {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
 }
 
-.crt-scanlines::before {
+.crt-overlay::before {
   content: '';
   position: absolute;
   /* One period of headroom at the top, since the roll travels downward. */
@@ -283,9 +295,32 @@ body {
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0 2px,
-    color-mix(in srgb, var(--color-ink) 10%, transparent) 2px 3px
+    color-mix(in srgb, var(--color-ink) 8%, transparent) 2px 3px
   );
   animation: crt-scanline-roll 1.2s linear infinite;
+  will-change: transform;
+}
+
+/* The rolling band — a soft luminance bar, the hum bar of a mistuned terrestrial
+ * picture. Deliberately untextured: the scanlines show through it and supply the
+ * grain, which costs nothing and stacks one fewer layer into the contrast
+ * budget. The feather is asymmetric, sharper at the leading edge than the
+ * trailing one, which is how head-switching noise actually falls off. */
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -44px;
+  height: 44px;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 22%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 38%,
+    transparent 100%
+  );
+  animation: crt-band-roll 9s linear infinite;
   will-change: transform;
 }
 

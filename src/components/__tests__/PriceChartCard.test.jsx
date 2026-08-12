@@ -126,14 +126,14 @@ describe('PriceChartCard', () => {
 describe('PriceChartCard CRT treatment', () => {
   it('lays the scanlines over the chart', () => {
     renderCard()
-    expect(screen.getByTestId('chart-scanlines')).toHaveClass('crt-scanlines')
+    expect(screen.getByTestId('chart-crt')).toHaveClass('crt-overlay')
   })
 
   it('announces them to nobody', () => {
     // Pure decoration sitting over a chart that already carries its own
     // labelling. A screen reader stopping on an empty div here is noise.
     renderCard()
-    expect(screen.getByTestId('chart-scanlines')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('chart-crt')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('wobbles the chart wrapper, not the card', () => {
@@ -152,13 +152,13 @@ describe('PriceChartCard CRT treatment', () => {
     // Outside it they would sit still in front of a moving picture, and they
     // would keep full strength while the chart dims under a range change.
     const { container } = renderCard()
-    expect(container.querySelector('.crt-wobble .crt-scanlines')).not.toBeNull()
+    expect(container.querySelector('.crt-wobble .crt-overlay')).not.toBeNull()
   })
 
   it('draws no scanlines over the first-load skeleton', () => {
     // There is no chart to be a CRT of yet, and the skeleton has a pulse of its
     // own for the overlay to fight with.
     renderCard({ chart: null, chartLoading: true })
-    expect(screen.queryByTestId('chart-scanlines')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('chart-crt')).not.toBeInTheDocument()
   })
 })

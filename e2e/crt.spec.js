@@ -12,14 +12,16 @@ import { mockApis } from './mocks.js'
 
 const TIMEOUT = 15_000
 
-/** The computed style of the scanline layer, which is a `::before`. */
-function scanlineStyle(page, prop) {
+/** The computed style of one of the overlay's two layers, both pseudo-elements. */
+function layerStyle(page, pseudo, prop) {
   return page.evaluate(
-    p => getComputedStyle(document.querySelector('[data-testid="chart-scanlines"]'), '::before')
+    ([ps, p]) => getComputedStyle(document.querySelector('[data-testid="chart-crt"]'), ps)
       .getPropertyValue(p),
-    prop,
+    [pseudo, prop],
   )
 }
+const scanlineStyle = (page, prop) => layerStyle(page, '::before', prop)
+const bandStyle = (page, prop) => layerStyle(page, '::after', prop)
 
 test.describe('CRT chart treatment', () => {
   test.beforeEach(async ({ page }) => {
@@ -30,7 +32,7 @@ test.describe('CRT chart treatment', () => {
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     await mockApis(page)
     await page.goto('/')
-    await expect(page.getByTestId('chart-scanlines')).toBeAttached({ timeout: TIMEOUT })
+    await expect(page.getByTestId('chart-crt')).toBeAttached({ timeout: TIMEOUT })
   })
 
   test('paints a real gradient rather than dropping an unparseable colour', async ({ page }) => {
@@ -52,6 +54,29 @@ test.describe('CRT chart treatment', () => {
     // keyframes move only `transform`, and this proves those keyframes are the
     // ones in force rather than a stale build's.
     expect(await scanlineStyle(page, 'animation-iteration-count')).toBe('infinite')
+  })
+
+  test('rolls a band that resolves to a real gradient', async ({ page }) => {
+    // Same failure as the scanlines: an unparseable `color-mix` leaves an
+    // element that is present, correctly sized and animating, with nothing in
+    // it. The band is the more likely of the two to go unnoticed, because it is
+    // off screen for most of every cycle anyway.
+    const image = await bandStyle(page, 'background-image')
+    expect(image).toContain('linear-gradient')
+    expect(image, 'the band colour did not resolve').not.toContain('color-mix')
+    expect(image).toMatch(/rgba?\(/)
+    expect(await bandStyle(page, 'animation-name')).toBe('crt-band-roll')
+  })
+
+  test('runs the band and the wobble at different cadences', async ({ page }) => {
+    // Two faults on one screen arriving together every cycle read as one
+    // mechanism. This is the claim the browser can make that the stylesheet
+    // cannot: that both animations are actually in force with those durations.
+    const band = await bandStyle(page, 'animation-duration')
+    const wobble = await page.locator('.crt-wobble')
+      .evaluate(el => getComputedStyle(el).animationDuration)
+    expect(band).not.toBe(wobble)
+    for (const d of [band, wobble]) expect(parseFloat(d)).toBeGreaterThan(1)
   })
 
   test('wobbles the chart and its axes together', async ({ page }) => {
@@ -103,7 +128,7 @@ test.describe('CRT chart treatment', () => {
     // The overlay is `inset: 0` on a wrapper it does not control the size of,
     // and the layer inside it is deliberately taller than its frame. A missing
     // `overflow: hidden` puts scanlines across the card below.
-    const overflow = await page.getByTestId('chart-scanlines').evaluate((el) => {
+    const overflow = await page.getByTestId('chart-crt').evaluate((el) => {
       const frame = el.getBoundingClientRect()
       const host = el.parentElement.getBoundingClientRect()
       return {
