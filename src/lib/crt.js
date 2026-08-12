@@ -136,6 +136,44 @@ export const MAX_WOBBLE_OFFSETS = 1
 export const combinedAlpha = (a, b) => 1 - (1 - a) * (1 - b)
 
 /**
+ * The sparklines get the same raster as a **ground behind the series**, not as
+ * an overlay on top of it, and that single difference is what makes them
+ * possible at all.
+ *
+ * The first read of this was that the sparklines could not have scanlines:
+ * they are 40px and 80px tall, the stroke is 1.5px, and a 1px dark line every
+ * 3px chops a line that thin into dashes. That is true of an *overlay* and is
+ * simply not true of a background — the SVG paints over it, so the series keeps
+ * its full strength and its crisp edges while the box behind it reads as a
+ * little screen. Same pitch and same token as the price chart, deliberately, so
+ * the three of them read as one piece of hardware rather than three effects.
+ *
+ * **Static, with no animation at all, and that is a decision rather than an
+ * omission.** These are small elements on cards that are always on screen, and
+ * the chart already carries the movement; a third and fourth rolling raster
+ * would be motion competing with the one place motion means something. It also
+ * means these cost nothing whatsoever — a background gradient painted once, no
+ * compositor layer, no `will-change`, nothing on the reduced-motion path.
+ *
+ * The alpha is higher than the chart's because it can be: nothing here
+ * composites over text, and the band never reaches these cards, so the shared
+ * budget above does not apply. What binds instead is the series staying legible
+ * against its own ground.
+ */
+export const GRAIN_ALPHA = 0.12
+
+/**
+ * How much contrast the sparkline series must keep against the grained ground.
+ *
+ * A data line is a graphical object, so WCAG 1.4.11 asks 3:1 — this is the text
+ * threshold instead, held deliberately because it is free here (the measured
+ * figure is about 5:1 in both themes) and because a sparkline is a reading
+ * rather than an ornament. Pinning the stricter bar costs nothing today and
+ * stops the grain being turned up later to the point where it does.
+ */
+export const GRAIN_MIN_SERIES_CONTRAST = 4.5
+
+/**
  * The roles that actually render *inside* the chart box, and therefore the ones
  * the overlay is laid over. Derived from `PriceChartCard` rather than assumed:
  * `quiet` is both axes' tick labels, `up` and `down` are the high/low reference

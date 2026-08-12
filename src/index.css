@@ -334,3 +334,23 @@ body {
 .crt-wobble:hover {
   animation-play-state: paused;
 }
+
+/* The sparklines' raster ground.
+ *
+ * A `background-image` rather than an overlay, which is the whole reason these
+ * can have a raster at all: the series is 1.5px in a 40px box, and a 1px dark
+ * line every 3px laid *over* it would chop it into dashes. Behind it, the SVG
+ * paints on top at full strength and the box reads as a small screen.
+ *
+ * Same pitch and token as the chart so the three read as one piece of hardware,
+ * and deliberately not animated — the chart carries the movement, and a rolling
+ * raster on two always-visible cards would compete with the one place motion
+ * means something. Nothing here is composited, promoted or on the reduced-motion
+ * path; it is a gradient painted once. */
+.crt-grain {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    color-mix(in srgb, var(--color-ink) 12%, transparent) 2px 3px
+  );
+}

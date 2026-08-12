@@ -124,6 +124,35 @@ test.describe('CRT chart treatment', () => {
     expect(await wobbling.evaluate(el => getComputedStyle(el).animationPlayState)).toBe('paused')
   })
 
+  test('grains the sparklines without animating them', async ({ page }) => {
+    // The Fear & Greed sparkline is the one that renders under the mocks — the
+    // Vibe Score's needs seven snapshot rows and the fixture returns none, so it
+    // is deliberately not asserted here rather than asserted vacuously.
+    const spark = page.getByRole('img', { name: /Fear and Greed/ })
+    await expect(spark).toBeAttached({ timeout: TIMEOUT })
+
+    const style = await spark.evaluate(el => {
+      const s = getComputedStyle(el)
+      return { image: s.backgroundImage, animation: s.animationName, position: s.position }
+    })
+    // Same unparseable-`color-mix` failure as the chart layers: present, sized,
+    // and drawing nothing.
+    expect(style.image).toContain('repeating-linear-gradient')
+    expect(style.image, 'the grain colour did not resolve').not.toContain('color-mix')
+    expect(style.image).toMatch(/rgba?\(/)
+    // Static by design, and behind the series rather than over it — an overlay
+    // would chop a 1.5px stroke into dashes.
+    expect(style.animation).toBe('none')
+    expect(style.position).toBe('static')
+  })
+
+  // Deliberately not tested here: that the series paints *over* the grain. The
+  // obvious hit-test — `elementFromPoint` at the box's centre — resolves to
+  // something inside the box whether the grain is a background or an overlay, so
+  // it would pass either way. The claim is pinned structurally instead, in
+  // `crt.test.js`, by forbidding `position`/`inset` in the rule; that is the
+  // narrower assertion but it is the one that is actually true.
+
   test('adds nothing that overflows the chart box', async ({ page }) => {
     // The overlay is `inset: 0` on a wrapper it does not control the size of,
     // and the layer inside it is deliberately taller than its frame. A missing

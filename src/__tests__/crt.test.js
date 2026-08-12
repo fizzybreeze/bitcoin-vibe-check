@@ -14,12 +14,13 @@
 // browser reads, and nothing but an assertion across the pair keeps them saying
 // the same thing.
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PALETTE, THEMES } from '../lib/palette.js'
 import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
   BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
+  GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST,
   WOBBLE_PERIOD_S, BAND_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
 } from '../lib/crt.js'
@@ -133,7 +134,10 @@ describe('the stylesheet mirrors crt.js', () => {
   // and carries a `color-mix` of its own, so an unbounded slice would let the
   // scanline assertions pass by matching the band's numbers.
   const scanlineRule = css.slice(css.indexOf('.crt-overlay::before'), css.indexOf('.crt-overlay::after'))
-  const bandRule = css.slice(css.indexOf('.crt-overlay::after'))
+  // Bounded at both ends for the same reason: `.crt-grain` below carries a
+  // `color-mix` too, and an open-ended slice let the band's assertions collect
+  // the grain's percentage alongside its own.
+  const bandRule = css.slice(css.indexOf('.crt-overlay::after'), css.indexOf('.crt-wobble {'))
 
   it('mixes the scanline to the alpha the contrast check was run against', () => {
     // If these two separate, every ratio proved above is a ratio of a colour
@@ -185,7 +189,10 @@ describe('the stylesheet mirrors crt.js', () => {
 
 describe('the two cadences', () => {
   const wobbleRule = css.slice(css.indexOf('.crt-wobble {'), css.indexOf('.crt-wobble:hover'))
-  const bandRule = css.slice(css.indexOf('.crt-overlay::after'))
+  // Bounded at both ends for the same reason: `.crt-grain` below carries a
+  // `color-mix` too, and an open-ended slice let the band's assertions collect
+  // the grain's percentage alongside its own.
+  const bandRule = css.slice(css.indexOf('.crt-overlay::after'), css.indexOf('.crt-wobble {'))
 
   it('runs each at the period crt.js declares', () => {
     expect(wobbleRule).toContain(`crt-wobble ${WOBBLE_PERIOD_S}s`)
@@ -314,6 +321,92 @@ describe('the overlay does not take anything away', () => {
 
   it('holds still while the chart is being pointed at', () => {
     expect(css).toMatch(/\.crt-wobble:hover\s*\{[^}]*animation-play-state:\s*paused/s)
+  })
+})
+
+describe('the sparkline grain', () => {
+  const grainRule = css.slice(css.indexOf('.crt-grain {'))
+
+  it('mixes to the alpha crt.js declares', () => {
+    const pct = grainRule.match(/var\(--color-[a-z-]+\) (\d+)%, transparent\)/)?.[1]
+    expect(pct, 'no color-mix found in the grain gradient').toBeDefined()
+    expect(Number(pct)).toBe(GRAIN_ALPHA * 100)
+  })
+
+  it('uses the same raster and token as the chart, so they read as one screen', () => {
+    expect(grainRule).toContain(`var(--color-${CRT_SCANLINE_ROLE})`)
+    const stops = grainRule.match(/transparent 0 (\d+)px,[\s\S]*?transparent\) (\d+)px (\d+)px/)
+    expect(stops, 'the grain gradient stops are not in the expected shape').not.toBeNull()
+    const [, lit, lineStart, period] = stops.map(Number)
+    expect(period).toBe(SCANLINE_PITCH_PX)
+    expect(period - lineStart).toBe(SCANLINE_LINE_PX)
+    expect(lit).toBe(SCANLINE_PITCH_PX - SCANLINE_LINE_PX)
+  })
+
+  it('does not animate, and is not a compositor layer', () => {
+    // The claim that these are free. A rolling raster on two always-visible
+    // cards would also compete with the chart, which is the one place motion
+    // here means anything.
+    const rule = grainRule.slice(0, grainRule.indexOf('\n}'))
+    expect(rule).not.toMatch(/animation|will-change|transform/)
+  })
+
+  it('is a background rather than an overlay, which is what keeps the series crisp', () => {
+    // Laid *over* a 1.5px stroke in a 40px box, a 1px line every 3px chops the
+    // series into dashes. `background-image` puts it behind, so the SVG paints
+    // on top at full strength — and `position`/`inset` here would mean someone
+    // had turned it back into an overlay.
+    const rule = grainRule.slice(0, grainRule.indexOf('\n}'))
+    expect(rule).toContain('background-image')
+    expect(rule).not.toMatch(/position:|inset:/)
+  })
+
+  it.each(THEMES)('keeps the %s series legible against its own ground', (theme) => {
+    const P = PALETTE[theme]
+    const grained = composite(P.surface, P[CRT_SCANLINE_ROLE], GRAIN_ALPHA)
+    // The line crosses lit rows and grained rows alike, so the worse of the two
+    // governs. Held to the text threshold rather than 1.4.11's 3:1 — see crt.js.
+    const worst = Math.min(contrastRatio(P.accent, grained), contrastRatio(P.accent, P.surface))
+    expect(worst, `the ${theme} sparkline series against the grain`)
+      .toBeGreaterThanOrEqual(GRAIN_MIN_SERIES_CONTRAST)
+  })
+
+  it.each(THEMES)('is visible at all in the %s theme', (theme) => {
+    // The floor that exists because a raster invisible in one theme is exactly
+    // what shipped once already.
+    const P = PALETTE[theme]
+    const grained = composite(P.surface, P[CRT_SCANLINE_ROLE], GRAIN_ALPHA)
+    expect(contrastRatio(P.surface, grained)).toBeGreaterThan(MIN_BANDING_RATIO)
+  })
+
+  it('reaches every sparkline in the app, not just the two known ones', () => {
+    // Scanned rather than listed: a third sparkline added later would otherwise
+    // be the one plain box among three rastered ones, and nothing would say so.
+    // `PriceChartCard` is excluded because it is the full chart, which wears the
+    // animated overlay instead.
+    // Counted one grain per rendered chart rather than guessed at from class
+    // names: the first version matched any element carrying an `h-*` utility,
+    // which swept up skeletons and fixed-height boxes that are not sparklines
+    // at all and reported three offenders that were nothing of the kind.
+    const offenders = []
+    for (const file of readdirSync(join(SRC, 'components'))) {
+      if (!file.endsWith('.jsx') || file === 'PriceChartCard.jsx') continue
+      const src = readFileSync(join(SRC, 'components', file), 'utf8')
+      const charts = (src.match(/<ResponsiveContainer/g) ?? []).length
+      if (!charts) continue
+      const grains = (src.match(/crt-grain/g) ?? []).length
+      if (grains !== charts) offenders.push(`${file}: ${charts} sparkline(s), ${grains} grain(s)`)
+    }
+    expect(offenders, 'a sparkline is missing the grain').toEqual([])
+  })
+
+  it('found the sparklines it was scanning for', () => {
+    // The guard on the guard: the scan above passes trivially if its file filter
+    // stops matching, which is how a sweep quietly becomes a no-op.
+    const withGrain = readdirSync(join(SRC, 'components'))
+      .filter(f => f.endsWith('.jsx'))
+      .filter(f => readFileSync(join(SRC, 'components', f), 'utf8').includes('crt-grain'))
+    expect(withGrain.sort()).toEqual(['BtcPriceCard.jsx', 'MarketSentimentCard.jsx'])
   })
 })
 
