@@ -201,12 +201,6 @@ implementation work.
 
 Directionally right, not yet specified. Listed so they are not forgotten.
 
-**A personal layer that never leaves the device.** Enter a cost basis and a stack
-size in `localStorage`; see position value, personal break-even against the
-Power Law and the 200-day, "your MVRV". No account, no wallet connect, no upload
-— and say so loudly on the card itself, because the trust claim *is* the feature.
-`usePersistedState` already does the storage half.
-
 **Vibe history replay.** Once the table has a year: "this day last year", cycle
 overlays, "the last time the vibe was this low". Gated purely on data age, which
 is why §3.2 matters now rather than later.
@@ -224,31 +218,15 @@ assumed. The audience overlap with an opinionated no-login Bitcoin dashboard is
 about as high as it gets.
 
 **The typeface is chosen, and the choice is the platform UI face.** Shipped in
-v1.8.5; see the version-history row. What is worth keeping here is the shape of
-the remaining work, because the decision deliberately did not close it.
+v1.8.5; see the version-history row. **The remaining half of this item — adopting
+a display face — was built, looked at and rejected; it is in §7 with the
+measurements.** What stays here is only what is still true of the *shipped*
+decision.
 
-`--font-sans` and `--font-mono` are now `@theme` tokens mirroring
+`--font-sans` and `--font-mono` are `@theme` tokens mirroring
 `src/lib/typography.js`, `tabular-nums` reaches every figure that changes
 without a reload, and the two export surfaces that each declared their own
-`-apple-system…` stack now read the shared one. **Adopting a display face is
-therefore one token and its mirror**, not a hunt through fifteen components —
-which was the actual point of the item.
-
-**Two standing requirements come with that door, and they are why it stayed
-shut.** Whatever face is chosen must carry real tabular figures, and it must be
-supplied to *both* export surfaces in the same change: Satori takes font buffers
-at request time inside a serverless function whose first constraint is that it
-must never return nothing, and html2canvas needs the face loaded in the document
-before it rasterises. Miss either and the preview card or the share image drifts
-away from the site with nothing failing to say so.
-
-**The title is no longer part of that question.** v1.11.0 draws the wordmark
-from a ten-glyph pixel alphabet (`src/lib/wordmark.js`) rather than setting it,
-so the header, the share canvas, the live preview card and the static fallback
-all render the same picture with no font to resolve. That narrows the two
-standing requirements below to *body* type: a display face would still have to
-carry tabular figures and still have to reach both export surfaces, but it can
-no longer take the product's name with it when it fails.
+`-apple-system…` stack read the shared one.
 
 **`api/lib/ogView.js` remains the one surface whose *text* cannot follow** —
 Satori's bundled Geist, which we do not supply, which has no weight axis and no ₿
@@ -388,7 +366,9 @@ considered and rejected on the thesis, not on effort.
 | Not doing | Why |
 |---|---|
 | Accounts and logins | The no-login constraint is the product, not a limitation to grow out of. Every feature here is designed to work without one. |
-| Wallet connect / exchange API keys | Asking a Bitcoiner to connect a wallet to a dashboard is asking for trust that a dashboard has no business requesting. The local-only personal layer gets most of the value at none of the risk. |
+| Wallet connect / exchange API keys | Asking a Bitcoiner to connect a wallet to a dashboard is asking for trust that a dashboard has no business requesting. Note this rejection stands **on its own** and no longer leans on a local-only alternative: the personal layer that used to be offered as the safer version of this is itself rejected in the row below, so there is no "do it this way instead" to fall back on. Holdings are out of scope in every form. |
+| A display face | **Built, rendered in both themes, looked at, and rejected on taste — so this is a verdict on the artefact rather than a guess about it.** The scope evaluated was the narrowest defensible one: the Vibe Score and its temperature word, ~12.5 KB self-hosted, `font-display: swap`, falling through to the UI face. Three findings are worth more than the verdict. **(1) The measurement rules out most of the obvious candidates before taste gets a say.** `typography.js` requires real tabular figures, and probed with fontTools across fifteen faces, **`tnum` is absent from Chakra Petch, Orbitron, Rajdhani, Oxanium, Titillium, IBM Plex Sans and Pixelify Sans** — every overtly techno face this product's idiom points at first. On any of them the `tabular-nums` already on the score becomes a silent no-op and the number changes width as it moves. Eight carried it: Space Grotesk, Exo 2, Sora, Saira, Archivo, Outfit, Red Hat Display, Bricolage Grotesque. Space Grotesk was verified in a real browser at 12.5 KB latin — `111111` and `888888` both 133.92px, so the table is genuinely active. **(2) The win is smaller than it sounds, which is what decided it.** The face touches two digits and one word, and at the size the score actually renders the candidates are near-indistinguishable — the first in-situ comparison shots were worthless and a magnified specimen sheet had to be built before a choice was even possible. **(3) "Headings" is not a separate target in this app**: a card's heading *is* `CARD_LABEL` — mono, uppercase, 12px since v1.16.0 — so putting titles in a display face makes three registers in one card and softens the terminal read that decision bought. **Two latent defects were found by building it and are deliberately left unfixed**, because both are no-ops while every face is a platform face and this repo does not keep code no gate can see: `useShareImage` does not wait on `document.fonts.ready` before html2canvas rasterises (a capture racing a webfont silently produces the fallback, permanently, in something already posted), and `ShareCanvas` sets its own inline `fontFamily` on the score, so it would not follow the app without being pointed at the stack. **Any future attempt must fix both in the same change** — that is the html2canvas half of the standing requirement, and it is now known rather than theoretical. Satori remains unmet and unmeetable cheaply, so the preview card would draw the score in Geist regardless. Reopen only as a deliberate re-skin with a wider scope, not as a refinement of one number. |
+| A personal layer (cost basis, stack size, "your MVRV") | Held in `localStorage` only, no account, no upload — and rejected anyway, which is the point worth recording. **The usual objections were granted and did not save it**: it is simple, `usePersistedState` already does the storage half, and being device-local it carries no meaningful security risk. It was rejected on *product* grounds by the owner. This dashboard reads **the market**, not the holder — a cost basis turns a room-reading page into a portfolio tracker, which is a different product with a different reason to exist, and the moment a visitor's position is on screen every other number starts being read against it. Keeping the page clean is worth more than the feature. **Do not re-propose it on the grounds that it is local-only, cheap, or that the storage already exists** — all three were already true when it was turned down. Reopen only if the owner's view of what the product is changes. |
 | Altcoin coverage | BTC dominance is the one altcoin-adjacent number that tells you something about Bitcoin. Everything past that is a different product. |
 | Price predictions or buy/sell signals | Power Law and Mayer Multiple are *models with published formulas*, presented as such. A signal is advice, and advice is a liability. |
 | Native App Store apps | The PWA installs on iOS, Android and desktop today. App-store review, two more build pipelines and a 30% cut buy nothing the install prompt does not already provide. |
