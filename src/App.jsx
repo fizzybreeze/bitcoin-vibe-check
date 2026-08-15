@@ -712,7 +712,10 @@ export default function App() {
   const vibeHistory = useVibeHistory()
 
   return (
-    <div className="min-h-screen bg-ground p-4 md:p-8 text-ink">
+    // `circuit-ground` paints the trace pattern behind everything below it —
+    // see `src/lib/circuitry.js`. It carries its own positioning, so nothing
+    // about the page frame moves out of this one class list.
+    <div className="circuit-ground min-h-screen bg-ground p-4 md:p-8 text-ink">
 
       {/* Header */}
       {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}

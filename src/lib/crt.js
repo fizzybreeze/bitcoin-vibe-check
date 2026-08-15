@@ -162,19 +162,55 @@ export const combinedAlpha = (a, b) => 1 - (1 - a) * (1 - b)
  * little screen. Same pitch and same token as the price chart, deliberately, so
  * the three of them read as one piece of hardware rather than three effects.
  *
- * **Static, with no animation at all, and that is a decision rather than an
- * omission.** These are small elements on cards that are always on screen, and
- * the chart already carries the movement; a third and fourth rolling raster
- * would be motion competing with the one place motion means something. It also
- * means these cost nothing whatsoever — a background gradient painted once, no
- * compositor layer, no `will-change`, nothing on the reduced-motion path.
- *
  * The alpha is higher than the chart's because it can be: nothing here
  * composites over text, and the band never reaches these cards, so the shared
  * budget above does not apply. What binds instead is the series staying legible
  * against its own ground.
+ *
+ * **The raster drifts now, where it used to be static, and this file argued for
+ * static.** That argument was that the chart carries the movement and a third
+ * and fourth rolling raster would compete with the one place motion means
+ * something. It was overruled deliberately — see `GRAIN_DRIFT_PERIOD_S`, which
+ * is where the version that does not compete is described, because the pace is
+ * the whole of the difference between the two readings.
+ *
+ * What the change costs is the *other* half of that paragraph, and it is worth
+ * stating rather than dropping: these are no longer free. Each grained box is a
+ * clipping frame with a promoted layer inside it, and each is now on the
+ * reduced-motion path. Both are still compositor-only — one `transform`, no
+ * repaint, no rAF — so the cost is two more layers rather than two more
+ * animations that do work per frame.
  */
 export const GRAIN_ALPHA = 0.12
+
+/**
+ * How long the sparkline raster takes to travel one period.
+ *
+ * **This is the whole of the "does it compete with the chart" question, and it
+ * is a pace rather than a presence.** The objection to animating these at all
+ * was that a second and third rolling raster would pull attention off the one
+ * element where movement carries meaning. At the chart's own 1.2s the objection
+ * is correct — and it is worse than it sounds on a small box, because a raster
+ * drifts at an absolute speed while a box is a fixed height: 2.5px/s crosses the
+ * 264px chart in a slow two minutes and crosses a 40px sparkline in sixteen
+ * seconds. The identical declaration reads as an idling screen on one and as
+ * something scrolling on the other.
+ *
+ * At 6s the drift is 0.5px/s. A row takes six seconds to move into the place the
+ * row above it just left, which is slow enough that nothing in peripheral vision
+ * registers it as motion and fast enough that it is plainly moving once you look
+ * at it — a vertical hold very slightly out, which is the whole artifact. It is
+ * deliberately **not** coprime with anything: the two sparklines and the chart
+ * are meant to read as one piece of hardware, and two rasters drifting at
+ * unrelated speeds side by side is what would say otherwise. That is the
+ * opposite of the wobble-and-band rule above and for the opposite reason — those
+ * are two independent *faults*, and this is one screen.
+ *
+ * The pixel shift was ruled out for these outright. The chart's wobble displaces
+ * a 264px box by a pixel; the same displacement on a 40px box is proportionally
+ * six times the disturbance, on an element whose entire content is a 1.5px line.
+ */
+export const GRAIN_DRIFT_PERIOD_S = 6
 
 /**
  * How much contrast the sparkline series must keep against the grained ground.
