@@ -22,6 +22,7 @@ import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
   BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
   GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST, GRAIN_DRIFT_PERIOD_S,
+  GRAIN_MAX_SERIES_BANDING,
   EXPORT_GRAIN_ALPHA, EXPORT_GRAIN_LAYERS, grainTileSvg, grainTileUri,
   WOBBLE_PERIOD_S, BAND_PERIOD_S, SCANLINE_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
@@ -383,16 +384,33 @@ describe('the sparkline grain', () => {
     expect(GRAIN_DRIFT_PERIOD_S / SCANLINE_PERIOD_S).toBeGreaterThanOrEqual(3)
   })
 
-  it('stays behind the series, which is what keeps a 1.5px stroke crisp', () => {
-    // Laid *over* a 1.5px stroke in a 40px box, a 1px line every 3px chops the
-    // series into dashes. It was a plain `background-image` on the element until
-    // the drift, and a background is not a thing you can translate — so it moved
-    // to a layer, and these two declarations are the whole of what keeps that
-    // layer underneath. They are asserted together because either alone is
-    // silently wrong: `z-index: -1` without the isolation escapes to the root
-    // and paints behind the *card*, which is a raster that renders as nothing.
-    expect(grainRule).toMatch(/z-index:\s*-1/)
-    expect(grainFrame).toMatch(/isolation:\s*isolate/)
+  it('sits in front of the series, the way the chart overlay does', () => {
+    // The whole of v1.18.0. Behind the series the raster and the line are two
+    // planes, and once the raster drifts the near one is the one holding still.
+    //
+    // A positive index rather than merely being a later sibling:
+    // `.recharts-wrapper` is `position: relative`, so a pseudo-element left at
+    // `z-index: auto` paints in the same step and loses on document order.
+    const z = Number(grainRule.match(/z-index:\s*(-?\d+)/)?.[1])
+    expect(z, 'the grain declares no z-index').not.toBeNaN()
+    expect(z).toBeGreaterThan(0)
+  })
+
+  it('does not isolate the box, because a positive index needs no help', () => {
+    // Not tidiness — `isolation: isolate` was load-bearing for the *negative*
+    // index (without it the layer escaped to the root and painted behind the
+    // card's own opaque background) and does nothing whatever for a positive
+    // one. Keeping it would be a declaration nothing on screen can distinguish,
+    // which is the class of thing this repo deletes rather than banks.
+    expect(grainFrame).not.toMatch(/isolation:/)
+  })
+
+  it('lets pointer events through, before there is anything to block', () => {
+    // Nothing in either sparkline is interactive today, so this fixes nothing —
+    // it is the chart's own finding applied forward. A layer over the whole box
+    // is exactly how the next sparkline to get a `<Tooltip>` silently does not,
+    // with the chart still drawing and every other assertion green.
+    expect(grainRule).toMatch(/pointer-events:\s*none/)
   })
 
   it('clips the travelling layer to the sparkline box, with one period of headroom', () => {
@@ -404,12 +422,41 @@ describe('the sparkline grain', () => {
 
   it.each(THEMES)('keeps the %s series legible against its own ground', (theme) => {
     const P = PALETTE[theme]
-    const grained = composite(P.surface, P[CRT_SCANLINE_ROLE], GRAIN_ALPHA)
-    // The line crosses lit rows and grained rows alike, so the worse of the two
-    // governs. Held to the text threshold rather than 1.4.11's 3:1 — see crt.js.
-    const worst = Math.min(contrastRatio(P.accent, grained), contrastRatio(P.accent, P.surface))
+    const scanned = hex => composite(hex, P[CRT_SCANLINE_ROLE], GRAIN_ALPHA)
+    // **Four combinations, not two, now that the raster crosses the line as well
+    // as the ground.** Either can be on a lit row or a scanned one and the pairs
+    // do not have to agree, so the worst of the four governs.
+    //
+    // The measurement worth keeping is that this does not move: the minimum is
+    // the series against the grained ground in both arrangements, so the number
+    // that justified `GRAIN_ALPHA` survived the reasoning behind it being
+    // rewritten. Held to the text threshold rather than 1.4.11's 3:1 — see
+    // crt.js.
+    const worst = Math.min(...[P.accent, scanned(P.accent)]
+      .flatMap(line => [P.surface, scanned(P.surface)].map(bg => contrastRatio(line, bg))))
     expect(worst, `the ${theme} sparkline series against the grain`)
       .toBeGreaterThanOrEqual(GRAIN_MIN_SERIES_CONTRAST)
+  })
+
+  it.each(THEMES)('does not band the %s series itself, which is the dashing objection', (theme) => {
+    // The claim that kept this raster behind the series for five versions, as a
+    // number rather than as a prediction: a 1px line every 3px over a 1.5px
+    // stroke was said to chop it into dashes. What that would look like is the
+    // stroke's own lit-row-to-scanned-row ratio, and it has to stay under the
+    // same figure the ground has to stay *over* — a raster you can see on the
+    // screen and cannot see on the reading.
+    const P = PALETTE[theme]
+    const onLine = contrastRatio(P.accent, composite(P.accent, P[CRT_SCANLINE_ROLE], GRAIN_ALPHA))
+    expect(onLine, `the ${theme} raster is visible on the series itself`)
+      .toBeLessThan(GRAIN_MAX_SERIES_BANDING)
+  })
+
+  it('ties the two bounds to one figure rather than two that can drift', () => {
+    // The pair is the argument for the placement: the same number is the floor
+    // on the ground and the ceiling on the line. Split into two constants, one
+    // could be raised to admit a stronger raster while the other went on
+    // claiming the effect was invisible on the series.
+    expect(GRAIN_MAX_SERIES_BANDING).toBe(MIN_BANDING_RATIO)
   })
 
   it.each(THEMES)('is visible at all in the %s theme', (theme) => {

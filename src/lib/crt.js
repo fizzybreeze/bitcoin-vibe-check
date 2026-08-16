@@ -150,36 +150,67 @@ export const MAX_WOBBLE_OFFSETS = 1
 export const combinedAlpha = (a, b) => 1 - (1 - a) * (1 - b)
 
 /**
- * The sparklines get the same raster as a **ground behind the series**, not as
- * an overlay on top of it, and that single difference is what makes them
- * possible at all.
- *
- * The first read of this was that the sparklines could not have scanlines:
- * they are 40px and 80px tall, the stroke is 1.5px, and a 1px dark line every
- * 3px chops a line that thin into dashes. That is true of an *overlay* and is
- * simply not true of a background — the SVG paints over it, so the series keeps
- * its full strength and its crisp edges while the box behind it reads as a
- * little screen. Same pitch and same token as the price chart, deliberately, so
- * the three of them read as one piece of hardware rather than three effects.
+ * The sparklines get the same raster as the chart, **over the series** — the
+ * chart's arrangement, and it was the opposite of this until v1.18.0.
  *
  * The alpha is higher than the chart's because it can be: nothing here
  * composites over text, and the band never reaches these cards, so the shared
  * budget above does not apply. What binds instead is the series staying legible
- * against its own ground.
+ * against its own ground, and now also the raster staying *invisible on the
+ * line* — see `GRAIN_MAX_SERIES_BANDING`.
  *
- * **The raster drifts now, where it used to be static, and this file argued for
+ * **The raster drifts, where it used to be static, and this file argued for
  * static.** That argument was that the chart carries the movement and a third
  * and fourth rolling raster would compete with the one place motion means
  * something. It was overruled deliberately — see `GRAIN_DRIFT_PERIOD_S`, which
  * is where the version that does not compete is described, because the pace is
  * the whole of the difference between the two readings.
  *
- * What the change costs is the *other* half of that paragraph, and it is worth
- * stating rather than dropping: these are no longer free. Each grained box is a
- * clipping frame with a promoted layer inside it, and each is now on the
- * reduced-motion path. Both are still compositor-only — one `transform`, no
- * repaint, no rAF — so the cost is two more layers rather than two more
- * animations that do work per frame.
+ * What that costs is worth stating rather than dropping: these are no longer
+ * free. Each grained box is a clipping frame with a promoted layer inside it,
+ * and each is now on the reduced-motion path. Both are still compositor-only —
+ * one `transform`, no repaint, no rAF — so the cost is two more layers rather
+ * than two more animations that do work per frame.
+ *
+ * ── Why it moved in front ────────────────────────────────────────────────────
+ *
+ * **The drift is what made the placement visible, which is the whole report.**
+ * A static raster behind a series is indistinguishable from one in front at a
+ * glance; a *drifting* one behind it is two planes with the near one holding
+ * still, which reads as parallax rather than as a vertical hold slipping. The
+ * chart never had that problem, because its overlay is over everything — so
+ * three elements built to read as one piece of hardware were split by the one
+ * property nobody had reason to look at until something moved.
+ *
+ * **What put it behind was a claim about a number, and the number had never
+ * been measured.** The argument on record was that a 1px line every 3px laid
+ * over a 1.5px stroke chops the series into dashes. The measure of that is the
+ * stroke's own lit-row-to-scanned-row ratio, and at this alpha it is **1.11 in
+ * dark and 1.14 in light** — under `MIN_BANDING_RATIO`, which is the figure this
+ * same file uses to decide a raster is visible on the ground at all. So the
+ * dashing sits below the visibility floor the module already defines. The
+ * corroboration was on screen the whole time: the price chart has drawn its
+ * `accent` series under the identical raster since v1.13.0, at a *lower* alpha
+ * but with a band stacked on top of it, and nothing has ever called it dashed.
+ *
+ * **The legibility figure does not move at all, and that is the part that was
+ * genuinely surprising.** `GRAIN_MIN_SERIES_CONTRAST` is checked against four
+ * combinations once the raster is in front — lit or scanned stroke against lit
+ * or scanned ground — and the minimum of those four is the same pair it was
+ * when only the ground could be scanned: the series against the grained ground,
+ * 5.02 in dark and 4.99 in light. Both placements, same number. So the
+ * *reasoning* that justified this alpha changed and the *measurement* behind it
+ * did not, which is why the alpha is not retuned here. It was also not retuned
+ * because the report said these look good and asked only for the layering; a
+ * strength change riding along would confound the thing that was reported.
+ *
+ * **The window is narrow in one direction and that is stated rather than
+ * smoothed over**: the ground has to band at least `MIN_BANDING_RATIO`, which
+ * puts a floor at ~0.076, and the line has to band less than it, which puts a
+ * ceiling at ~0.128 — both bounds binding in the light theme. 0.12 sits near
+ * the ceiling. There is no headroom assertion because there is no headroom;
+ * what protects it is that `crt.test.js` checks both bounds, so a nudge in
+ * either direction fails the build rather than either the reader or the effect.
  */
 export const GRAIN_ALPHA = 0.12
 
@@ -458,3 +489,24 @@ export const CRT_SCANLINE_ROLE = 'ink'
  * flattens the effect fails rather than quietly removing it.
  */
 export const MIN_BANDING_RATIO = 1.15
+
+/**
+ * How visible the sparkline raster is allowed to be **on the series itself** —
+ * the stroke's own lit-row-to-scanned-row contrast, where 1.0 is a line the
+ * raster does not touch.
+ *
+ * This bound exists only because the raster moved in front of the series in
+ * v1.18.0, and it is deliberately the same number as the floor above rather than
+ * a second one chosen to fit. One figure used as a floor on the ground and a
+ * ceiling on the line states exactly what the effect is for: a raster you can
+ * see on the screen and cannot see on the reading. Two constants would let the
+ * two halves of that sentence drift apart, and the pair of them is the whole
+ * argument for the placement.
+ *
+ * It declares nothing about perception. 1.15 is this repo's own visibility
+ * floor, applied in the direction that turns "it will chop the line into dashes"
+ * from a prediction into a measurement. It sits beside `MIN_BANDING_RATIO`
+ * rather than beside `GRAIN_ALPHA` for the plainest of reasons — it is derived
+ * from it, and a `const` cannot read one declared 300 lines further down.
+ */
+export const GRAIN_MAX_SERIES_BANDING = MIN_BANDING_RATIO
