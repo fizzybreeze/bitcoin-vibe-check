@@ -127,34 +127,108 @@ test.describe('CRT chart treatment', () => {
     expect(await wobbling.evaluate(el => getComputedStyle(el).animationPlayState)).toBe('paused')
   })
 
-  test('grains the sparklines without animating them', async ({ page }) => {
+  test('grains the sparklines, and drifts the grain', async ({ page }) => {
     // The Fear & Greed sparkline is the one that renders under the mocks — the
     // Vibe Score's needs seven snapshot rows and the fixture returns none, so it
     // is deliberately not asserted here rather than asserted vacuously.
     const spark = page.getByRole('img', { name: /Fear and Greed/ })
     await expect(spark).toBeAttached({ timeout: TIMEOUT })
 
-    const style = await spark.evaluate(el => {
-      const s = getComputedStyle(el)
-      return { image: s.backgroundImage, animation: s.animationName, position: s.position }
+    const style = await spark.evaluate((el) => {
+      const s = getComputedStyle(el, '::before')
+      return {
+        image: s.backgroundImage,
+        animation: s.animationName,
+        zIndex: s.zIndex,
+        isolation: getComputedStyle(el).isolation,
+      }
     })
     // Same unparseable-`color-mix` failure as the chart layers: present, sized,
     // and drawing nothing.
     expect(style.image).toContain('repeating-linear-gradient')
     expect(style.image, 'the grain colour did not resolve').not.toContain('color-mix')
     expect(style.image).toMatch(/rgba?\(/)
-    // Static by design, and behind the series rather than over it — an overlay
-    // would chop a 1.5px stroke into dashes.
-    expect(style.animation).toBe('none')
-    expect(style.position).toBe('static')
+    expect(style.animation).toBe('crt-scanline-roll')
+    // Behind the series rather than over it — an overlay would chop a 1.5px
+    // stroke into dashes. **Both halves, because either alone is silently
+    // wrong**: with the isolation removed the negative index escapes to the root
+    // and the layer paints behind the card's own opaque background, which is a
+    // grain that has stopped rendering with every other assertion here green.
+    expect(style.zIndex).toBe('-1')
+    expect(style.isolation).toBe('isolate')
+  })
+
+  test('actually moves the grain, rather than declaring an animation that does not', async ({ page }) => {
+    // The claim no stylesheet parse can make. A layer can carry the right
+    // keyframes and still never move — a zero-length travel, a paused parent, a
+    // `transform` the compositor refuses — and the picture looks identical in
+    // every screenshot either way.
+    const spark = page.getByRole('img', { name: /Fear and Greed/ })
+    await expect(spark).toBeAttached({ timeout: TIMEOUT })
+    const at = () => spark.evaluate(el => getComputedStyle(el, '::before').transform)
+
+    const before = await at()
+    // Long enough to clear a fifth of the 6s period, so this cannot pass on
+    // sub-pixel noise and cannot fail on a slow runner missing one frame.
+    await page.waitForTimeout(1500)
+    expect(await at(), 'the grain declares a drift it is not performing').not.toBe(before)
   })
 
   // Deliberately not tested here: that the series paints *over* the grain. The
   // obvious hit-test — `elementFromPoint` at the box's centre — resolves to
-  // something inside the box whether the grain is a background or an overlay, so
-  // it would pass either way. The claim is pinned structurally instead, in
-  // `crt.test.js`, by forbidding `position`/`inset` in the rule; that is the
-  // narrower assertion but it is the one that is actually true.
+  // something inside the box whether the grain is behind or in front, so it
+  // would pass either way. The claim is pinned structurally instead, by the
+  // z-index and isolation pair above; that is the narrower assertion but it is
+  // the one that is actually true.
+
+  test('paints the circuit ground behind the page, without moving it', async ({ page }) => {
+    // Three ways this layer fails while looking perfectly healthy in the DOM:
+    // the `color-mix` drops and it draws nothing, the mask fails to load and it
+    // floods the whole page with flat ink, or somebody animates it — which is
+    // the one decision `circuitry.js` calls load-bearing.
+    const frame = page.locator('.circuit-ground')
+    await expect(frame).toHaveCount(1)
+
+    // **Both of the first two assertions were vacuous in their first draft and a
+    // mutation walked through each**, which is the lesson worth keeping about
+    // computed style: it reports what was *declared*, not what happened.
+    // Corrupting the tile's SVG left `maskImage` reporting the same data URI —
+    // a resource that fails to decode is still the value in force — and
+    // corrupting the `color-mix` dropped the declaration, so `backgroundColor`
+    // came back `rgba(0, 0, 0, 0)`, which satisfied a "looks like a colour"
+    // regex perfectly while painting nothing at all. So the tile is *decoded*
+    // and the colour is checked for a non-zero alpha.
+    const style = await frame.evaluate(async (el) => {
+      const s = getComputedStyle(el, '::before')
+      const url = s.maskImage.match(/url\("?(data:[^")]+)"?\)/)?.[1]
+      const tile = url && await new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+        img.onerror = () => resolve(null)
+        img.src = url
+      })
+      return {
+        tile,
+        bg: s.backgroundColor,
+        animation: s.animationName,
+        zIndex: s.zIndex,
+      }
+    })
+    expect(style.tile, 'the circuit tile is not a data URI that decodes').not.toBeNull()
+    // The resource's own dimensions, so a tile that loads but is the wrong
+    // drawing cannot pass — and `crt.spec.js` need not restate the number.
+    expect(style.tile.w).toBe(style.tile.h)
+    expect(style.tile.w).toBeGreaterThan(64)
+
+    // An unparseable `color-mix` is dropped, and a dropped `background-color`
+    // computes to transparent black — present, masked, and invisible.
+    const alpha = Number(style.bg.match(/[\d.]+\s*\)$/)?.[0].replace(')', '') ?? 1)
+    expect(alpha, `the trace colour did not resolve: ${style.bg}`).toBeGreaterThan(0)
+    expect(style.bg, 'the trace colour did not resolve').not.toContain('color-mix')
+
+    expect(style.animation).toBe('none')
+    expect(style.zIndex).toBe('-1')
+  })
 
   test('adds nothing that overflows the chart box', async ({ page }) => {
     // The overlay is `inset: 0` on a wrapper it does not control the size of,

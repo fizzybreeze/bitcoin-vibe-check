@@ -21,7 +21,7 @@ import { PALETTE, THEMES } from '../lib/palette.js'
 import {
   SCANLINE_ALPHA, SCANLINE_PITCH_PX, SCANLINE_LINE_PX, MIN_BANDING_RATIO,
   BAND_ALPHA, BAND_HEIGHT_PX, BAND_TRAVEL_PCT, combinedAlpha,
-  GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST,
+  GRAIN_ALPHA, GRAIN_MIN_SERIES_CONTRAST, GRAIN_DRIFT_PERIOD_S,
   EXPORT_GRAIN_ALPHA, EXPORT_GRAIN_LAYERS, grainTileSvg, grainTileUri,
   WOBBLE_PERIOD_S, BAND_PERIOD_S, SCANLINE_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
@@ -331,7 +331,21 @@ describe('the overlay does not take anything away', () => {
 })
 
 describe('the sparkline grain', () => {
-  const grainRule = css.slice(css.indexOf('.crt-grain {'))
+  // Two rules now, and they are sliced to their own **braces** rather than to
+  // the next selector, which is the difference between a check and a decoration.
+  // Bounding the layer at `.circuit-ground {` looked correct and swept up the
+  // documentation comment in between — and that comment explains the z-index and
+  // the isolation *in prose*, so deleting `z-index: -1` from the rule left the
+  // assertion matching the paragraph describing it. A mutation walked straight
+  // through, which is `palette.test.js`'s hex-in-a-comment finding for the third
+  // time in this repo's history.
+  const body = (selector) => {
+    const start = css.indexOf(selector)
+    expect(start, `${selector} is missing from index.css`).toBeGreaterThan(-1)
+    return css.slice(start, css.indexOf('\n}', start))
+  }
+  const grainFrame = body('.crt-grain {')
+  const grainRule = body('.crt-grain::before')
 
   it('mixes to the alpha crt.js declares', () => {
     const pct = grainRule.match(/var\(--color-[a-z-]+\) (\d+)%, transparent\)/)?.[1]
@@ -349,22 +363,43 @@ describe('the sparkline grain', () => {
     expect(lit).toBe(SCANLINE_PITCH_PX - SCANLINE_LINE_PX)
   })
 
-  it('does not animate, and is not a compositor layer', () => {
-    // The claim that these are free. A rolling raster on two always-visible
-    // cards would also compete with the chart, which is the one place motion
-    // here means anything.
-    const rule = grainRule.slice(0, grainRule.indexOf('\n}'))
-    expect(rule).not.toMatch(/animation|will-change|transform/)
+  it('drifts at the period crt.js declares, on the chart raster keyframes', () => {
+    // The same keyframes as the chart rather than a second pair saying the same
+    // thing: one raster, one travel of one period, two speeds.
+    expect(grainRule).toContain(`animation: crt-scanline-roll ${GRAIN_DRIFT_PERIOD_S}s linear infinite`)
   })
 
-  it('is a background rather than an overlay, which is what keeps the series crisp', () => {
+  it('drifts far slower than the chart, which is the whole of the objection to it', () => {
+    // The case against animating these was that a second and third rolling
+    // raster competes with the one place motion means something — and that case
+    // is correct at the chart's own pace. A raster drifts at an absolute speed
+    // while a box is a fixed height, so the identical declaration crosses a
+    // 264px chart in two minutes and a 40px sparkline in sixteen seconds.
+    //
+    // Pinned as a ratio rather than as a number, so the constraint survives
+    // someone retuning the chart: whatever the chart does, these are a fraction
+    // of it. Reverting this to `SCANLINE_PERIOD_S` — the tempting "make them
+    // match" edit — is what this fails on.
+    expect(GRAIN_DRIFT_PERIOD_S / SCANLINE_PERIOD_S).toBeGreaterThanOrEqual(3)
+  })
+
+  it('stays behind the series, which is what keeps a 1.5px stroke crisp', () => {
     // Laid *over* a 1.5px stroke in a 40px box, a 1px line every 3px chops the
-    // series into dashes. `background-image` puts it behind, so the SVG paints
-    // on top at full strength — and `position`/`inset` here would mean someone
-    // had turned it back into an overlay.
-    const rule = grainRule.slice(0, grainRule.indexOf('\n}'))
-    expect(rule).toContain('background-image')
-    expect(rule).not.toMatch(/position:|inset:/)
+    // series into dashes. It was a plain `background-image` on the element until
+    // the drift, and a background is not a thing you can translate — so it moved
+    // to a layer, and these two declarations are the whole of what keeps that
+    // layer underneath. They are asserted together because either alone is
+    // silently wrong: `z-index: -1` without the isolation escapes to the root
+    // and paints behind the *card*, which is a raster that renders as nothing.
+    expect(grainRule).toMatch(/z-index:\s*-1/)
+    expect(grainFrame).toMatch(/isolation:\s*isolate/)
+  })
+
+  it('clips the travelling layer to the sparkline box, with one period of headroom', () => {
+    // The roll travels downward, so the layer starts one period high and the
+    // frame clips it. Without the clip the raster paints over the caption below.
+    expect(grainRule).toMatch(new RegExp(`inset: -${SCANLINE_PITCH_PX}px 0 0 0;`))
+    expect(grainFrame).toMatch(/overflow:\s*hidden/)
   })
 
   it.each(THEMES)('keeps the %s series legible against its own ground', (theme) => {

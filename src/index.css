@@ -343,20 +343,87 @@ body {
 
 /* The sparklines' raster ground.
  *
- * A `background-image` rather than an overlay, which is the whole reason these
- * can have a raster at all: the series is 1.5px in a 40px box, and a 1px dark
- * line every 3px laid *over* it would chop it into dashes. Behind it, the SVG
- * paints on top at full strength and the box reads as a small screen.
+ * **Behind the series, never over it** — that is the whole reason these can have
+ * a raster at all: the series is 1.5px in a 40px box, and a 1px dark line every
+ * 3px laid *over* it would chop it into dashes. Behind it, the SVG paints on top
+ * at full strength and the box reads as a small screen.
+ *
+ * It was a plain `background-image` on this element until the drift was added,
+ * and it cannot stay one: a background is not a thing you can translate without
+ * animating `background-position`, which repaints the layer every frame to draw
+ * the identical picture — the exact trade the chart's roll exists to avoid. So
+ * the raster moves to a `::before` that can carry a `transform`, and **the two
+ * declarations below are what keep it behind the series**. `z-index: -1` puts it
+ * under the element's in-flow content; `isolation: isolate` is what makes that
+ * mean "under the chart" rather than "under the card", by making this element
+ * the stacking context the negative index resolves in. Without it the layer
+ * escapes to the root and paints behind the card's own opaque background, which
+ * is a raster that has stopped rendering with nothing on screen to say so.
  *
  * Same pitch and token as the chart so the three read as one piece of hardware,
- * and deliberately not animated — the chart carries the movement, and a rolling
- * raster on two always-visible cards would compete with the one place motion
- * means something. Nothing here is composited, promoted or on the reduced-motion
- * path; it is a gradient painted once. */
+ * and a fifth of its speed so they do not read as one *animation*. */
 .crt-grain {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.crt-grain::before {
+  content: '';
+  position: absolute;
+  /* One period of headroom at the top, since the roll travels downward — and
+   * the reason the frame above clips. */
+  inset: -3px 0 0 0;
+  z-index: -1;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0 2px,
     color-mix(in srgb, var(--color-ink) 12%, transparent) 2px 3px
   );
+  animation: crt-scanline-roll 6s linear infinite;
+  will-change: transform;
+}
+
+/* The circuit-trace ground.
+ *
+ * **These rules mirror `src/lib/circuitry.js`, which carries the reasoning**;
+ * `circuitry.test.js` parses this file and fails if the two disagree. The short
+ * version:
+ *
+ * **It does not animate, and that is the load-bearing decision.** The chart has
+ * two moving artifacts, the sparklines a third, the ticker scrolls and the block
+ * dot breathes. A moving page background is where a dashboard stops being
+ * readable — and this one would be moving behind the entire page rather than
+ * inside a box.
+ *
+ * **The strength is a ceiling.** This layer sits *behind* the header and footer
+ * copy, so it moves the ground and leaves the glyph where it is — the harsher
+ * composite. Held to the same 4.5:1 every text role already clears on `ground`,
+ * which caps it just under 6% and puts the shipped 4.5% there with the only
+ * headroom available.
+ *
+ * **A mask rather than a coloured tile**, because a data-URI SVG cannot read a
+ * custom property: masking one flat `ink` layer is how a single piece of artwork
+ * follows the theme instead of shipping one tile per theme with two literal
+ * hexes standing in for a token.
+ *
+ * `z-index: -1` and `isolation: isolate` do the same job here as on `.crt-grain`
+ * above — under the page's own content, over the page's own background, and the
+ * isolation is what makes the negative index resolve against this element rather
+ * than escaping to the root. */
+.circuit-ground {
+  position: relative;
+  isolation: isolate;
+}
+
+.circuit-ground::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--color-ink) 4.5%, transparent);
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' fill='none' stroke='white' stroke-width='2'><path d='M0 40h96l20 20h56l20-20h48'/><path d='M64 0v56l-24 24v88l24 24v48'/><path d='M104 128h56l20 20v44'/><path d='M40 120h44'/><path d='M216 200h-40l-20-20'/><g fill='white' stroke='none'><circle cx='64' cy='40' r='3.5'/><circle cx='104' cy='128' r='3.5'/><circle cx='180' cy='192' r='3.5'/><circle cx='84' cy='120' r='3'/><circle cx='216' cy='200' r='3.5'/><circle cx='156' cy='180' r='3'/><circle cx='40' cy='120' r='3'/></g></svg>");
+  mask-size: 240px 240px;
+  mask-repeat: repeat;
 }

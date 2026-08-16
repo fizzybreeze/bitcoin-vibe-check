@@ -32,16 +32,24 @@ const ICON_COMPONENT = join(SRC, 'components', 'Icon.jsx')
  * one drawing apiece. Each is held honest below.
  */
 const ARTWORK = [
-  { path: join(SRC, 'components', 'VibeCharacter.jsx'), from: 'vibeCharacter.js' },
-  { path: join(SRC, 'components', 'Wordmark.jsx'),      from: 'wordmark.js' },
+  { path: join(SRC, 'components', 'VibeCharacter.jsx'), from: 'vibeCharacter.js', draws: /<rect/ },
+  { path: join(SRC, 'components', 'Wordmark.jsx'),      from: 'wordmark.js',      draws: /<rect/ },
   // Not a component: it builds standalone SVG strings for the three export
   // surfaces, which cannot render React and must not each redraw the alphabet.
-  { path: join(SRC, 'lib', 'wordmark.js'),              from: 'GLYPHS' },
+  { path: join(SRC, 'lib', 'wordmark.js'),              from: 'GLYPHS',           draws: /<rect/ },
   // Not a drawing either — one tile of the CRT raster, built as an SVG string
   // because that is the only expression of it html2canvas and Satori both draw
   // (both decline a repeating gradient, one of them silently). Geometry, not
   // artwork, and nothing an `<Icon>` could express.
-  { path: join(SRC, 'lib', 'crt.js'),                   from: 'SCANLINE_PITCH_PX' },
+  { path: join(SRC, 'lib', 'crt.js'),                   from: 'SCANLINE_PITCH_PX', draws: /<rect/ },
+  // One tile of the circuit ground, and the one entry here that is *not* on a
+  // pixel grid — it is vector line art, because a trace chamfered at 45° is the
+  // difference between the pattern reading as a board and reading as a maze.
+  // Hence `draws` per entry rather than a shared `<rect>`: the shape each of
+  // these is held to is a property of the drawing, and flattening it would
+  // either exempt this one from being checked at all or force it onto a grid it
+  // has no reason to be on.
+  { path: join(SRC, 'lib', 'circuitry.js'),             from: 'CIRCUIT_TILE_PX',  draws: /<path/ },
 ]
 const ARTWORK_PATHS = new Set(ARTWORK.map(a => a.path))
 const ICONS_MODULE = join(SRC, 'lib', 'icons.js')
@@ -138,12 +146,12 @@ describe('nothing outside Icon.jsx draws its own', () => {
 })
 
 describe('the artwork exemptions', () => {
-  it.each(ARTWORK)('$path still draws from a pixel grid, not an icon', ({ path, from }) => {
+  it.each(ARTWORK)('$path still draws artwork, not an icon', ({ path, from, draws }) => {
     // An exemption nobody re-checks is how a list rots — the same rule the
     // Satori and overlay exemptions are held to elsewhere.
     const body = readFileSync(path, 'utf8')
     expect(body).toContain(from)
-    expect(body).toMatch(/<rect/)
+    expect(body).toMatch(draws)
     // And it must not quietly become a second icon set.
     expect(body).not.toMatch(/\bICON_PATHS\b/)
   })
