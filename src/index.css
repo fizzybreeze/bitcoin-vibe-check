@@ -341,30 +341,37 @@ body {
   animation-play-state: paused;
 }
 
-/* The sparklines' raster ground.
+/* The sparklines' raster.
  *
- * **Behind the series, never over it** — that is the whole reason these can have
- * a raster at all: the series is 1.5px in a 40px box, and a 1px dark line every
- * 3px laid *over* it would chop it into dashes. Behind it, the SVG paints on top
- * at full strength and the box reads as a small screen.
+ * **In front of the series, like the chart's, and it was behind until v1.18.0.**
+ * The raster and the series are meant to be one picture seen through one screen;
+ * behind the line they are two planes, and once the raster drifts the near plane
+ * is the one holding still — which reads as parallax rather than as a vertical
+ * hold slipping. The chart three cards away has never had that problem, because
+ * its overlay is over everything.
  *
- * It was a plain `background-image` on this element until the drift was added,
- * and it cannot stay one: a background is not a thing you can translate without
- * animating `background-position`, which repaints the layer every frame to draw
- * the identical picture — the exact trade the chart's roll exists to avoid. So
- * the raster moves to a `::before` that can carry a `transform`, and **the two
- * declarations below are what keep it behind the series**. `z-index: -1` puts it
- * under the element's in-flow content; `isolation: isolate` is what makes that
- * mean "under the chart" rather than "under the card", by making this element
- * the stacking context the negative index resolves in. Without it the layer
- * escapes to the root and paints behind the card's own opaque background, which
- * is a raster that has stopped rendering with nothing on screen to say so.
+ * **What put it behind was a claim about a number that had never been measured**
+ * — that a 1px line every 3px laid over a 1.5px stroke chops the series into
+ * dashes. The measure of that is the stroke's *own* lit-row-to-scanned-row
+ * ratio, and at this alpha it is 1.11 in dark and 1.14 in light: under the 1.15
+ * this file uses to decide a raster is visible on the ground at all. The chart
+ * has been drawing the same `accent` series under the same raster since v1.13.0.
+ *
+ * `z-index: 1` is the whole of what puts it in front, and it is doing real work
+ * rather than being a formality: `.recharts-wrapper` is `position: relative`, so
+ * a pseudo-element at `z-index: auto` paints in the same step and loses on
+ * document order. **`isolation: isolate` went with the negative index** — a
+ * positive one needs no stacking context of its own to beat the box's own
+ * content, so keeping it would have been a declaration nothing could see.
+ *
+ * `pointer-events: none` is the chart's finding applied forward. Neither
+ * sparkline is interactive today, so nothing is being fixed; a layer over the
+ * whole box is how the next one to get a `<Tooltip>` silently does not.
  *
  * Same pitch and token as the chart so the three read as one piece of hardware,
  * and a fifth of its speed so they do not read as one *animation*. */
 .crt-grain {
   position: relative;
-  isolation: isolate;
   overflow: hidden;
 }
 
@@ -374,7 +381,8 @@ body {
   /* One period of headroom at the top, since the roll travels downward — and
    * the reason the frame above clips. */
   inset: -3px 0 0 0;
-  z-index: -1;
+  z-index: 1;
+  pointer-events: none;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0 2px,
@@ -407,10 +415,12 @@ body {
  * follows the theme instead of shipping one tile per theme with two literal
  * hexes standing in for a token.
  *
- * `z-index: -1` and `isolation: isolate` do the same job here as on `.crt-grain`
- * above — under the page's own content, over the page's own background, and the
- * isolation is what makes the negative index resolve against this element rather
- * than escaping to the root. */
+ * **`z-index: -1` and `isolation: isolate` are a pair and neither works alone**
+ * — under the page's own content, over the page's own background, with the
+ * isolation making the negative index resolve against this element rather than
+ * escaping to the root and painting behind the page's own background. That pair
+ * was on `.crt-grain` too until v1.18.0, where it went with the placement: this
+ * is the one layer left that has to sit *under* what it decorates. */
 .circuit-ground {
   position: relative;
   isolation: isolate;

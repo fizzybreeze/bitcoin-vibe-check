@@ -136,12 +136,7 @@ test.describe('CRT chart treatment', () => {
 
     const style = await spark.evaluate((el) => {
       const s = getComputedStyle(el, '::before')
-      return {
-        image: s.backgroundImage,
-        animation: s.animationName,
-        zIndex: s.zIndex,
-        isolation: getComputedStyle(el).isolation,
-      }
+      return { image: s.backgroundImage, animation: s.animationName }
     })
     // Same unparseable-`color-mix` failure as the chart layers: present, sized,
     // and drawing nothing.
@@ -149,13 +144,10 @@ test.describe('CRT chart treatment', () => {
     expect(style.image, 'the grain colour did not resolve').not.toContain('color-mix')
     expect(style.image).toMatch(/rgba?\(/)
     expect(style.animation).toBe('crt-scanline-roll')
-    // Behind the series rather than over it — an overlay would chop a 1.5px
-    // stroke into dashes. **Both halves, because either alone is silently
-    // wrong**: with the isolation removed the negative index escapes to the root
-    // and the layer paints behind the card's own opaque background, which is a
-    // grain that has stopped rendering with every other assertion here green.
-    expect(style.zIndex).toBe('-1')
-    expect(style.isolation).toBe('isolate')
+    // Where this layer sits is deliberately *not* asserted from the computed
+    // style any more. `z-index` there is what was declared rather than what was
+    // painted, which is the trap the circuit tile's mask fell into one version
+    // ago — and the placement is now provable in pixels instead, below.
   })
 
   test('actually moves the grain, rather than declaring an animation that does not', async ({ page }) => {
@@ -174,12 +166,64 @@ test.describe('CRT chart treatment', () => {
     expect(await at(), 'the grain declares a drift it is not performing').not.toBe(before)
   })
 
-  // Deliberately not tested here: that the series paints *over* the grain. The
-  // obvious hit-test — `elementFromPoint` at the box's centre — resolves to
-  // something inside the box whether the grain is behind or in front, so it
-  // would pass either way. The claim is pinned structurally instead, by the
-  // z-index and isolation pair above; that is the narrower assertion but it is
-  // the one that is actually true.
+  test('paints the grain over the chart inside the box, not under it', async ({ page }) => {
+    // **The claim this file recorded as untestable, which inverting the layer
+    // made testable.** While the raster was behind the series the obvious probe
+    // — `elementFromPoint` at the box's centre — resolved inside the box either
+    // way, so the placement was pinned structurally and never in paint. It no
+    // longer has to be: a layer *in front* of opaque content shows up in the
+    // pixels, where a `z-index` read out of a computed style is only ever what
+    // somebody declared.
+    //
+    // The probe paints recharts' own wrapper — the real element at the real
+    // depth, rather than an injected div that might sit at a different one — a
+    // flat colour, and then asks whether anything modulates it. Behind the
+    // series the wrapper hides the raster completely and every row of the box is
+    // one value; in front, one row in three is lifted toward `ink`.
+    const spark = page.getByRole('img', { name: /Fear and Greed/ })
+    await expect(spark).toBeAttached({ timeout: TIMEOUT })
+    await expect(spark.locator('.recharts-wrapper')).toBeAttached({ timeout: TIMEOUT })
+
+    await spark.evaluate((el) => {
+      el.querySelector('.recharts-wrapper').style.background = 'rgb(128, 128, 128)'
+    })
+
+    // `animations: 'disabled'` rewinds the drift to its first frame rather than
+    // removing it, so the raster is still painted — it is only here so the rows
+    // sampled are the same ones on every run.
+    const shot = (await spark.screenshot({ animations: 'disabled' })).toString('base64')
+    const rows = await page.evaluate(async (b64) => {
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = reject
+        i.src = `data:image/png;base64,${b64}`
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      // One mean per pixel row. A raster modulates whole rows, so this collapses
+      // the horizontal axis without losing the only signal being looked for.
+      return Array.from({ length: canvas.height }, (_, y) => {
+        let sum = 0
+        for (let x = 0; x < canvas.width; x++) sum += data[(y * canvas.width + x) * 4 + 1]
+        return sum / canvas.width
+      })
+    }, shot)
+
+    expect(rows.length, 'the sparkline screenshot has no rows').toBeGreaterThan(10)
+    // Measured against both mutations rather than guessed at: the probe is 128
+    // and a scanned row composites to ~143 in the dark theme, so the spread is
+    // **13.4 with the layer in front and 1.3 behind it** — the residue being the
+    // antialiased edge of the box. The bar sits between the two with room on
+    // both sides, so this fails on the placement rather than on a rounding step.
+    const spread = Math.max(...rows) - Math.min(...rows)
+    expect(spread, `the grain is not painting over the chart (rows are flat at ${rows[0]})`)
+      .toBeGreaterThan(6)
+  })
 
   test('paints the circuit ground behind the page, without moving it', async ({ page }) => {
     // Three ways this layer fails while looking perfectly healthy in the DOM:
