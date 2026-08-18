@@ -70,3 +70,52 @@ export async function fetchChartSeries(days, currency) {
     return draw(FALLBACK_CURRENCY)
   }
 }
+
+/**
+ * The drawn series, with its final point's close kept live from the socket.
+ *
+ * **Why this is free.** Kraken's last candle is the bucket currently being
+ * written, so its close is not a historical figure at all — it is the last
+ * trade, and the socket is already streaming that. Replacing it costs no
+ * request and no fetch; the chart simply stops being frozen at whatever
+ * instant it happened to be fetched.
+ *
+ * **Why it is bounded, which is the part worth reading before extending it.**
+ * The overwrite is legal only while that bucket is still open. A tab left
+ * sitting past the hour has a series whose last point is a *closed* candle, and
+ * writing the current price into it would draw a later price against an earlier
+ * label — a fabricated point wearing the shape of a true one, which is the one
+ * failure a price chart cannot take back and the reason v1.14.0 refused to
+ * convert a dollar series by spot FX. So past `until` this returns the series
+ * untouched and the chart goes back to being honestly stale. Fixing *that* half
+ * means refetching the candles, which is a different mechanism with its own
+ * cost, and it is deliberately not done here.
+ *
+ * **It never mutates.** The array it is given is the one held in `chartCache`
+ * and re-served on every range toggle, so writing through would compound a
+ * patch into stored data and hand back a series that is no longer what Kraken
+ * said. A new array with a new final object is the whole of the safety.
+ *
+ * `price` must be denominated in the series' own currency — `series.currency`,
+ * never the header's selection, which differ whenever a fallback happened.
+ */
+export function patchSeriesTail(points, price, nowMs) {
+  if (!Array.isArray(points) || points.length === 0) return points
+  // Same screen as the socket applies before a price reaches state: zero is a
+  // broken frame rather than a reading, and a non-finite one renders as NaN.
+  if (!Number.isFinite(price) || price <= 0) return points
+
+  const last = points[points.length - 1]
+  // No `until` means a point this module did not shape — refuse rather than
+  // guess, since the guess is the fabrication above.
+  if (!Number.isFinite(last?.until) || nowMs >= last.until) return points
+
+  // Rounded to match every other point, which `parseKrakenOhlc` rounds too. It
+  // also means an unchanged rounded price yields an equal value, which is what
+  // lets the caller skip re-rendering the chart on a tick that would not move
+  // a pixel.
+  const rounded = Math.round(price)
+  if (rounded === last.price) return points
+
+  return [...points.slice(0, -1), { ...last, price: rounded }]
+}
