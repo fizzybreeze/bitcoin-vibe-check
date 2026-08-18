@@ -24,6 +24,19 @@ const chartVolumeTooltip = pair =>
  * in App. They are presentation, they are used nowhere else, and deriving them
  * beside the axes they configure is what keeps the prop list honest.
  *
+ * **The change badge names its range, and that label is the whole of it.**
+ * `computeChartChange` is first-point-to-last-point of whatever is drawn, so
+ * the badge means "across this range" at every range — but unlabelled at 1D it
+ * reads as a second opinion on the 24h change in the card beside it, and the
+ * two genuinely differ. They measure different things: that one is a rolling
+ * 24 hours from the live ticker, this one spans 24 hourly candles anchored to
+ * clock-hour boundaries (so ~22–23 hours) and is frozen at whenever the series
+ * was fetched. Naming the range is what stops a reader treating one as the
+ * other's error. The maths is deliberately untouched — matching the two would
+ * mean deriving the header's figure from candles, which makes it "since
+ * yesterday's close", a different number again, and `marketData.js` already
+ * refused that trade.
+ *
  * **Two currencies, on purpose.** `currency` is what the header's selector says;
  * `chartCurrency` is what the candles are actually denominated in, which
  * `fetchChartSeries` reports and which differs only when Kraken has no market
@@ -82,6 +95,7 @@ export default function PriceChartCard({
             >
               <Icon name={chartChange >= 0 ? 'triangle-up' : 'triangle-down'} size="sm" />
               {chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
+              <span className="font-normal text-quiet">· {range}</span>
             </span>
           )}
         </div>

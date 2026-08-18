@@ -138,6 +138,27 @@ describe('PriceChartCard', () => {
     expect(screen.getByTestId('chart-range-change')).toHaveClass('text-down')
   })
 
+  it('names the range the change is measured across', () => {
+    // Unlabelled, this badge reads as a second opinion on the 24h change in
+    // the card beside it — and at 1D the two genuinely differ: that one is a
+    // rolling 24 hours off the live ticker, this one spans 24 hourly candles
+    // anchored to clock-hour boundaries and frozen at fetch time. The label is
+    // what stops one being read as the other's error.
+    const { rerender } = renderCard({ chartChange: 2.5, range: '1D' })
+    // Matched loosely across the separator: the badge is an inline-flex row
+    // and the space either side of the `·` comes from `gap-1`, not from a
+    // character in the markup.
+    expect(screen.getByTestId('chart-range-change')).toHaveTextContent(/\+2\.50%\s*·\s*1D/)
+
+    rerender(
+      <PriceChartCard chart={chart} chartLoading={false} chartError={null} chartChange={2.5}
+        range="1Y" setRange={() => {}} refreshChart={() => {}} ranges={RANGES} currency="usd" />
+    )
+    // The label follows the active range rather than being written once for
+    // the case that prompted it.
+    expect(screen.getByTestId('chart-range-change')).toHaveTextContent(/\+2\.50%\s*·\s*1Y/)
+  })
+
   it('hides the range change while a fetch is in flight', () => {
     // Showing the previous range's move next to the new range's chart is worse
     // than showing nothing — it reads as this range's number.

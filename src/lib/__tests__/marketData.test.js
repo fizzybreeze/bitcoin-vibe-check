@@ -100,11 +100,27 @@ describe('when CoinPaprika is down', () => {
     expect(withVolume.volumeGbp).toBeCloseTo(35e9 * 82000 / 104500, 0)
   })
 
+  it('seeds only the dollar 24h change from CoinPaprika', () => {
+    // CoinPaprika is asked for `quotes.USD` and answers one market, so its
+    // `percent_change_24h` is the dollar figure. Spreading it across the other
+    // four is the exact defect this change closes — it would render as the
+    // selected currency's day and would not be. They stay blank until the
+    // socket lands.
+    const seeded = mergeMarketData({
+      paprikaTicker: { quotes: { USD: { price: 104500, percent_change_24h: 2.5 } } },
+    })
+    expect(seeded.priceChange24hUsd).toBe(2.5)
+    expect(seeded.priceChange24hGbp).toBeNull()
+    expect(seeded.priceChange24hEur).toBeNull()
+    expect(seeded.priceChange24hCad).toBeNull()
+    expect(seeded.priceChange24hChf).toBeNull()
+  })
+
   it('blanks what genuinely has no other source', () => {
     // Honest blanks, not invented numbers. Each of these is documented in the
     // module as having no fallback and why.
     expect(out.volumeUsd).toBeNull()
-    expect(out.priceChange24h).toBeNull()
+    expect(out.priceChange24hUsd).toBeNull()
     expect(out.athUsd).toBeNull()
   })
 
@@ -258,14 +274,49 @@ describe('the non-price sources', () => {
 describe('krakenTickerUpdates', () => {
   // The WebSocket was the one upstream whose values reached state unscreened,
   // and unlike a failed fetch it *replaces* a price already on screen.
-  const MAP = { 'BTC/USD': 'priceUsd', 'BTC/GBP': 'priceGbp' }
+  const MAP = {
+    'BTC/USD': { price: 'priceUsd', change: 'priceChange24hUsd' },
+    'BTC/GBP': { price: 'priceGbp', change: 'priceChange24hGbp' },
+  }
   const frame = (...data) => ({ channel: 'ticker', data })
 
   it('publishes a rounded price per mapped symbol', () => {
     expect(krakenTickerUpdates(frame(
       { symbol: 'BTC/USD', last: 104500.4, change_pct: -1.25 },
       { symbol: 'BTC/GBP', last: 82000.6 },
-    ), MAP)).toEqual({ priceUsd: 104500, priceGbp: 82001, priceChange24h: -1.25 })
+    ), MAP)).toEqual({ priceUsd: 104500, priceGbp: 82001, priceChange24hUsd: -1.25 })
+  })
+
+  it('publishes each symbol\'s own 24h change, not the dollar pair\'s', () => {
+    // The bug this replaces: `change_pct` was read off `BTC/USD` whatever the
+    // reader had selected, so a GBP visitor got the dollar pair's day under a
+    // sterling price. The two figures differ by that day's GBP/USD move, and
+    // nothing on screen said which one was being shown.
+    expect(krakenTickerUpdates(frame(
+      { symbol: 'BTC/USD', last: 104500, change_pct: -1.25 },
+      { symbol: 'BTC/GBP', last: 82000,  change_pct: 0.4 },
+    ), MAP)).toEqual({
+      priceUsd: 104500, priceChange24hUsd: -1.25,
+      priceGbp: 82000,  priceChange24hGbp: 0.4,
+    })
+  })
+
+  it('publishes a non-dollar change from a frame with no dollar pair in it', () => {
+    // The sharper half of the same claim: keyed off `BTC/USD`, a frame that
+    // does not mention the dollar pair carries no change at all — so sterling
+    // would sit on a stale figure for as long as Kraken batched it that way.
+    expect(krakenTickerUpdates(frame(
+      { symbol: 'BTC/GBP', last: 82000, change_pct: 0.4 },
+    ), MAP)).toEqual({ priceGbp: 82000, priceChange24hGbp: 0.4 })
+  })
+
+  it('keeps a symbol\'s change when its price is unusable', () => {
+    // The two are screened separately and by different predicates — a price
+    // must be above zero, a percentage change need only be a number — so a
+    // broken `last` must not take a perfectly good `change_pct` with it.
+    expect(krakenTickerUpdates(frame(
+      { symbol: 'BTC/USD', last: 0, change_pct: -1.25 },
+    ), MAP)).toEqual({ priceChange24hUsd: -1.25 })
   })
 
   it('drops a zero price instead of publishing it', () => {
@@ -299,7 +350,7 @@ describe('krakenTickerUpdates', () => {
   it('accepts a zero or negative 24h change, which are real readings', () => {
     // `positive` would be the wrong predicate here, which is why there are two.
     expect(krakenTickerUpdates(frame({ symbol: 'BTC/USD', last: 1, change_pct: 0 }), MAP))
-      .toEqual({ priceUsd: 1, priceChange24h: 0 })
+      .toEqual({ priceUsd: 1, priceChange24hUsd: 0 })
   })
 
   it('drops a 24h change that is missing or unusable rather than calling it 0%', () => {

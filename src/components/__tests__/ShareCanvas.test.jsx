@@ -31,6 +31,42 @@ function renderCycleCard(mvrv, props = {}) {
   )
 }
 
+function renderPriceCard(props = {}) {
+  return render(
+    <ShareCanvas
+      selectedCards={['btcPrice']}
+      sentimentSummary=""
+      cardData={{
+        priceUsd: 100_000, priceGbp: 79_000,
+        priceChange24hUsd: 2.5, priceChange24hGbp: -1.25,
+      }}
+      currency="usd"
+      forwardedRef={null}
+      {...props}
+    />
+  )
+}
+
+describe('ShareCanvas — BTC Price', () => {
+  it('quotes the 24h change of the currency the price is drawn in', () => {
+    // Same defect as the live card, and worse here: a share image is posted
+    // and cannot be re-rendered, so a percentage in the wrong currency is
+    // wrong permanently. The price already followed the selector; the change
+    // was the dollar pair's whatever it said.
+    renderPriceCard({ currency: 'gbp' })
+    expect(screen.getByText(/-1\.25% \(24h\)/)).toBeTruthy()
+    expect(screen.queryByText(/\+2\.50% \(24h\)/)).toBeNull()
+  })
+
+  it('omits the change rather than falling back to the dollar figure', () => {
+    // `?? null`, never `?? priceChange24hUsd` — a stand-in here reads as the
+    // selected currency's day and is not. The price keeps its own USD fallback
+    // because the formatter labels it; a bare percentage carries no such tell.
+    renderPriceCard({ currency: 'eur' })
+    expect(screen.queryByText(/\(24h\)/)).toBeNull()
+  })
+})
+
 describe('ShareCanvas — Cycle Indicators', () => {
   it('labels an MVRV that came from the daily snapshot', () => {
     renderCycleCard({ value: 2.15, date: '2026-08-05', source: 'snapshot' })

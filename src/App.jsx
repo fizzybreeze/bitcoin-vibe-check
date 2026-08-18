@@ -56,12 +56,16 @@ const RANGES = [
   { label: '1Y', days: 365 },
 ]
 
+// Which state fields each subscribed symbol writes. One entry per symbol
+// carrying both names, rather than a price map beside a change map: the 24h
+// change follows the selected currency now, and two maps listing the same five
+// symbols are two maps that can come to list different ones.
 const WS_SYMBOL_MAP = {
-  'BTC/USD': 'priceUsd',
-  'BTC/GBP': 'priceGbp',
-  'BTC/EUR': 'priceEur',
-  'BTC/CAD': 'priceCad',
-  'BTC/CHF': 'priceChf',
+  'BTC/USD': { price: 'priceUsd', change: 'priceChange24hUsd' },
+  'BTC/GBP': { price: 'priceGbp', change: 'priceChange24hGbp' },
+  'BTC/EUR': { price: 'priceEur', change: 'priceChange24hEur' },
+  'BTC/CAD': { price: 'priceCad', change: 'priceChange24hCad' },
+  'BTC/CHF': { price: 'priceChf', change: 'priceChange24hChf' },
 }
 
 async function loadData() {
@@ -130,7 +134,11 @@ function writeCache(data) {
   if (data.volumeEur      != null) patch.volumeEur      = data.volumeEur
   if (data.volumeCad      != null) patch.volumeCad      = data.volumeCad
   if (data.volumeChf      != null) patch.volumeChf      = data.volumeChf
-  if (data.priceChange24h != null) patch.priceChange24h = data.priceChange24h
+  if (data.priceChange24hUsd != null) patch.priceChange24hUsd = data.priceChange24hUsd
+  if (data.priceChange24hGbp != null) patch.priceChange24hGbp = data.priceChange24hGbp
+  if (data.priceChange24hEur != null) patch.priceChange24hEur = data.priceChange24hEur
+  if (data.priceChange24hCad != null) patch.priceChange24hCad = data.priceChange24hCad
+  if (data.priceChange24hChf != null) patch.priceChange24hChf = data.priceChange24hChf
   // Deliberately never caches the derived market cap. The cache is a
   // repeat-visit fallback with no provenance attached, so a stored estimate
   // would resurface later with nothing to label it — and it needs no caching
@@ -291,7 +299,11 @@ export default function App() {
         volumeEur:      result.volumeEur      ?? cache.volumeEur      ?? null,
         volumeCad:      result.volumeCad      ?? cache.volumeCad      ?? null,
         volumeChf:      result.volumeChf      ?? cache.volumeChf      ?? null,
-        priceChange24h: result.priceChange24h ?? cache.priceChange24h ?? null,
+        priceChange24hUsd: result.priceChange24hUsd ?? cache.priceChange24hUsd ?? null,
+        priceChange24hGbp: result.priceChange24hGbp ?? cache.priceChange24hGbp ?? null,
+        priceChange24hEur: result.priceChange24hEur ?? cache.priceChange24hEur ?? null,
+        priceChange24hCad: result.priceChange24hCad ?? cache.priceChange24hCad ?? null,
+        priceChange24hChf: result.priceChange24hChf ?? cache.priceChange24hChf ?? null,
         marketCapUsd:   result.marketCapUsd   ?? cache.marketCapUsd   ?? null,
         fng:            result.fng            ?? cache.fng            ?? null,
         fngHistory:     result.fngHistory     ?? cache.fngHistory     ?? null,
@@ -343,7 +355,11 @@ export default function App() {
         if (result.difficulty    != null) patch.difficulty    = result.difficulty
         if (result.fees          != null) patch.fees          = result.fees
         if (result.blockHeight   != null) patch.blockHeight   = result.blockHeight
-        if (result.priceChange24h != null) patch.priceChange24h = result.priceChange24h
+        if (result.priceChange24hUsd != null) patch.priceChange24hUsd = result.priceChange24hUsd
+        if (result.priceChange24hGbp != null) patch.priceChange24hGbp = result.priceChange24hGbp
+        if (result.priceChange24hEur != null) patch.priceChange24hEur = result.priceChange24hEur
+        if (result.priceChange24hCad != null) patch.priceChange24hCad = result.priceChange24hCad
+        if (result.priceChange24hChf != null) patch.priceChange24hChf = result.priceChange24hChf
         // Paired: a refresh that recovers CoinPaprika must clear the estimate
         // label at the same moment it replaces the estimated number.
         if (result.marketCapUsd   != null) {
@@ -620,10 +636,18 @@ export default function App() {
 
   const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
           volumeUsd, volumeGbp, volumeEur, volumeCad, volumeChf,
-          priceChange24h, fees, blockHeight, fng, fngHistory, difficulty, btcDominance, mempool, lastBlockTs,
+          priceChange24hUsd, priceChange24hGbp, priceChange24hEur, priceChange24hCad, priceChange24hChf,
+          fees, blockHeight, fng, fngHistory, difficulty, btcDominance, mempool, lastBlockTs,
           marketCapUsd, marketCapEstimated, lightning, athUsd } = data ?? {}
   const price  = { usd: priceUsd,  gbp: priceGbp,  eur: priceEur,  cad: priceCad,  chf: priceChf  }[currency] ?? null
   const volume = { usd: volumeUsd, gbp: volumeGbp, eur: volumeEur, cad: volumeCad, chf: volumeChf }[currency] ?? null
+  // `?? null`, never `?? priceChange24hUsd`. Falling back to the dollar figure
+  // is precisely the bug this replaces: it renders as the selected currency's
+  // day and is not.
+  const change24h = {
+    usd: priceChange24hUsd, gbp: priceChange24hGbp, eur: priceChange24hEur,
+    cad: priceChange24hCad, chf: priceChange24hChf,
+  }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
   const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
 
@@ -782,8 +806,8 @@ export default function App() {
         <div>
           <BtcPriceCard
             value={price != null ? fmtCurrency(price, currency) : null}
-            change={priceChange24h}
-            sub={priceChange24h != null ? '24h change' : null}
+            change={change24h}
+            sub={change24h != null ? '24h change' : null}
             athPct={athPct}
             vibe={vibe}
             vibeLoading={vibeLoading}

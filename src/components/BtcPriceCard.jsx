@@ -167,7 +167,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
           )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (
-            <p className={`hidden md:flex items-center gap-1 mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p data-testid="price-change-24h" className={`hidden md:flex items-center gap-1 mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
               {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
@@ -180,7 +180,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         {/* Mobile-only: change + sub on right */}
         {change != null && value != null && (
           <div className="md:hidden text-right shrink-0 ml-3">
-            <p className={`flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p data-testid="price-change-24h" className={`flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
               {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
