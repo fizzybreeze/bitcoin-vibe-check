@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { usePersistedState } from './hooks/usePersistedState.js'
 import Icon from './components/Icon.jsx'
@@ -25,7 +25,7 @@ import {
 } from './lib/calculations.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
 import { KRAKEN_INTERVAL, fetchKrakenCandles } from './lib/ohlc.js'
-import { fetchChartSeries } from './lib/chartSeries.js'
+import { fetchChartSeries, patchSeriesTail } from './lib/chartSeries.js'
 import CycleIndicatorsCard from './components/CycleIndicatorsCard.jsx'
 import BtcPriceCard from './components/BtcPriceCard.jsx'
 import NetworkPulseCard from './components/NetworkPulseCard.jsx'
@@ -221,7 +221,6 @@ export default function App() {
   // others is a frame reporting a fallback that did not occur.
   const [chartSeries, setChartSeries] = useState(null)
   const [chartLoading, setChartLoading] = useState(true)
-  const [chartChange, setChartChange] = useState(null)
   const [chartNonce, setChartNonce]   = useState(0)
   const [chartError, setChartError]   = useState(null) // null | 'temp' | 'permanent'
   const [wsLive, setWsLive]           = useState(false)
@@ -494,7 +493,6 @@ export default function App() {
     // about, met once more inside the fix for it.
     function showSeries(series) {
       setChartSeries(series)
-      setChartChange(computeChartChange(series.points))
     }
 
     // Cancel any pending debounce or retry timer
@@ -518,7 +516,6 @@ export default function App() {
     // On refresh (same cacheKey), keep old chart visible behind the opacity overlay.
     if (prevCacheKey !== cacheKey) setChartSeries(null)
     setChartLoading(true)
-    setChartChange(null)
 
     // Stamp this fetch so stale responses from cancelled requests are discarded
     const myId = ++fetchIdRef.current
@@ -648,6 +645,51 @@ export default function App() {
     usd: priceChange24hUsd, gbp: priceChange24hGbp, eur: priceChange24hEur,
     cad: priceChange24hCad, chf: priceChange24hChf,
   }[currency] ?? null
+  // A clock for the patch above, and deliberately not a polling one. The only
+  // instant that matters is the one the last candle closes at: before it the
+  // patch is legal, after it the same overwrite would fabricate a point. So
+  // this wakes *once*, exactly then, rather than ticking every N seconds and
+  // leaving an N-second window in which the chart is quietly lying.
+  //
+  // Reading `Date.now()` in the memo itself is what this replaces — impure in
+  // render, and the lint rule is right to refuse it.
+  const [tailOpenAt, setTailOpenAt] = useState(() => Date.now())
+  const chartTailUntil = chartSeries?.points?.[chartSeries.points.length - 1]?.until ?? null
+  useEffect(() => {
+    if (chartTailUntil == null) return
+    // A series fetched before this bucket closed is already expired on arrival
+    // when it comes back out of the cache, so a non-positive delay is normal
+    // and fires on the next tick rather than being a special case.
+    const id = setTimeout(() => setTailOpenAt(Date.now()), Math.max(0, chartTailUntil - Date.now()))
+    return () => clearTimeout(id)
+  }, [chartTailUntil])
+
+  // The chart's own currency, never the header's selection — they differ
+  // whenever Kraken had no market for the selection and the series fell back to
+  // dollars, and patching a dollar chart with a franc price is the fabrication
+  // `patchSeriesTail` exists to avoid.
+  const chartPrice = {
+    usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf,
+  }[chartSeries?.currency] ?? null
+
+  // Kraken's last candle is the bucket still being written, so its close is the
+  // live price. Keeping it patched is what stops the chart — and the range
+  // badge computed from it — freezing at the instant it was fetched, at no
+  // extra request. `patchSeriesTail` returns the *same array* when the value
+  // would not move (rounded price unchanged, or the bucket has closed), so this
+  // memo only hands recharts a new series when a pixel would actually differ.
+  const chartPoints = useMemo(
+    () => patchSeriesTail(chartSeries?.points ?? null, chartPrice, tailOpenAt),
+    [chartSeries, chartPrice, tailOpenAt],
+  )
+
+  // Derived from the *patched* points rather than stored when the fetch landed,
+  // which is what keeps the badge and the line telling the same story: computed
+  // at fetch time it would sit frozen above a chart whose last point is moving.
+  // It also removes a piece of state that could only ever disagree with the
+  // series it describes.
+  const chartChange = useMemo(() => computeChartChange(chartPoints), [chartPoints])
+
   const athPct = computeAthDistance(priceUsd, athUsd)
   const ma200  = ohlcData200?.length ? calc200DMA(ohlcData200) : null
 
@@ -816,7 +858,7 @@ export default function App() {
         </div>
         <div className="md:col-span-2 h-full">
           <PriceChartCard
-            chart={chartSeries?.points ?? null}
+            chart={chartPoints}
             chartLoading={chartLoading}
             chartError={chartError}
             chartChange={chartChange}

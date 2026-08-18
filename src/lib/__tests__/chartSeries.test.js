@@ -8,7 +8,7 @@
 // prove the predicate matches a string this test wrote — not that Kraken's real
 // envelope reaches it. Every failure below is expressed as a response body.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { fetchChartSeries, FALLBACK_CURRENCY } from '../chartSeries.js'
+import { fetchChartSeries, FALLBACK_CURRENCY, patchSeriesTail } from '../chartSeries.js'
 import { _resetInFlight } from '../ohlc.js'
 
 // [ time, open, high, low, close, vwap, volume, count ]
@@ -173,5 +173,82 @@ describe('fetchChartSeries', () => {
     vi.stubGlobal('fetch', routeByPair({ XBTGBP: ok(CANDLES) }))
     const { points } = await fetchChartSeries(1, 'gbp')
     expect(points[0].date).toMatch(/^\d{2}:\d{2}$/)
+  })
+})
+
+describe('patchSeriesTail', () => {
+  // Kraken's last candle is the bucket still being written, so its close is the
+  // current price. Everything here is about the one case where that stops being
+  // true.
+  const NOW = Date.parse('2026-08-18T14:30:00Z')
+  const OPEN_UNTIL = Date.parse('2026-08-18T15:00:00Z')   // bucket still forming
+  const CLOSED_AT  = Date.parse('2026-08-18T14:00:00Z')   // bucket already shut
+
+  const series = (until) => [
+    { date: '12:00', price: 100_000, volume: 1, until: until - 7_200_000 },
+    { date: '13:00', price: 101_000, volume: 2, until: until - 3_600_000 },
+    { date: '14:00', price: 102_000, volume: 3, until },
+  ]
+
+  it('writes the live price into the candle that is still forming', () => {
+    const out = patchSeriesTail(series(OPEN_UNTIL), 103_456, NOW)
+    expect(out[out.length - 1].price).toBe(103_456)
+  })
+
+  it('leaves a closed candle alone rather than fabricating a point', () => {
+    // The failure this guard exists for: past the bucket, the overwrite draws a
+    // later price against an earlier label — a made-up point in the shape of a
+    // true one, which is what v1.14.0 refused to do with spot FX.
+    const points = series(CLOSED_AT)
+    expect(patchSeriesTail(points, 103_456, NOW)).toBe(points)
+  })
+
+  it('never mutates the array it is given', () => {
+    // It is the array held in `chartCache` and re-served on every range toggle,
+    // so writing through would compound a patch into stored data.
+    const points = series(OPEN_UNTIL)
+    const before = points[2].price
+    patchSeriesTail(points, 103_456, NOW)
+    expect(points[2].price).toBe(before)
+  })
+
+  it('keeps every earlier point exactly as Kraken reported it', () => {
+    const out = patchSeriesTail(series(OPEN_UNTIL), 103_456, NOW)
+    expect(out.slice(0, -1)).toEqual(series(OPEN_UNTIL).slice(0, -1))
+    // Volume is not the socket's to say — it carries a price and nothing else.
+    expect(out[out.length - 1].volume).toBe(3)
+  })
+
+  it('returns the same array when the rounded price would not move a pixel', () => {
+    // Identity, not equality: the caller memoises on it, so a new array here
+    // would redraw the chart on every socket frame for no visible change.
+    const points = series(OPEN_UNTIL)
+    expect(patchSeriesTail(points, 102_000.4, NOW)).toBe(points)
+  })
+
+  it('rounds to match the points around it', () => {
+    const out = patchSeriesTail(series(OPEN_UNTIL), 103_456.7, NOW)
+    expect(out[out.length - 1].price).toBe(103_457)
+  })
+
+  it('refuses a price the socket should never have published', () => {
+    // Same screen `krakenTickerUpdates` applies: zero is a broken frame, not a
+    // reading, and a non-finite one renders as NaN on the axis.
+    const points = series(OPEN_UNTIL)
+    for (const bad of [0, -1, NaN, Infinity, null, undefined, '103456']) {
+      expect(patchSeriesTail(points, bad, NOW), String(bad)).toBe(points)
+    }
+  })
+
+  it('refuses a point that carries no bucket of its own', () => {
+    // A series shaped by something other than `parseKrakenOhlc` cannot say
+    // whether its last candle is open, and guessing is the fabrication above.
+    const points = [{ date: '14:00', price: 102_000, volume: 3 }]
+    expect(patchSeriesTail(points, 103_456, NOW)).toBe(points)
+  })
+
+  it('passes an empty or absent series straight through', () => {
+    expect(patchSeriesTail([], 103_456, NOW)).toEqual([])
+    expect(patchSeriesTail(null, 103_456, NOW)).toBeNull()
   })
 })

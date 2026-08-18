@@ -155,6 +155,39 @@ describe('parseKrakenOhlc', () => {
     expect(out[out.length - 1].price).toBe(1099)
   })
 
+  it('stamps each point with the instant its candle stops forming', () => {
+    // The whole reason this field exists: `patchSeriesTail` may only overwrite
+    // a close that is still being written, and without the candle's own window
+    // it would have to guess — which is how a live price ends up drawn against
+    // an earlier label.
+    const out = parseKrakenOhlc([candle(DAY_S, 42_000)], 30, 1)
+    expect(out[0].until).toBe((DAY_S + DAY_S) * 1000)
+  })
+
+  it('derives that window from the range\'s own interval', () => {
+    // Hourly candles at 1D, daily at 1M/1Y — a fixed span here would keep the
+    // 1D chart patchable for a day, which is 23 hours of fabrication.
+    const hourly = parseKrakenOhlc([candle(HOUR_S, 42_000)], 1, 1)
+    expect(hourly[0].until).toBe((HOUR_S + HOUR_S) * 1000)
+
+    const yearly = parseKrakenOhlc([candle(DAY_S, 42_000)], 365, 1)
+    expect(yearly[0].until).toBe((DAY_S + DAY_S) * 1000)
+  })
+
+  it('gives a 7D group the window of the candle whose close it kept', () => {
+    // The group's price is one 4-hourly close, so it stops being live when that
+    // candle closes — not at the end of the calendar day it is labelled with.
+    // The conservative reading on purpose: refusing to patch is never wrong.
+    const day = 10 * DAY_S
+    const out = parseKrakenOhlc([
+      candle(day, 41_000),
+      candle(day + 4 * HOUR_S, 42_000),
+    ], 7, 42)
+    expect(out).toHaveLength(1)
+    expect(out[0].price).toBe(42_000)
+    expect(out[0].until).toBe((day + 4 * HOUR_S + 4 * HOUR_S) * 1000)
+  })
+
   it('reads close from index 4', () => {
     const out = parseKrakenOhlc([candle(DAY_S, 42_000)], 30, 1)
     expect(out[0].price).toBe(42_000)

@@ -250,39 +250,61 @@ function quoteVolume(candle) {
 }
 
 /**
- * Shape Kraken candles into the chart's { date, price, volume } points, taking
- * the most recent `count` since Kraken cannot bound the response itself.
+ * Shape Kraken candles into the chart's { date, price, volume, until } points,
+ * taking the most recent `count` since Kraken cannot bound the response itself.
+ *
+ * **`until` is the instant the point's candle stops forming** — its open plus
+ * the interval — and it exists for exactly one consumer: `patchSeriesTail`,
+ * which may only overwrite a close that is still being written. Kraken's last
+ * candle is the in-progress bucket, so its close *is* the current price and can
+ * be kept live from the socket; once the bucket has closed, the same overwrite
+ * would print a later price against an earlier label, which is a fabricated
+ * point in the exact shape of a true one.
+ *
+ * Carried on every point rather than on the series, because a series-level
+ * interval would have to be recombined with the last candle's open to say
+ * anything, and the two could be handed round separately.
  */
 export function parseKrakenOhlc(candles, days, count) {
   if (!candles?.length) return null
   const recent = count != null ? candles.slice(-count) : candles
+  const intervalMs = krakenParamsForDays(days).interval * 60_000
+  const openedAt = c => c[0] * 1000
 
   if (days === 1) {
     return recent.map(c => ({
-      date: new Date(c[0] * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      date: new Date(openedAt(c)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       price: Math.round(parseFloat(c[4])),
       volume: quoteVolume(c),
+      until: openedAt(c) + intervalMs,
     }))
   }
 
   // 7D fetches 4-hourly candles but renders one bar per day: sum the volumes
   // and keep the last close of each day.
+  //
+  // `until` is that last candle's own window, not the calendar day's — the
+  // group's price is one 4-hourly close, so it stops being the live one when
+  // that candle closes. Deliberately the conservative reading: refusing to
+  // patch a point is never wrong, patching a closed one is.
   if (days === 7) {
     const groups = {}
     for (const c of recent) {
-      const date = new Date(c[0] * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      const date = new Date(openedAt(c)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       groups[date] = {
         date,
         price: Math.round(parseFloat(c[4])),
         volume: (groups[date]?.volume ?? 0) + quoteVolume(c),
+        until: openedAt(c) + intervalMs,
       }
     }
     return Object.values(groups)
   }
 
   return recent.map(c => ({
-    date: new Date(c[0] * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    date: new Date(openedAt(c)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     price: Math.round(parseFloat(c[4])),
     volume: quoteVolume(c),
+    until: openedAt(c) + intervalMs,
   }))
 }
