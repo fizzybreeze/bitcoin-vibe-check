@@ -10,7 +10,17 @@ import { PALETTE } from '../lib/palette.js'
 import useTheme from '../hooks/useTheme.js'
 import { CARD, CARD_LABEL, CARD_LABEL_SM, CARD_VALUE } from '../lib/typography.js'
 
-const BTC_PRICE_TOOLTIP = 'Spot price sourced from Kraken WebSocket, updated in real time. The price chart shows closing price across your selected time range.'
+// Covers both figures this card shows, because the change is the one whose
+// provenance a reader cannot infer: it carries no currency symbol, so nothing
+// on screen distinguishes a sterling change from a dollar one — which is
+// exactly how it came to be the dollar pair's for as long as it was. It also
+// has to explain the absence, since outside USD there is no change to show
+// until the socket lands and CoinPaprika has no per-currency figure to stand
+// in with. The last sentence is the answer to "why do these two percentages
+// disagree", and it lives here rather than being repeated in the chart card's
+// tooltip: the badge there names its own range, and two tooltips reconciling
+// the same pair of numbers is two copies that can come to disagree.
+const BTC_PRICE_TOOLTIP = 'Spot price and 24h change both come from the Kraken feed for the currency you have selected, updated live. Outside US dollars the change appears once that feed connects. The 24h change is a rolling 24 hours, so it will not match the percentage on the price chart — that one compares the first and last points of the range being drawn.'
 
 // The formula is published here on purpose. A composite index that hides its
 // arithmetic deserves the "made-up number" criticism it will get.
@@ -167,7 +177,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
           )}
           {/* Desktop-only stacked change */}
           {change != null && value != null && (
-            <p className={`hidden md:flex items-center gap-1 mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p data-testid="price-change-24h" className={`hidden md:flex items-center gap-1 mt-1.5 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
               {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>
@@ -180,7 +190,7 @@ export default function BtcPriceCard({ value, change, sub, athPct, vibe = null, 
         {/* Mobile-only: change + sub on right */}
         {change != null && value != null && (
           <div className="md:hidden text-right shrink-0 ml-3">
-            <p className={`flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
+            <p data-testid="price-change-24h" className={`flex items-center justify-end gap-1 text-sm font-medium tabular-nums ${changePositive ? 'text-up' : 'text-down'}`}>
               <Icon name={changePositive ? 'triangle-up' : 'triangle-down'} size="sm" />
               {changePositive ? '+' : ''}{change.toFixed(2)}%
             </p>

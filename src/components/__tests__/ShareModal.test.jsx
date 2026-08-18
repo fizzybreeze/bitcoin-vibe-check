@@ -23,7 +23,11 @@ const mockCardData = {
   priceEur: 92_000,
   priceCad: 136_000,
   priceChf: 89_000,
-  priceChange24h: 2.5,
+  // Per currency, matching what `mergeMarketData` actually returns — a fixture
+  // carrying a shape the app no longer produces is a shape the next reader
+  // copies.
+  priceChange24hUsd: 2.5,
+  priceChange24hGbp: -1.25,
   athUsd: 109_000,
   fng: { value: '72', value_classification: 'Greed' },
   difficulty: { difficultyChange: 2.1, timeAvg: 600_000, remainingBlocks: 1200 },

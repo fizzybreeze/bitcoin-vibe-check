@@ -70,20 +70,34 @@ function finite(value) {
  * The screen is applied to the value that is actually stored — after the
  * rounding, not before — so nothing can be admitted and then spoiled on its way
  * into state.
+ *
+ * **The 24h change is per currency, and that is a fix rather than a
+ * generalisation.** This function used to pick `change_pct` off `BTC/USD`
+ * whatever the reader had selected, so a GBP visitor read the dollar pair's
+ * day under a sterling price — the two differing by that day's GBP/USD move,
+ * with nothing on screen to say so. It is the same defect v1.14.0 fixed one
+ * card over, where the chart's heading followed the selector while its axis
+ * stayed in dollars, and it costs nothing to close: every pair the header
+ * offers is already subscribed on this socket and every frame already carries
+ * its own `change_pct`.
+ *
+ * `symbolMap` therefore names both fields a symbol writes. One entry per
+ * symbol rather than a price map beside a change map, because two maps that
+ * have to list the same five symbols are two maps that can come to list
+ * different ones.
  */
 export function krakenTickerUpdates(msg, symbolMap) {
   if (msg?.channel !== 'ticker' || !Array.isArray(msg.data) || !msg.data.length) return null
 
   const updates = {}
   for (const ticker of msg.data) {
-    const key = symbolMap?.[ticker?.symbol]
-    if (!key) continue
+    const fields = symbolMap?.[ticker?.symbol]
+    if (!fields) continue
     const last = positive(Math.round(Number(ticker?.last)))
-    if (last != null) updates[key] = last
+    if (last != null) updates[fields.price] = last
+    const change = finite(ticker?.change_pct)
+    if (change != null) updates[fields.change] = change
   }
-
-  const change = finite(msg.data.find(t => t?.symbol === 'BTC/USD')?.change_pct)
-  if (change != null) updates.priceChange24h = change
 
   return Object.keys(updates).length ? updates : null
 }
@@ -215,10 +229,28 @@ export function mergeMarketData({
     volumeEur: convertVolume(priceEur),
     volumeCad: convertVolume(priceCad),
     volumeChf: convertVolume(priceChf),
-    // No fallback. A 24h change derived from Kraken's daily candles would be
-    // "since yesterday's close", not a rolling 24 hours — a different number
-    // that would quietly disagree with the price beside it.
-    priceChange24h: paprika.percent_change_24h ?? null,
+    // Per currency, and only the dollar one has a source here: CoinPaprika is
+    // asked for `quotes.USD` and answers one market, so `percent_change_24h`
+    // is the dollar figure and nothing in this burst knows what sterling did.
+    //
+    // The other four are therefore blank until the Kraken socket lands, about
+    // a second later, and blank is the deliberate answer rather than the
+    // absence of one. Spreading the dollar figure across all five is what this
+    // change exists to stop — it reads as the selected currency's day and is
+    // not — and the two candidates for a stand-in are no better: Kraken's REST
+    // ticker carries `o`, which makes the figure "since UTC midnight", and its
+    // daily candles make it "since yesterday's close". Both are a different
+    // measurement wearing this one's label, which is the same call the volume
+    // above makes for the same reason.
+    //
+    // The cost is real and worth stating: a visitor on a non-USD currency
+    // whose socket never connects sees no 24h change at all, where they
+    // previously saw the dollar one. That is a gap in place of a wrong number.
+    priceChange24hUsd: paprika.percent_change_24h ?? null,
+    priceChange24hGbp: null,
+    priceChange24hEur: null,
+    priceChange24hCad: null,
+    priceChange24hChf: null,
     marketCapUsd: paprikaMarketCap ?? derivedMarketCap,
     // Travels with the value rather than being re-derived by whoever renders
     // it: the card has to say which of the two it is showing, and a consumer

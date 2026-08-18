@@ -105,8 +105,19 @@ const VIBE_SHARE_DIMENSIONS = [
 function BtcPriceShareCard({ cardData, currency, theme }) {
   const p = PALETTE[theme]
   const S = shareStyles(p)
-  const { priceUsd, priceGbp, priceEur, priceCad, priceChf, priceChange24h, athUsd, vibe } = cardData
+  const { priceUsd, priceGbp, priceEur, priceCad, priceChf,
+          priceChange24hUsd, priceChange24hGbp, priceChange24hEur, priceChange24hCad, priceChange24hChf,
+          athUsd, vibe } = cardData
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
+  // The change follows the currency the price is drawn in, and falls back to
+  // nothing rather than to the dollar figure — unlike `price` above, where a
+  // stand-in is at least labelled by the formatter. A share image outlives the
+  // moment it was made and cannot be checked against the live card, so a
+  // percentage in the wrong currency here is wrong permanently.
+  const priceChange24h = {
+    usd: priceChange24hUsd, gbp: priceChange24hGbp, eur: priceChange24hEur,
+    cad: priceChange24hCad, chf: priceChange24hChf,
+  }[currency] ?? null
   const athPct = computeAthDistance(priceUsd, athUsd)
   const isAtATH = athPct != null && athPct >= -0.1
   const changePos = priceChange24h != null && priceChange24h >= 0
