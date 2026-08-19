@@ -36,15 +36,17 @@ export default function MarketSentimentCard({ fng, fngHistory, loading }) {
       {fngHistory && (
         <div className="mt-3">
           <div
-            className="crt-grain h-20"
+            className="crt-grain crt-fault-b h-20"
             role="img"
             aria-label={describeTrend('Fear and Greed', fngHistory.map(d => d.v), { period: '30 days' })}
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-                <Line type="monotone" dataKey="v" stroke={PALETTE[theme].accent} dot={false} activeDot={false} strokeWidth={1.5} isAnimationActive={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="crt-picture">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={fngHistory} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+                  <Line type="monotone" dataKey="v" stroke={PALETTE[theme].accent} dot={false} activeDot={false} strokeWidth={1.5} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
           <p className="mt-1 text-xs text-quiet">SENTIMENT TREND (30D)</p>
         </div>

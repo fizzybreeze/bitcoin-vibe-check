@@ -364,6 +364,14 @@ body {
  * positive one needs no stacking context of its own to beat the box's own
  * content, so keeping it would have been a declaration nothing could see.
  *
+ * **It hangs off `.crt-picture` rather than off the frame, and that is not
+ * bookkeeping.** `.crt-picture` is the element the slip displaces, so putting
+ * the raster on it is what keeps raster and stroke moving as one thing. Left on
+ * the frame, a slip would jog the line against a stationary raster — two planes
+ * with the near one holding still, which is the parallax reading this layer was
+ * moved in front to remove. The chart does the same: its overlay sits *inside*
+ * `.crt-wobble`, not beside it.
+ *
  * `pointer-events: none` is the chart's finding applied forward. Neither
  * sparkline is interactive today, so nothing is being fixed; a layer over the
  * whole box is how the next one to get a `<Tooltip>` silently does not.
@@ -375,7 +383,18 @@ body {
   overflow: hidden;
 }
 
-.crt-grain::before {
+/* The picture inside that frame: the raster and the stroke together, and the
+ * one thing the slip displaces. Its reasoning is with the faults below. */
+.crt-picture {
+  position: relative;
+  /* The frame is `h-10`/`h-20`, so this is definite and `ResponsiveContainer`
+   * still measures a real box through it. */
+  height: 100%;
+  animation: crt-slip var(--crt-slip-period) steps(1, end) infinite;
+  will-change: transform;
+}
+
+.crt-picture::before {
   content: '';
   position: absolute;
   /* One period of headroom at the top, since the roll travels downward — and
@@ -386,10 +405,99 @@ body {
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0 2px,
-    color-mix(in srgb, var(--color-ink) 12%, transparent) 2px 3px
+    color-mix(in srgb, var(--color-ink) 11%, transparent) 2px 3px
   );
   animation: crt-scanline-roll 6s linear infinite;
   will-change: transform;
+}
+
+/* The sparklines' own faults — a rolling band and a one-pixel slip.
+ *
+ * **These mirror `SPARK_*` in `src/lib/crt.js`, which carries the reasoning and
+ * the measurements**; `crt.test.js` fails if the two disagree. The short
+ * version, and the parts that are easy to get wrong:
+ *
+ * **The two sparklines must never be in step.** They were byte-identical until
+ * this — one class, one drift, mounted in the same frame — which is invisible
+ * for a raster (it tiles, so there is no feature to align on) and would be
+ * glaring for a fault. So every timing is a custom property declared on the
+ * frame class and consumed once here, and the four periods are primes that
+ * share no beat with each other or with the chart's 7s and 9s.
+ *
+ * **`--crt-band-delay` is negative, and one of the two is non-zero.** Each band
+ * is parked off the top of its box for 60% of its cycle, so two started in the
+ * same frame are identically parked for the first several seconds of every page
+ * load: different periods make them drift apart, they do not make them start
+ * apart. A negative delay seeks forward, so one opens mid-sweep.
+ *
+ * **No `var()` fallbacks anywhere below.** With one, dropping a fault class from
+ * a card yields two sparklines quietly sharing a cadence — the exact defect this
+ * exists to remove. Without one the declaration is invalid at computed-value
+ * time and the animation simply does not run, which is loud.
+ *
+ * **The slip is vertical, downward, and inside the clipping frame.** Horizontal
+ * would be a no-op on a near-horizontal stroke with no gridlines to slide
+ * against; vertical is safe here precisely because there is no scale for a
+ * reading to move against, which is what forbids it on the chart. Downward
+ * because the raster's one period of headroom is at the top. Inside the frame
+ * because the box must not move: the Vibe sparkline has a border, a grid of
+ * right-aligned figures and a 10px caption within a few pixels of it. */
+
+/* The band. Pixels rather than a percentage of the box: the two boxes are 40px
+ * and 80px, and an artifact of one piece of hardware has one physical height —
+ * the same reason the raster is 3px on both. The feather is the chart's, ramping
+ * up over the top 22% and falling away across the lower 62%. */
+.crt-picture::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -13px;
+  height: 13px;
+  z-index: 2;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 22%,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 38%,
+    transparent 100%
+  );
+  animation: crt-spark-band-roll var(--crt-band-period) linear var(--crt-band-delay) infinite;
+  will-change: transform;
+}
+
+/* Cadence, and nothing else. One entry per sparkline; `SPARK_FAULTS` is the
+ * table these mirror. */
+.crt-fault-a {
+  --crt-slip-period: 11s;
+  --crt-band-period: 13s;
+  --crt-band-delay: 0s;
+}
+
+.crt-fault-b {
+  --crt-slip-period: 17s;
+  --crt-band-period: 19s;
+  --crt-band-delay: -13s;
+}
+
+/* One displacement per cycle, held for half a percent of it — 55ms at 11s and
+ * 85ms at 17s, either side of the chart's 70ms. A longer hold stops reading as
+ * a flick and starts reading as a shift that settles. */
+@keyframes crt-slip {
+  0%    { transform: translate3d(0, 0, 0); }
+  91%   { transform: translate3d(0, 1px, 0); }
+  91.5% { transform: translate3d(0, 0, 0); }
+  100%  { transform: translate3d(0, 0, 0); }
+}
+
+/* Sized against the taller of the two boxes, because one value has to clear
+ * both: 800% of 13px is 104px, against 80 + 13 and 40 + 13. The shorter box
+ * finishes its pass early and spends the rest of the sweep clipped below, which
+ * is what a bar crossing a shorter window would do. */
+@keyframes crt-spark-band-roll {
+  0%, 60% { transform: translate3d(0, 0, 0); }
+  100%    { transform: translate3d(0, 800%, 0); }
 }
 
 /* The circuit-trace ground.
