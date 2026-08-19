@@ -12,7 +12,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Live Market Data
 - **Real-time BTC price** streamed via Kraken WebSocket v2, updating continuously without page refresh
-- **24-hour price change** with directional indicator
+- **24-hour price change** with directional indicator, **in the currency you have selected** — it is read from that currency's own Kraken pair rather than from BTC/USD. Outside US dollars it appears once the socket connects, because CoinPaprika quotes one market and a dollar figure under a sterling price is a wrong answer where a blank is an honest one
 - **ATH distance indicator** — shows percentage below all-time high, or "AT ATH" when within 0.1%
 - **Multi-currency display** — switch between USD, GBP, EUR, CAD, and CHF at any time; all values update instantly
 - **24h trading volume** with comparison against the 7-day rolling average
@@ -62,11 +62,12 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### Price Chart
 - Interactive area chart with overlaid volume bars
 - Four time ranges: **1D · 7D · 1M · 1Y**
-- Range percentage change displayed alongside the chart label
+- **Range percentage change alongside the chart label, named with the range it measures** (`+2.41% · 1D`). It is first-point-to-last-point of what is drawn, which is deliberately *not* the same measurement as the header's rolling 24-hour change — the label is what stops one being read as the other's error
 - **High and low reference lines** for the selected period
 - **Follows the currency selector** — the chart is redrawn from Kraken's market for the selected currency (XBT/USD, GBP, EUR, CAD, CHF), so the axis, the reference lines and the tooltip all quote real trades in that currency rather than a converted dollar series. If Kraken has no market for a selection the chart falls back to USD, labels itself USD, and says which market was missing
 - **Volume bars show one Kraken pair only** — a tooltip in the chart header names the pair and explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome
+- **The last point tracks the live price** while its candle is still forming. Kraken's final candle is the bucket currently being written, so its close *is* the last trade — and the socket is already streaming that, so this costs no extra request. Once that candle closes the chart stops updating rather than overwriting it, because writing a later price against an earlier label would be a fabricated point
 - Chart data is memoised per range *and currency* for the session, and the three inactive ranges are prefetched in the background once the active one loads, so switching range is instant
 
 ### Network Fees & Mempool
@@ -144,7 +145,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 | PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app) + [Workbox](https://developer.chrome.com/docs/workbox) |
 | Unit tests | [Vitest](https://vitest.dev) + [Testing Library](https://testing-library.com) |
 | E2E tests | [Playwright](https://playwright.dev) |
-| Hosting | [Vercel](https://vercel.com) — static site plus two serverless functions |
+| Hosting | [Vercel](https://vercel.com) — static site plus three serverless functions |
 | Database | [Supabase](https://supabase.com) Postgres (donor names, daily metric snapshots) |
 | CI / cron | [GitHub Actions](https://docs.github.com/actions) |
 | Newsletter | [Beehiiv](https://beehiiv.com) (embedded signup form) |
@@ -181,21 +182,39 @@ The worker itself is `src/sw.js`, built with `vite-plugin-pwa`'s `injectManifest
 ```
 src/
   App.jsx                    the root component — state, effects and data orchestration
+  main.jsx                   the entry point
+  index.css                  Tailwind import, the theme tokens, and the CRT/circuit layers
   sw.js                      the service worker — precache, the caching routes, push listeners
   utils.js                   pure helpers — formatting, halving math, dominance labels
   lib/
     calculations.js          Vibe Score, ATH distance, sats per fiat, supply issued, hash trend
-    runtimeCaching.js        one NetworkFirst rule per data source, read by the service worker
-    pushMessage.js           what a push payload shows, and where clicking it is allowed to go
-    vapid.js                 the VAPID public key decoded and checked before the browser sees it
-    pushSubscription.js      a PushSubscription as a table row, and what the insert's outcome means
+    marketData.js            raw upstream responses → the state App holds, and which source
+                             stands in for which (and which deliberately has no stand-in)
     ohlc.js                  Kraken OHLC primitives — URL building, unwrapping, candle parsing,
                              and the in-flight dedupe the three daily-candle callers share
-    palette.js               every colour in both themes — the source of truth index.css mirrors
+    chartSeries.js           which candles the chart draws, in which currency, and the socket
+                             patch that keeps the last point live while its candle is open
+    chartCache.js            the per-range-per-currency store — cache plus in-flight join
+    alertRules.js            what an alert is and when it fires — shared with the sender
+    vibeHistory.js           which snapshot rows are comparable enough to plot
     scales.js                the band ladders (vibe, Fear & Greed, MVRV, congestion, block time)
+    palette.js               every colour in both themes — the source of truth index.css mirrors
+    typography.js            the font stacks and the card label/value/shell class constants
+    icons.js                 every icon on one 24×24 grid, plus the header button shell
+    wordmark.js              the header title as a ten-glyph pixel alphabet
+    vibeCharacter.js         the pixel-art figure beside the Vibe Score
+    crt.js · circuitry.js    the CRT scanline treatment and the circuit-trace page ground
+    runtimeCaching.js        one NetworkFirst rule per data source, read by the service worker
+    pushMessage.js           what a push payload shows, and where clicking it is allowed to go
+    pushRules.js             which rule fields leave the device, and the per-browser secret
+    pushSubscription.js      a PushSubscription as a table row, and what the insert's outcome means
+    vapid.js                 the VAPID public key decoded and checked before the browser sees it
+    quotes.js                the Satoshi quotes, shared by the footer and the brief's sign-off
     supabase.js              Supabase client; returns null when env vars are absent
+    supabaseEnv.js           which vars it needs and the warning naming the missing one
   utils/cycleCalculations.js Power Law fair value, Mayer Multiple
-  hooks/                     usePersistedState, useMetricAlerts, useShareImage
+  hooks/                     useTheme, usePersistedState, useMetricAlerts, usePushSubscription,
+                             useDialogFocus, useShareImage, useVibeHistory
   components/                every card, plus the share flow, price alerts and tooltip
   __tests__/ · **/__tests__/ Vitest unit tests
 api/chain-data.js            Vercel serverless function — BGeometrics MVRV proxy, CORS-restricted
@@ -204,18 +223,23 @@ api/push-evaluate.js         the push sender — pg_cron calls it every 5 min; s
 api/lib/pushEvaluator.js     which rules crossed, in which currency, and what a push status means
 api/og.js                    Vercel serverless function — live link-preview image (@vercel/og)
 api/lib/ogView.js            preview layout as a pure model + element tree (no network, no wasm)
+api/lib/abuseGuard.js        the query-string refusal and per-address rate limit both routes share
 scripts/snapshot.js          daily metrics capture → Supabase (runs on GitHub Actions)
+scripts/lib/metrics.js       the snapshot row as a pure function, importing the live calculations
 scripts/newsletter-draft.js  drafts the weekly brief from the stored rows — sends nothing
 scripts/lib/newsletterDraft.js  what the brief says, what it refuses to say, and what it leaves blank
-src/lib/quotes.js            the Satoshi quotes, shared by the footer and the brief's sign-off
 scripts/nostr-post.js        publishes the day's vibe to Nostr, behind a volatility guard
 scripts/lib/socialPost.js    what the post says, and the guard that decides not to post
+scripts/lib/mark.js          the logo, as a pixel grid
 scripts/generate-icons.mjs   rasterises the PWA/notification icons — run by hand, not in CI
+scripts/generate-og-image.mjs  rasterises the static link-preview fallback — also by hand
+scripts/lib/autoMerge.js     the two decisions the Dependabot auto-merge workflow makes
 scripts/lib/rollbackTarget.js which production deployment to roll back to, as a pure function
 supabase/migrations/         schema as code — every DB change belongs here
 e2e/                         Playwright dashboard tests (fully mocked, no network)
 smoke/                       Playwright tests against the deployed site (real upstreams)
-.github/workflows/           ci · e2e · snapshot · claude
+.github/workflows/           ci · e2e · visual-baselines · snapshot · smoke ·
+                             dependabot-auto-merge · claude
 vercel.json                  deploy config plus security and caching headers
 ```
 
@@ -268,7 +292,7 @@ npm test           # unit tests (Vitest)
 npm run test:e2e   # end-to-end tests (Playwright, chromium)
 ```
 
-The e2e suite is hermetic — all APIs are mocked in `e2e/fixtures.js`, so it passes on a restricted network. It does need a chromium build: `npx playwright install --with-deps chromium`.
+The e2e suite is hermetic — every upstream is stubbed in `e2e/mocks.js` from the data in `e2e/fixtures.js`, so it passes on a restricted network. It runs the behavioural specs twice, at desktop and mobile viewports, plus a `visual` project that pixel-compares four cards. It does need a chromium build: `npx playwright install --with-deps chromium`.
 
 ---
 
@@ -316,6 +340,8 @@ All four gates must pass before pushing. The `/verify` slash command runs them i
 | `npm run build` | succeeds |
 | `npm run test:e2e` | all green — required for any UI change |
 
+`npm run test:smoke` is deliberately **not** a pre-push gate: it hits the deployed site, so it can only mean anything after a merge. `smoke.yml` runs it daily against production.
+
 Rules that hold regardless:
 
 - **Never push to `main`.** Open a PR from a `claude/*` branch; CI must pass before merge.
@@ -329,8 +355,10 @@ Rules that hold regardless:
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `ci.yml` | push to `main`, all PRs | lint + unit tests + build. Required check: `Lint, test, build` |
-| `e2e.yml` | push to `main`, all PRs | Playwright chromium; uploads the HTML report as an artifact. Required check: `Playwright (chromium)` |
+| `e2e.yml` | push to `main`, all PRs | Playwright chromium at both viewports plus the visual project; uploads the HTML report and, separately, a mobile screenshot of the dashboard. Required check: `Playwright (chromium)` |
 | `snapshot.yml` | daily at 06:17 UTC, plus manual dispatch | daily metrics → Supabase `metric_snapshots`, then the Nostr post, and **on Sundays** the weekly brief (job summary + `weekly-brief` artifact). Dispatch takes `draft_newsletter` to force a brief on any day, and `newsletter_issue` to override its number |
+| `visual-baselines.yml` | `update-visual-baselines` label on a PR, or manual dispatch | regenerates the visual-regression baselines **on the runner** and commits them to the PR branch. Baselines made anywhere else fail on font antialiasing alone |
+| `dependabot-auto-merge.yml` | Dependabot PRs | merges patch and minor bumps once the required checks are green; majors wait for a human |
 | `smoke.yml` | daily at 07:43 UTC, plus manual dispatch | Playwright against the live site with real upstreams, from a US-hosted runner |
 | `claude.yml` | `@claude` mention on an issue, PR or review comment | responds and pushes work back |
 
@@ -354,10 +382,13 @@ Vercel builds and deploys the app. `vercel.json` is committed so the configurati
 
 Every branch gets a preview URL. Merging to `main` deploys production to [bitcoinvibecheck.com](https://bitcoinvibecheck.com).
 
-There are two serverless functions:
+There are three serverless functions:
 
 - **`api/chain-data.js`** proxies BGeometrics MVRV with a 24-hour CDN cache. Its CORS allowlist is restricted to this project's own origins plus its Vercel preview namespace — a wildcard would let any site burn the 15-requests-per-day free tier. When BGeometrics does not answer it serves the most recent MVRV stored in `metric_snapshots`, labelled as such on the card, capped at 7 days old and cached for an hour rather than a day so it cannot outlive the outage that produced it.
-- **`api/og.js`** renders the link-preview image, reached as `/og-live.png` via a rewrite in `vercel.json`. It is an unauthenticated compute endpoint, so the edge cache is the defence: `s-maxage=300` with a day of `stale-while-revalidate` collapses a burst of unfurls into one render. It never calls `/api/chain-data` — that quota belongs to the live dashboard.
+- **`api/og.js`** renders the link-preview image, reached as `/og-live.png` via a rewrite in `vercel.json`. It never calls `/api/chain-data` — that quota belongs to the live dashboard.
+- **`api/push-evaluate.js`** is the alert sender. `pg_cron` calls it every five minutes with a bearer token from the Supabase Vault; it evaluates the stored rules, signs and sends the pushes, writes back only the rules that were actually delivered, and reaps endpoints the push service reports as gone. It answers 503 rather than 200 when any of its five environment variables is missing, so a misconfiguration is visible in `push_evaluate_log` instead of silently sending nothing.
+
+Both public routes (`chain-data` and `og`) **refuse a query string and rate-limit per client address**. The edge cache alone was not a defence: a CDN cache key includes the query string, so `?1`, `?2`, `?3` missed the cache and ran the function every time — fifteen of those would have spent a day's BGeometrics quota. The two guards protect different things and `api/lib/abuseGuard.js` says which is which.
 
 ### If production breaks
 
@@ -389,11 +420,12 @@ Schema lives in `supabase/migrations/`. Both tables have RLS enabled.
 |---|---|---|
 | `donors` | Names submitted via the donation card | `SELECT` where `approved = true`; `INSERT` only with `approved = false`. No update or delete. |
 | `metric_snapshots` | One row per UTC day of dashboard metrics (`jsonb`) | `SELECT` only. Writes use the service role. |
-| `push_subscriptions` | One row per browser opted in to Web Push | **`INSERT` only.** No read (an endpoint is a capability and a durable browser identifier), no update, and no delete — unsubscribing happens in the browser, and dead endpoints are reaped by the sender on a `410`. |
+| `push_subscriptions` | One row per browser opted in to Web Push, plus the alert rules the sender evaluates | **`INSERT`**; `UPDATE` on the `rules` column only; `SELECT` on the `secret_hash` column only. Both are scoped by RLS to the row whose hash matches the request's `x-push-secret` header, so a browser reaches at most its own row. `endpoint`, `p256dh` and `auth` are readable by nobody — an endpoint is a capability *and* a durable browser identifier. There is deliberately **no delete**: unsubscribing happens in the browser, and dead endpoints are reaped by the sender on a `404`/`410`. |
+| `push_evaluate_log` | One row per sender tick, holding the `pg_net` request id so the real HTTP status can be joined back | **None.** All grants revoked plus an explicit deny-all policy; `service_role` and the cron job's `SECURITY DEFINER` function are the whole access list. |
 
 > Row-level security is only half the gate. RLS decides which *rows*; the table grant decides which *verbs* — and `TRUNCATE` bypasses RLS entirely, while Supabase grants it to `anon` by default. Every table above now holds exactly the verbs the app uses. When adding one, revoke first and grant back.
 
-`scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. `api/chain-data.js` reads the table for its MVRV fallback; nothing in the browser does yet. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
+`scripts/snapshot.js` captures every dashboard metric once a day and upserts it into `metric_snapshots`, keyed by a generated `captured_on` date, so re-runs are idempotent. It runs on GitHub Actions rather than any local machine, and can be triggered by hand from the Actions tab — including from the GitHub mobile app. `api/chain-data.js` reads the table for its MVRV fallback, and since v1.6.9 so does the browser — `useVibeHistory` replays the last 30 rows into the Vibe Score sparkline with the anon key, under its own `runtimeCaching` rule scoped to that table. Setup lives in [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md).
 
 Donor notifications come from the `new_donor_notification` trigger on `donors`, which POSTs to a Make.com webhook. That URL is a capability URL and is deliberately not committed — the baseline migration documents it with a placeholder.
 
@@ -407,7 +439,7 @@ Donor notifications come from the `new_donor_notification` trigger on `donors`, 
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Where the product could go next, and what it deliberately will not do — intent, not commitment |
 | [`scripts/SNAPSHOT_SETUP.md`](scripts/SNAPSHOT_SETUP.md) | Setting up and operating the daily metrics snapshot |
 | [`docs/DEV_WORKFLOW_AUDIT.md`](docs/DEV_WORKFLOW_AUDIT.md) | The August 2026 audit that produced the current CI, security and mobile-development setup — kept as a historical record |
-| [`.env.example`](.env.example) | Annotated list of every environment variable |
+| [`.env.example`](.env.example) | Annotated list of every variable you set yourself, local and deployed. Workflow-internal ones (dispatch inputs, Actions-provided) are documented at their workflow instead |
 
 ---
 

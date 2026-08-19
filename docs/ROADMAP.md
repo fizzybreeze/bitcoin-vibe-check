@@ -331,7 +331,17 @@ and BTC dominance have no second source in this stack and cannot be honestly
 derived from one: Kraken's `v[1]` is one pair on one exchange against a figure
 advertised as global, a candle-derived change is "since yesterday's close"
 rather than a rolling 24 hours, and nothing else the app fetches knows altcoins
-exist. The only remaining option is a second aggregator, which is a new
+exist.
+
+**v1.18.1 narrowed one of those three and widened its gap, which is worth
+stating rather than leaving to be rediscovered.** The 24h change is now read per
+currency off the socket, because it was being taken from `BTC/USD` whatever the
+selector said. CoinPaprika quotes one market, so the *seed* for the other four
+currencies no longer exists: a non-USD visitor whose socket never connects sees
+no 24h change at all, where they previously saw the dollar figure. That is a gap
+in place of a wrong answer and it is the intended trade, but it means four
+fifths of that field now depend on the WebSocket alone — the only reading in the
+app with a single transport and no fallback of any kind. The only remaining option is a second aggregator, which is a new
 dependency against §1's keyless preference for three secondary numbers that
 already fail visibly rather than wrongly. Not worth it today; revisit only if
 CoinPaprika's reliability becomes a real complaint rather than a hypothetical.
