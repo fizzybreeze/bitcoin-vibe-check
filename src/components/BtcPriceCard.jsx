@@ -70,23 +70,25 @@ function VibeHistorySparkline({ points }) {
   return (
     <div data-testid="vibe-sparkline" className="mt-3">
       <div
-        className="crt-grain h-10"
+        className="crt-grain crt-fault-a h-10"
         role="img"
         aria-label={describeTrend('Vibe Score', points.map(p => p.score), { period: vibeHistoryLabel(points) })}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke={PALETTE[theme].accent}
-              dot={false}
-              activeDot={false}
-              strokeWidth={1.5}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <div className="crt-picture">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={points} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke={PALETTE[theme].accent}
+                dot={false}
+                activeDot={false}
+                strokeWidth={1.5}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       {/* Labelled by what the line actually covers, never by the window it was
           asked for. Until 30 points exist this names the first day on it. */}

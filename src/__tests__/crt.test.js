@@ -26,6 +26,8 @@ import {
   EXPORT_GRAIN_ALPHA, EXPORT_GRAIN_LAYERS, grainTileSvg, grainTileUri,
   WOBBLE_PERIOD_S, BAND_PERIOD_S, SCANLINE_PERIOD_S, MAX_WOBBLE_OFFSETS,
   CRT_INK_ROLES, CRT_DECORATIVE_ROLES, CRT_SURFACE_ROLE, CRT_SCANLINE_ROLE,
+  SPARK_BAND_ALPHA, SPARK_BAND_HEIGHT_PX, SPARK_BAND_TRAVEL_PCT, SPARK_FAULTS,
+  SLIP_OFFSET_PX, MAX_SLIP_OFFSETS, MIN_BAND_VISIBILITY,
 } from '../lib/crt.js'
 
 const SRC = resolve('src')
@@ -33,6 +35,7 @@ const css = readFileSync(join(SRC, 'index.css'), 'utf8')
 const chartCard = readFileSync(join(SRC, 'components/PriceChartCard.jsx'), 'utf8')
 
 const AA_NORMAL_TEXT = 4.5
+const FAULT_CLASSES = SPARK_FAULTS.map(f => f.className)
 
 // ── sRGB compositing and contrast ────────────────────────────────────────────
 const chan = v => { const s = v / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 }
@@ -245,6 +248,15 @@ describe('the two cadences', () => {
     expect(MAX_WOBBLE_OFFSETS / WOBBLE_PERIOD_S).toBeLessThanOrEqual(1 / 7)
   })
 
+  // Bounded, both of them. There is a second band keyframe below this one now,
+  // with the same parked shape and a travel of its own, so a slice running to
+  // end-of-file lets the sparklines' keyframe answer for the chart's — the
+  // assertion stays green with the chart's park or its travel deleted outright.
+  const chartBandRoll = css.slice(
+    css.indexOf('@keyframes crt-band-roll'),
+    css.indexOf('.crt-overlay {'),
+  )
+
   it('sweeps the band clear across the plot area', () => {
     // A `translateY` percentage resolves against the element, so the travel is
     // stated in band-heights — and it has to exceed the chart plus the band or
@@ -255,15 +267,17 @@ describe('the two cadences', () => {
     expect(chartHeight, 'could not read the chart height from PriceChartCard').toBeGreaterThan(0)
     const travelPx = (BAND_TRAVEL_PCT / 100) * BAND_HEIGHT_PX
     expect(travelPx).toBeGreaterThanOrEqual(chartHeight + BAND_HEIGHT_PX)
-    expect(css).toContain(`translate3d(0, ${BAND_TRAVEL_PCT}%, 0)`)
+    // Bounded to the chart's own keyframe. Unbounded this was `expect(css)`,
+    // which the sparklines' band keyframe would have satisfied on the chart's
+    // behalf the moment it declared a travel of its own.
+    expect(chartBandRoll).toContain(`translate3d(0, ${BAND_TRAVEL_PCT}%, 0)`)
   })
 
   it('parks the band off screen at both ends of its cycle', () => {
     // Both endpoints outside the clipping frame is what makes the loop seamless
     // without a fade. A band that is still visible at 100% snaps back to the top
     // in full view once every cycle.
-    const roll = css.slice(css.indexOf('@keyframes crt-band-roll'))
-    expect(roll).toMatch(/0%,\s*\d+%\s*\{ transform: translate3d\(0, 0, 0\); \}/)
+    expect(chartBandRoll).toMatch(/0%,\s*\d+%\s*\{ transform: translate3d\(0, 0, 0\); \}/)
   })
 })
 
@@ -346,7 +360,7 @@ describe('the sparkline grain', () => {
     return css.slice(start, css.indexOf('\n}', start))
   }
   const grainFrame = body('.crt-grain {')
-  const grainRule = body('.crt-grain::before')
+  const grainRule = body('.crt-picture::before')
 
   it('mixes to the alpha crt.js declares', () => {
     const pct = grainRule.match(/var\(--color-[a-z-]+\) (\d+)%, transparent\)/)?.[1]
@@ -477,15 +491,30 @@ describe('the sparkline grain', () => {
     // which swept up skeletons and fixed-height boxes that are not sparklines
     // at all and reported three offenders that were nothing of the kind.
     const offenders = []
+    const seen = []
     for (const file of readdirSync(join(SRC, 'components'))) {
       if (!file.endsWith('.jsx') || file === 'PriceChartCard.jsx') continue
       const src = readFileSync(join(SRC, 'components', file), 'utf8')
       const charts = (src.match(/<ResponsiveContainer/g) ?? []).length
       if (!charts) continue
-      const grains = (src.match(/crt-grain/g) ?? []).length
+      // A **token** match, not a substring one. `\b` is no help here — `-` is a
+      // non-word character, so `\bcrt-grain\b` matches inside `crt-grain-a`
+      // and a modifier class named that way would count twice and fail a card
+      // that is perfectly correct. The lookahead is the form that works, and it
+      // is what makes `crt-grain-*` a legal name for anything added later.
+      const grains = (src.match(/crt-grain(?![\w-])/g) ?? []).length
+      const pictures = (src.match(/crt-picture(?![\w-])/g) ?? []).length
+      const faults = FAULT_CLASSES.filter(c => src.includes(c))
       if (grains !== charts) offenders.push(`${file}: ${charts} sparkline(s), ${grains} grain(s)`)
+      if (pictures !== charts) offenders.push(`${file}: ${charts} sparkline(s), ${pictures} picture(s)`)
+      if (faults.length !== 1) offenders.push(`${file}: ${faults.length} fault class(es), expected 1`)
+      for (const c of faults) seen.push(c)
     }
     expect(offenders, 'a sparkline is missing the grain').toEqual([])
+    // The half the counting cannot see: two cards can each carry exactly one
+    // fault class and carry the *same* one, which is the defect this whole
+    // change exists to remove and which looks correct in either file alone.
+    expect(seen.sort(), 'two sparklines share a cadence').toEqual([...FAULT_CLASSES].sort())
   })
 
   it('found the sparklines it was scanning for', () => {
@@ -495,6 +524,265 @@ describe('the sparkline grain', () => {
       .filter(f => f.endsWith('.jsx'))
       .filter(f => readFileSync(join(SRC, 'components', f), 'utf8').includes('crt-grain'))
     expect(withGrain.sort()).toEqual(['BtcPriceCard.jsx', 'MarketSentimentCard.jsx'])
+  })
+})
+
+describe('the sparkline faults', () => {
+  // Sliced to their own braces, the grain block's convention and for its reason
+  // — a documentation comment between two rules will satisfy an assertion about
+  // the rule it describes if the slice runs to the next selector.
+  const body = (selector) => {
+    const start = css.indexOf(selector)
+    expect(start, `${selector} is missing from index.css`).toBeGreaterThan(-1)
+    return css.slice(start, css.indexOf('\n}', start))
+  }
+  const pictureRule = body('.crt-picture {')
+  const bandRule = body('.crt-picture::after')
+  const slipFrames = css.slice(
+    css.indexOf('@keyframes crt-slip'),
+    css.indexOf('@keyframes crt-spark-band-roll'),
+  )
+  const sparkBandRoll = css.slice(css.indexOf('@keyframes crt-spark-band-roll'))
+
+  const scanned = (hex, theme) => composite(hex, PALETTE[theme][CRT_SCANLINE_ROLE], GRAIN_ALPHA)
+  const banded = (hex, theme) => composite(hex, PALETTE[theme][CRT_SCANLINE_ROLE], SPARK_BAND_ALPHA)
+  // The four alphas `ink` can arrive at: none, raster, band, both.
+  const layers = theme => [
+    hex => hex,
+    hex => scanned(hex, theme),
+    hex => banded(hex, theme),
+    hex => composite(hex, PALETTE[theme][CRT_SCANLINE_ROLE], combinedAlpha(GRAIN_ALPHA, SPARK_BAND_ALPHA)),
+  ]
+
+  describe.each(SPARK_FAULTS)('$className', (fault) => {
+    const frame = body(`.${fault.className} {`)
+
+    it('runs at the cadence crt.js declares for it', () => {
+      expect(frame).toContain(`--crt-slip-period: ${fault.slipPeriodS}s`)
+      expect(frame).toContain(`--crt-band-period: ${fault.bandPeriodS}s`)
+      expect(frame).toContain(`--crt-band-delay: ${fault.bandDelayS}s`)
+    })
+
+    it('is worn by exactly one card, and by the card crt.js names', () => {
+      // The table says which component each cadence belongs to, and nothing
+      // else in the suite would notice the two being swapped — both cards would
+      // still carry one distinct class each and every timing assertion would
+      // still pass.
+      const file = `${fault.what.split(' ')[0]}.jsx`
+      const src = readFileSync(join(SRC, 'components', file), 'utf8')
+      expect(src, `${file} does not carry ${fault.className}`).toContain(fault.className)
+    })
+
+    it('declares the box height the band travel was derived against', () => {
+      // Derived from the component rather than restated, the same way the
+      // chart's bound reads its height out of `PriceChartCard`. Changing `h-10`
+      // to `h-16` fails here rather than silently shortening the band's pass.
+      const file = `${fault.what.split(' ')[0]}.jsx`
+      const src = readFileSync(join(SRC, 'components', file), 'utf8')
+      const n = Number(src.match(/crt-grain[^"]*\bh-(\d+)\b/)?.[1])
+      expect(n, `no h-* class found on the grained box in ${file}`).toBeGreaterThan(0)
+      expect(n * 4).toBe(fault.boxPx)
+    })
+
+    it('sweeps its band clear across its own box', () => {
+      const travelPx = (SPARK_BAND_TRAVEL_PCT / 100) * SPARK_BAND_HEIGHT_PX
+      expect(travelPx).toBeGreaterThanOrEqual(fault.boxPx + SPARK_BAND_HEIGHT_PX)
+    })
+
+    it('displaces its picture at most once per slip cycle', () => {
+      // Its own pattern, because the chart's counter matches the *horizontal*
+      // slot and this displacement is vertical. The `(?:px)?` is carried across
+      // with it and is the load-bearing part: a resting keyframe is written
+      // `translate3d(0, 0, 0)` with a bare zero, so a px-only pattern matches
+      // every displacement and no rest — with no zeros in the array no run can
+      // ever begin, the count is 0 whatever the stylesheet says, and restoring
+      // three twitches leaves this green.
+      const frames = [...slipFrames.matchAll(/translate3d\(0, (-?[\d.]+)(?:px)?, 0\)/g)].map(m => Number(m[1]))
+      expect(frames.length, 'no slip keyframes found').toBeGreaterThan(0)
+      expect(frames, 'no resting keyframes matched — the pattern is too strict').toContain(0)
+      const runs = frames.filter((v, i) => v !== 0 && (i === 0 || frames[i - 1] === 0)).length
+      expect(runs, `the slip fires ${runs} times per cycle`).toBeLessThanOrEqual(MAX_SLIP_OFFSETS)
+    })
+
+    it('keeps the fault rarer than the chart is allowed to be', () => {
+      // The oracle-defence the chart's wobble already carries, applied across
+      // the table: a test cannot defend its own budget, so what is pinned is the
+      // *rate*. A higher count is legal only on a proportionally longer cycle,
+      // and these boxes are permanently on screen where the chart is the one
+      // element movement is supposed to mean something on.
+      expect(MAX_SLIP_OFFSETS / fault.slipPeriodS)
+        .toBeLessThanOrEqual(MAX_WOBBLE_OFFSETS / WOBBLE_PERIOD_S)
+    })
+  })
+
+  it('lets no two faults land on a common beat', () => {
+    // The whole requirement, and the reason `SPARK_FAULTS` is a table: this is
+    // a property of the set, and six loose constants have nothing that compares
+    // them. Both sparklines and the chart, all six periods.
+    const periods = [
+      WOBBLE_PERIOD_S, BAND_PERIOD_S,
+      ...SPARK_FAULTS.flatMap(f => [f.slipPeriodS, f.bandPeriodS]),
+    ]
+    expect(new Set(periods).size, 'two cadences share a period').toBe(periods.length)
+    for (const a of periods) {
+      for (const b of periods) {
+        if (a === b) continue
+        const [hi, lo] = a > b ? [a, b] : [b, a]
+        expect(hi % lo, `${hi}s is a multiple of ${lo}s`).not.toBe(0)
+      }
+    }
+    // Not merely unequal — far enough apart that nothing realigns inside a
+    // session anyone will sit through.
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a)
+    const lcm = periods.reduce((m, p) => (m * p) / gcd(m, p))
+    expect(lcm, 'the whole effect realigns too soon').toBeGreaterThan(3600)
+  })
+
+  it('starts the two bands out of phase rather than only drifting apart', () => {
+    // Each band is parked for 60% of its cycle, so two started in the same frame
+    // are identically parked for the first several seconds of *every* page load.
+    // Different periods fix that eventually; a phase offset fixes it on the
+    // first painted frame, which is the state a browser can be asked about.
+    const delays = SPARK_FAULTS.map(f => f.bandDelayS)
+    const offset = delays.filter(d => d !== 0)
+    expect(offset.length, 'no fault is phase-offset from the others').toBe(delays.length - 1)
+    // Negative, which seeks the animation forward. A positive delay does the
+    // opposite of what is wanted here — it postpones the start and leaves both
+    // bands parked for longer than either would have been.
+    for (const d of offset) expect(d, 'the phase offset is not negative').toBeLessThan(0)
+    // And it has to land the offset band mid-sweep while the other is parked,
+    // which is what makes "they differ" observable at t=0 rather than lucky.
+    for (const f of SPARK_FAULTS) {
+      if (f.bandDelayS === 0) continue
+      const phase = ((-f.bandDelayS % f.bandPeriodS) + f.bandPeriodS) % f.bandPeriodS / f.bandPeriodS
+      expect(phase, `${f.className} opens parked, like the other one`).toBeGreaterThan(0.6)
+    }
+  })
+
+  it('mixes the band to the alpha the contrast check was run against', () => {
+    const pcts = [...bandRule.matchAll(/var\(--color-[a-z-]+\) ([\d.]+)%, transparent\)/g)].map(m => Number(m[1]))
+    expect(pcts.length, 'no color-mix found in the band gradient').toBeGreaterThan(0)
+    // Every stop at one value: recolouring one of two drew a two-tone band and
+    // passed the first version of the chart's equivalent.
+    expect([...new Set(pcts)]).toEqual([SPARK_BAND_ALPHA * 100])
+  })
+
+  it('draws the band in the same token as everything else on the screen', () => {
+    const tokens = [...bandRule.matchAll(/var\(--color-([a-z-]+)\)/g)].map(m => m[1])
+    expect(tokens.length).toBeGreaterThan(0)
+    expect([...new Set(tokens)]).toEqual([CRT_SCANLINE_ROLE])
+  })
+
+  it('gives the band one physical height on both boxes, not one fraction of each', () => {
+    // The argument for pixels over percentages: the two boxes are 40px and 80px,
+    // and an artifact of one piece of hardware has one height — the same reason
+    // the raster is 3px on both. A fraction of each would assert two screens.
+    expect(bandRule).toContain(`height: ${SPARK_BAND_HEIGHT_PX}px`)
+    expect(bandRule).toContain(`top: -${SPARK_BAND_HEIGHT_PX}px`)
+    expect(sparkBandRoll).toContain(`translate3d(0, ${SPARK_BAND_TRAVEL_PCT}%, 0)`)
+  })
+
+  it('parks the band off screen at both ends of its cycle', () => {
+    expect(sparkBandRoll).toMatch(/0%,\s*\d+%\s*\{ transform: translate3d\(0, 0, 0\); \}/)
+  })
+
+  it('takes every cadence from the fault class and never from a fallback', () => {
+    // A `var()` fallback here turns "somebody dropped the fault class" into
+    // "two sparklines quietly share a cadence", which is the defect this change
+    // exists to remove and which looks perfectly correct in either file alone.
+    // With no fallback the declaration is invalid at computed-value time and the
+    // animation does not run at all, which is loud.
+    expect(pictureRule).toContain('var(--crt-slip-period)')
+    expect(bandRule).toContain('var(--crt-band-period)')
+    expect(bandRule).toContain('var(--crt-band-delay)')
+    for (const rule of [pictureRule, bandRule]) {
+      expect(rule, 'a cadence carries a fallback').not.toMatch(/var\(--crt-[a-z-]+,/)
+    }
+  })
+
+  it('holds the slip to whole pixels and does not interpolate between them', () => {
+    for (const [, px] of slipFrames.matchAll(/translate3d\(0, (-?[\d.]+)px, 0\)/g)) {
+      expect(Number.isInteger(Number(px)), `slip offset ${px}px is fractional`).toBe(true)
+      expect(Math.abs(Number(px))).toBe(SLIP_OFFSET_PX)
+    }
+    expect(pictureRule).toMatch(/animation: crt-slip var\(--crt-slip-period\) steps\(1, end\) infinite/)
+  })
+
+  it('slips downward, into the headroom the raster already has', () => {
+    // The raster carries one period of headroom at the top and none at the
+    // bottom, because it drifts downward. An upward slip drags its bottom edge
+    // into view for the duration of the displacement; a downward one is free.
+    const offsets = [...slipFrames.matchAll(/translate3d\(0, (-?[\d.]+)px, 0\)/g)].map(m => Number(m[1]))
+    expect(offsets.length).toBeGreaterThan(0)
+    for (const px of offsets) expect(px, 'the slip displaces upward').toBeGreaterThan(0)
+  })
+
+  it.each(THEMES)('keeps the %s series legible with the band over it too', (theme) => {
+    // The 4 x 4 cross product of the alphas either the stroke or the ground can
+    // be under. Deliberately harsher than what can physically happen: both
+    // artifacts vary only in y and the band is 13px tall, so a stroke pixel and
+    // the ground beside it share the band's coverage everywhere but its feather
+    // — the reachable worst case is the 4-cell diagonal, which measures 5.20
+    // dark and 5.51 light. The conservative form is kept because it is the
+    // convention already on record for the raster, and because a bound that is
+    // only true of today's band height stops being true when it changes.
+    const P = PALETTE[theme]
+    const fs = layers(theme)
+    const worst = Math.min(...fs.flatMap(l => fs.map(g => contrastRatio(l(P.accent), g(P.surface)))))
+    expect(worst, `the ${theme} sparkline series under raster and band`)
+      .toBeGreaterThanOrEqual(GRAIN_MIN_SERIES_CONTRAST)
+  })
+
+  it.each(THEMES)('does not flatten the %s ground where the band passes', (theme) => {
+    // An exemption was expected here and measured not to be needed, which is
+    // worth an assertion rather than a carve-out: the band lifts the ground
+    // toward `ink`, so the obvious worry is that it washes the raster out where
+    // it passes. It does not — 1.45 in dark and 1.26 in light — and a future
+    // alpha that does fails the build instead of being quietly legal.
+    const P = PALETTE[theme]
+    const lit = banded(P.surface, theme)
+    const dark = composite(P.surface, P[CRT_SCANLINE_ROLE], combinedAlpha(GRAIN_ALPHA, SPARK_BAND_ALPHA))
+    expect(contrastRatio(lit, dark), `the ${theme} ground under the band`)
+      .toBeGreaterThan(MIN_BANDING_RATIO)
+  })
+
+  it.each(THEMES)('does not band the %s series where the band passes either', (theme) => {
+    const P = PALETTE[theme]
+    const lit = banded(P.accent, theme)
+    const dark = composite(P.accent, P[CRT_SCANLINE_ROLE], combinedAlpha(GRAIN_ALPHA, SPARK_BAND_ALPHA))
+    expect(contrastRatio(lit, dark), `the ${theme} raster on the series under the band`)
+      .toBeLessThan(GRAIN_MAX_SERIES_BANDING)
+  })
+
+  it.each(THEMES)('draws a band you can actually see in the %s theme', (theme) => {
+    // The floor `BAND_ALPHA` never had. Without it the band could be dropped to
+    // half a percent and every other assertion in this file would stay green,
+    // which is `MIN_BANDING_RATIO`'s founding lesson unlearned one constant
+    // over. Applied to the chart's band as well as the sparklines'.
+    const P = PALETTE[theme]
+    const rest = [P.surface, scanned(P.surface, theme)]
+    const sparkVis = Math.min(
+      contrastRatio(banded(P.surface, theme), P.surface),
+      contrastRatio(composite(P.surface, P[CRT_SCANLINE_ROLE], combinedAlpha(GRAIN_ALPHA, SPARK_BAND_ALPHA)), rest[1]),
+    )
+    expect(sparkVis, `the ${theme} sparkline band`).toBeGreaterThan(MIN_BAND_VISIBILITY)
+
+    const chartVis = Math.min(
+      contrastRatio(composite(P.surface, P[CRT_SCANLINE_ROLE], BAND_ALPHA), P.surface),
+      contrastRatio(
+        composite(P.surface, P[CRT_SCANLINE_ROLE], combinedAlpha(SCANLINE_ALPHA, BAND_ALPHA)),
+        composite(P.surface, P[CRT_SCANLINE_ROLE], SCANLINE_ALPHA),
+      ),
+    )
+    expect(chartVis, `the ${theme} chart band`).toBeGreaterThan(MIN_BAND_VISIBILITY)
+  })
+
+  it('lets the band through to the series and the caption below it', () => {
+    expect(bandRule).toMatch(/pointer-events:\s*none/)
+    const z = Number(bandRule.match(/z-index:\s*(\d+)/)?.[1])
+    expect(z, 'the band declares no z-index').not.toBeNaN()
+    // Over the raster, the way the chart stacks its two layers.
+    expect(z).toBeGreaterThan(Number(body('.crt-picture::before').match(/z-index:\s*(\d+)/)?.[1]))
   })
 })
 

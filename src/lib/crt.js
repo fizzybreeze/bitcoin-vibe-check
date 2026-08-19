@@ -196,23 +196,30 @@ export const combinedAlpha = (a, b) => 1 - (1 - a) * (1 - b)
  * **The legibility figure does not move at all, and that is the part that was
  * genuinely surprising.** `GRAIN_MIN_SERIES_CONTRAST` is checked against four
  * combinations once the raster is in front — lit or scanned stroke against lit
- * or scanned ground — and the minimum of those four is the same pair it was
- * when only the ground could be scanned: the series against the grained ground,
- * 5.02 in dark and 4.99 in light. Both placements, same number. So the
- * *reasoning* that justified this alpha changed and the *measurement* behind it
- * did not, which is why the alpha is not retuned here. It was also not retuned
- * because the report said these look good and asked only for the layering; a
- * strength change riding along would confound the thing that was reported.
+ * or scanned ground — and the minimum of those four was the same pair it was
+ * when only the ground could be scanned: the series against the grained ground.
+ * Both placements, same number, so the *reasoning* that justified this alpha
+ * changed and the *measurement* behind it did not.
  *
- * **The window is narrow in one direction and that is stated rather than
- * smoothed over**: the ground has to band at least `MIN_BANDING_RATIO`, which
- * puts a floor at ~0.076, and the line has to band less than it, which puts a
- * ceiling at ~0.128 — both bounds binding in the light theme. 0.12 sits near
- * the ceiling. There is no headroom assertion because there is no headroom;
- * what protects it is that `crt.test.js` checks both bounds, so a nudge in
- * either direction fails the build rather than either the reader or the effect.
+ * **It came down from 0.12 when the band arrived, and that is the shared-budget
+ * rule doing its job rather than a retune.** A pixel can be under the raster
+ * *and* under the band at once, so what has to clear
+ * `GRAIN_MIN_SERIES_CONTRAST` is the combination — and at 0.12 the largest band
+ * that fits is 0.034, which measures fainter than the chart's own band and is
+ * therefore not the artifact anyone asked for. A twelfth of the raster's
+ * strength buys a band at 0.04: exactly the chart's alpha, and measuring 1.10
+ * dark / 1.08 light against the chart band's 1.10 / 1.08. This is the trade
+ * `SCANLINE_ALPHA` made when the chart's band arrived, at a twelfth rather than
+ * the fifth it paid.
+ *
+ * **The window is stated rather than smoothed over**: with the band at 0.04 the
+ * ground has to band at least `MIN_BANDING_RATIO`, which puts a floor at
+ * ~0.075, and the line has to band less than it, which puts a ceiling at
+ * ~0.115 — both bounds binding in the light theme, and 0.11 sits at the top of
+ * it. What protects it is that `crt.test.js` checks both, so a nudge in either
+ * direction fails the build rather than either the reader or the effect.
  */
-export const GRAIN_ALPHA = 0.12
+export const GRAIN_ALPHA = 0.11
 
 /**
  * How long the sparkline raster takes to travel one period.
@@ -237,9 +244,14 @@ export const GRAIN_ALPHA = 0.12
  * opposite of the wobble-and-band rule above and for the opposite reason — those
  * are two independent *faults*, and this is one screen.
  *
- * The pixel shift was ruled out for these outright. The chart's wobble displaces
- * a 264px box by a pixel; the same displacement on a 40px box is proportionally
- * six times the disturbance, on an element whose entire content is a 1.5px line.
+ * **This paragraph used to rule the pixel shift out for these outright**, on the
+ * grounds that the chart's wobble displaces a 264px box by a pixel while the
+ * same displacement on a 40px box is proportionally six times the disturbance,
+ * on an element whose entire content is a 1.5px line. That reasoning was about
+ * displacing the *box*, and it still holds for displacing the box. The slip
+ * below moves an element inside the clipping frame instead, so nothing shifts
+ * relative to anything outside it and the arithmetic never applies. See
+ * `SLIP_OFFSET_PX`.
  */
 export const GRAIN_DRIFT_PERIOD_S = 6
 
@@ -253,6 +265,206 @@ export const GRAIN_DRIFT_PERIOD_S = 6
  * stops the grain being turned up later to the point where it does.
  */
 export const GRAIN_MIN_SERIES_CONTRAST = 4.5
+
+/**
+ * ── The sparklines' own faults ──────────────────────────────────────────────
+ *
+ * The raster above is the *screen*, and it is deliberately shared: one pitch,
+ * one speed, three elements. What follows is the other two artifacts the chart
+ * has carried since v1.13.0 — a rolling band and a one-pixel tracking slip —
+ * given to the two sparklines on cadences that share no beat with each other or
+ * with the chart.
+ *
+ * **Independence is the requirement, not a nicety, and it was already being
+ * broken before any of this was added.** Until now the two sparklines were
+ * byte-identical in treatment: one class, one 6s drift, mounted in the same
+ * frame. For a raster that is invisible — it tiles, so there is no feature to
+ * align on and no way to *see* that the two are in phase. For a fault it would
+ * be glaring: two boxes twitching in unison read as one mechanism driving both
+ * rather than as two screens with two faults, which is the same argument
+ * `WOBBLE_PERIOD_S` makes about one element and applied across two.
+ */
+
+/**
+ * Peak opacity of a sparkline's rolling band.
+ *
+ * **A measured ceiling, and the constraint that binds it is not the chart's.**
+ * `BAND_ALPHA` is held down by the AA budget: the chart's band rolls over 11px
+ * axis labels, so what has to clear 4.5:1 is `combinedAlpha` of the two layers.
+ * Nothing here composites over a glyph at all — a sparkline is one stroke in an
+ * empty box — so the combined figure is free to exceed the chart's (it is
+ * 0.1444, against the chart's 0.1168 ceiling) and the binding constraint is
+ * `GRAIN_MIN_SERIES_CONTRAST` instead: the stroke against its own ground, read
+ * through the raster *and* the band.
+ *
+ * **It is `BAND_ALPHA` because it measured to `BAND_ALPHA`, from that different
+ * constraint, and it is worth stating rather than leaving as a coincidence
+ * somebody later "tidies".** Measured across the 4 x 4 cross product of the
+ * alphas `ink` can arrive at — none, raster, band, both — for the stroke and
+ * the ground independently, at the shipped `GRAIN_ALPHA`:
+ *
+ *   band α   min contrast dark / light   band visibility dark / light
+ *   0.025          4.80 / 4.86                  1.065 / 1.047   ← too faint
+ *   0.030          4.72 / 4.81                  1.077 / 1.057
+ *   0.040          4.59 / 4.72                  1.105 / 1.077   ← ships
+ *   0.045          4.52 / 4.68                  1.118 / 1.087
+ *   0.050          4.45 / 4.63                        —         ← fails AA, dark
+ *
+ * The window is 0.030 to 0.045 and this sits inside it with room on both sides,
+ * which is unusual in this file and is bought by the paragraph in `GRAIN_ALPHA`
+ * above. The floor is `MIN_BAND_VISIBILITY`; the ceiling is the series.
+ *
+ * **The binding theme is dark, which is the opposite way round from
+ * `GRAIN_ALPHA`**, whose window is pinned by light at both ends. Worth knowing
+ * before anyone reasons about this file from memory.
+ *
+ * **The cross product is deliberately harsher than what can actually happen**,
+ * and the gap is large enough to say so rather than leave implied. Both
+ * artifacts vary only in *y*, and the band is 13px tall, so a stroke pixel and
+ * the ground beside it are under the same band coverage everywhere but its
+ * feathered edge — the physically reachable worst case is the 4-cell diagonal,
+ * which measures 5.17 dark and 5.09 light. The conservative form is kept
+ * because it is the convention already on record for the raster, and because a
+ * bound that is only true of today's band height is a bound that stops being
+ * true when someone changes the band height.
+ *
+ * **An exemption was expected here and turned out not to be needed**, which is
+ * worth recording as a measurement rather than as an absence. The band lifts the
+ * ground toward `ink`, so the obvious worry is that it flattens the raster where
+ * it passes and `MIN_BANDING_RATIO` would have to be carved out for it. It does
+ * not: under the band the ground still bands 1.41 in dark and 1.24 in light, and
+ * the stroke still bands 1.10 and 1.12 — inside both bounds. So both are
+ * asserted *under the band* as well, and a future alpha that does flatten the
+ * ground fails the build instead of being quietly legal.
+ */
+export const SPARK_BAND_ALPHA = BAND_ALPHA
+
+/**
+ * How tall a sparkline's band is, in CSS pixels, before its edges are feathered
+ * away — and the whole point is that it is **pixels, not a percentage of the
+ * box**.
+ *
+ * The two boxes are 40px and 80px. A band expressed as a fraction of each would
+ * be 6.7px on one and 13.3px on the other, which asserts two screens of
+ * different sizes; the raster is 3px on both for exactly the reason the
+ * opposite would be wrong. An artifact of a piece of hardware has a physical
+ * height, so both bands get one height.
+ *
+ * 13px rather than the chart's 44 because 44 does not fit: it exceeds a 40px
+ * box outright, and a band taller than its window is not a band sweeping
+ * through a picture, it is the picture changing brightness. That the chart's
+ * figure cannot be carried across is a real limit rather than a compromise
+ * worth hiding — 13px is a third of it, and it is chosen so that after the
+ * gradient's 22%/38% feather there is still a ~2px plateau to see.
+ */
+export const SPARK_BAND_HEIGHT_PX = 13
+
+/**
+ * How far a sparkline's band travels, as a percentage of its own height.
+ *
+ * Sized against the **taller** of the two boxes, because one value has to clear
+ * both: 800% of 13px is 104px, against 80 + 13 for Fear & Greed and 40 + 13 for
+ * the Vibe trend. `crt.test.js` derives those box heights from the `h-*` class
+ * in each component rather than restating them, the same way the chart's bound
+ * reads its height out of `PriceChartCard`.
+ *
+ * The shorter box therefore finishes its pass early and spends the rest of the
+ * sweep clipped below, which is not a defect to tune out: a bar crossing a
+ * shorter window takes less of the cycle to cross it, which is what it would
+ * do on a real screen.
+ */
+export const SPARK_BAND_TRAVEL_PCT = 800
+
+/**
+ * The two sparklines' cadences, one entry per box.
+ *
+ * A table rather than six loose constants, because the property that matters is
+ * a relationship *between* the entries — no two of these may share a beat, and
+ * none may share one with `WOBBLE_PERIOD_S` or `BAND_PERIOD_S` — and a property
+ * of a set is checked by walking the set. Separate exports would let a third
+ * sparkline arrive without anything ever comparing it to the other two, which
+ * is precisely how the two that exist came to be identical.
+ *
+ * All four periods are prime, so nothing realigns inside a session: 11 and 13
+ * meet at 143s, 17 and 19 at 323s, and all four at 46,189s. All four are
+ * *longer* than the chart's 7 and 9, deliberately — these boxes are small and
+ * permanently on screen, and the chart is the one element where movement is
+ * meant to carry meaning, so its faults should be the frequent ones.
+ *
+ * **`bandDelayS` is the half that is easy to leave out and cannot be.** Each
+ * band is parked off the top of its box for 60% of its cycle, so two bands
+ * started in the same frame are identically parked for the first several
+ * seconds of *every* page load. Different periods make them drift apart; they
+ * do not make them start apart. A **negative** delay seeks the animation
+ * forward — −13s on a 19s period opens at 68% of the cycle, mid-sweep, while
+ * the other is still parked at 0. A positive delay does the opposite of what is
+ * wanted here, postponing the start and leaving both parked for longer.
+ *
+ * `boxPx` is in the table so the travel bound above is derived from the box
+ * rather than restated. It is cross-checked against the `h-*` class in the
+ * component, so changing `h-10` to `h-16` fails a test rather than silently
+ * shortening the band's pass.
+ */
+export const SPARK_FAULTS = Object.freeze([
+  Object.freeze({
+    what: 'BtcPriceCard — Vibe trend',
+    className: 'crt-fault-a',
+    boxPx: 40,
+    slipPeriodS: 11,
+    bandPeriodS: 13,
+    bandDelayS: 0,
+  }),
+  Object.freeze({
+    what: 'MarketSentimentCard — Fear & Greed 30d',
+    className: 'crt-fault-b',
+    boxPx: 80,
+    slipPeriodS: 17,
+    bandPeriodS: 19,
+    bandDelayS: -13,
+  }),
+])
+
+/**
+ * How far a slip displaces the picture, in whole CSS pixels, and how often.
+ *
+ * **The slip is vertical where the chart's wobble is horizontal, and both
+ * halves of that have an argument.**
+ *
+ * Horizontal is what the chart needs because it has vertical furniture to slide
+ * against — gridlines, tick labels, two reference lines. A sparkline has none
+ * of it, and its content is a single near-horizontal stroke: displacing that
+ * sideways moves it almost exactly onto where it already was. That is not a
+ * subtle effect, it is no effect, which is the class of thing this module has
+ * shipped before and now measures for.
+ *
+ * Vertical is *forbidden* on the chart, and the reason is at the top of this
+ * file: it moves the series against its own scale, so a decoration would be
+ * altering a reading. That objection does not survive the move to a sparkline,
+ * which has no axis, no ticks and no reference lines — there is nothing on
+ * screen for the line to be displaced relative to, so a vertical step reads as
+ * a picture twitching rather than as a number changing.
+ *
+ * **Downward rather than up**, which is free and not arbitrary: the raster
+ * carries one period of headroom at the top and none at the bottom, because it
+ * drifts downward. A downward slip is absorbed by headroom that already exists;
+ * an upward one drags the raster's bottom edge into view for the duration.
+ *
+ * One pixel, whole, one displacement per cycle, `steps(1, end)` — the chart's
+ * reasoning unchanged. And it is applied to an element **inside** the clipping
+ * frame rather than to the frame itself, which is what answers the objection
+ * recorded under `GRAIN_DRIFT_PERIOD_S`: the box does not move, so the
+ * displacement is not "six times the chart's" against everything sitting beside
+ * it. The Vibe sparkline has a bordered section, a grid of right-aligned
+ * figures and a 10px caption within a few pixels of it, and none of them move.
+ *
+ * The raster moves **with** the picture rather than staying on the frame, and
+ * that is load-bearing rather than incidental: leaving it behind would displace
+ * the stroke against a stationary raster, which is two planes with the near one
+ * holding still — the exact parallax reading v1.18.0 removed when it brought
+ * the raster in front. See `.crt-picture` in `index.css`.
+ */
+export const SLIP_OFFSET_PX = 1
+export const MAX_SLIP_OFFSETS = MAX_WOBBLE_OFFSETS
 
 /**
  * ── The export surfaces ─────────────────────────────────────────────────────
@@ -510,3 +722,31 @@ export const MIN_BANDING_RATIO = 1.15
  * from it, and a `const` cannot read one declared 300 lines further down.
  */
 export const GRAIN_MAX_SERIES_BANDING = MIN_BANDING_RATIO
+
+/**
+ * The floor on how visible a *band* has to be, as a contrast ratio between the
+ * ground under the band and the same ground at rest, in the weaker theme.
+ *
+ * **This closes a hole rather than decorating one.** `BAND_ALPHA` has had no
+ * floor at all since the chart's band shipped: it could be dropped to 0.005 and
+ * every assertion in the file would stay green, which is `MIN_BANDING_RATIO`'s
+ * own founding lesson unlearned one constant over. So this applies to both
+ * bands, the chart's and the sparklines'.
+ *
+ * It is a second floor rather than a reuse of `MIN_BANDING_RATIO`, and the
+ * honest reason is that the two measure different things and the numbers do not
+ * transfer. That one is a hard-edged static raster — one lit row against the
+ * dark row beside it. This is a soft edge feathered across 13px and *moving*,
+ * and a moving gradient is picked up far below the contrast a static hard edge
+ * needs. Holding a band to 1.15 would fail bands that plainly read: the chart's
+ * measures 1.10 in dark and 1.08 in light, and the sparklines' 1.08 and 1.06.
+ *
+ * So it is calibrated the same way `MIN_BANDING_RATIO` is — set just under what
+ * the effect already ships at, in the theme where it is weakest — and it
+ * declares nothing about perception. What it is *for* is the v1.13.0 failure
+ * where an artifact rendered nothing and every other check stayed green. With
+ * it, `SPARK_BAND_ALPHA` fails the build in both directions: it cannot rise,
+ * because the series stops clearing AA, and it cannot fall, because the band
+ * stops being there.
+ */
+export const MIN_BAND_VISIBILITY = 1.05

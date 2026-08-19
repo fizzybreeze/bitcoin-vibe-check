@@ -134,7 +134,10 @@ test.describe('CRT chart treatment', () => {
     const spark = page.getByRole('img', { name: /Fear and Greed/ })
     await expect(spark).toBeAttached({ timeout: TIMEOUT })
 
-    const style = await spark.evaluate((el) => {
+    // The raster hangs off `.crt-picture` rather than off the labelled box: it
+    // has to move with the stroke when the slip fires, or the two are a near
+    // plane holding still over a far one — the parallax reading v1.18.0 removed.
+    const style = await spark.locator('.crt-picture').evaluate((el) => {
       const s = getComputedStyle(el, '::before')
       return { image: s.backgroundImage, animation: s.animationName }
     })
@@ -157,7 +160,7 @@ test.describe('CRT chart treatment', () => {
     // every screenshot either way.
     const spark = page.getByRole('img', { name: /Fear and Greed/ })
     await expect(spark).toBeAttached({ timeout: TIMEOUT })
-    const at = () => spark.evaluate(el => getComputedStyle(el, '::before').transform)
+    const at = () => spark.locator('.crt-picture').evaluate(el => getComputedStyle(el, '::before').transform)
 
     const before = await at()
     // Long enough to clear a fifth of the 6s period, so this cannot pass on
@@ -288,5 +291,216 @@ test.describe('CRT chart treatment', () => {
     })
     expect(overflow.clipped).toBe('hidden')
     expect(Math.abs(overflow.taller)).toBeLessThanOrEqual(1)
+  })
+})
+
+// The two sparklines' own faults, and the one claim that needed a fixture this
+// suite has never had.
+//
+// **Until this spec, the Vibe Score sparkline had never rendered in an e2e run
+// at all.** `mocks.js` answers every Supabase read with `[]` — correctly, and
+// deliberately — so `useVibeHistory` returns nothing and the card draws no line.
+// The consequence is the interesting part: the two sparklines have never once
+// been on screen together in any automated run, which is exactly how they came
+// to be byte-identical in treatment with nothing to say so.
+//
+// The rows are registered *after* `mockApis`, because Playwright matches routes
+// in reverse registration order — the `priceChange24h.spec.js` trick. They are
+// not added to `mocks.js`, which would put a sparkline into the `btc-price`
+// visual baseline and force a regeneration for a change that moves no pixels in
+// it.
+test.describe('sparkline faults', () => {
+  // Dated off the clock rather than hard-coded: `buildVibeHistory` refuses the
+  // whole series when the newest row is more than two days old, so fixed dates
+  // render an empty box the day after they are written — and an empty box is
+  // not a failing assertion, it is a test that quietly stops testing.
+  function snapshotRows(days = 10) {
+    const day = 86_400_000
+    return Array.from({ length: days }, (_, i) => {
+      const d = new Date(Date.now() - i * day)
+      return {
+        captured_on: d.toISOString().slice(0, 10),
+        // All seven inputs `vibeInputsFromMetrics` reads. Anything less and
+        // `replayRow` drops the row as incomparable, which renders as nothing
+        // rather than as a failure. The fastest fee must be above zero.
+        metrics: {
+          fear_greed_value: 40 + ((i * 7) % 25),
+          mayer_multiple: 1.1 + (i % 5) * 0.05,
+          mvrv_value: 2.0 + (i % 4) * 0.1,
+          price_change_30d_pct: 5 - (i % 9),
+          hashrate_trend_30d: 3 + (i % 3),
+          fee_fastest_sv: 8 + (i % 6),
+          mempool_tx_count: 40_000 + i * 1_000,
+        },
+      }
+    })
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await mockApis(page)
+    await page.route(/\/rest\/v1\/metric_snapshots/, route =>
+      route.fulfill({ json: snapshotRows() }))
+    await page.goto('/')
+  })
+
+  /** Both grained boxes, keyed by the fault class each one wears. */
+  const boxes = page => ({
+    'crt-fault-a': page.getByRole('img', { name: /Vibe Score/ }),
+    'crt-fault-b': page.getByRole('img', { name: /Fear and Greed/ }),
+  })
+
+  async function bothAttached(page) {
+    for (const box of Object.values(boxes(page))) {
+      await expect(box).toBeAttached({ timeout: TIMEOUT })
+    }
+  }
+
+  test('renders both sparklines, which is what makes the rest of this block mean anything', async ({ page }) => {
+    // The guard on the fixture. Without it every assertion below could pass by
+    // finding one box and comparing it with itself.
+    await bothAttached(page)
+    const [a, b] = await Promise.all(
+      Object.entries(boxes(page)).map(([cls, box]) =>
+        box.evaluate((el, c) => el.classList.contains(c), cls)),
+    )
+    expect(a && b, 'the two sparklines are not wearing distinct fault classes').toBe(true)
+  })
+
+  test('measures a real box through the slipping element', async ({ page }) => {
+    // `.crt-picture` sits between the sized frame and `ResponsiveContainer`,
+    // which needs a definite height to measure. Drop its `height: 100%` and
+    // recharts collapses to zero — the sparkline is still in the DOM, still
+    // labelled, and draws nothing.
+    await bothAttached(page)
+    for (const [cls, box] of Object.entries(boxes(page))) {
+      const size = await box.locator('.recharts-surface').evaluate(el => {
+        const r = el.getBoundingClientRect()
+        return { w: r.width, h: r.height }
+      })
+      expect(size.w, `${cls} drew no width`).toBeGreaterThan(10)
+      expect(size.h, `${cls} drew no height`).toBeGreaterThan(10)
+    }
+  })
+
+  test('resolves a real band on each sparkline, rather than a layer that draws nothing', async ({ page }) => {
+    // The `color-mix` failure the chart's layers already guard against: present,
+    // correctly sized, animating, and completely invisible.
+    await bothAttached(page)
+    for (const [cls, box] of Object.entries(boxes(page))) {
+      const s = await box.locator('.crt-picture').evaluate(el => {
+        const c = getComputedStyle(el, '::after')
+        return { image: c.backgroundImage, name: c.animationName, dur: c.animationDuration }
+      })
+      expect(s.image, `${cls} has no band gradient`).toContain('linear-gradient')
+      expect(s.image, `${cls} band colour did not resolve`).not.toContain('color-mix')
+      expect(s.image).toMatch(/rgba?\(/)
+      expect(s.name).toBe('crt-spark-band-roll')
+      // The cadence came through the custom property. There is no fallback, so
+      // a missing fault class leaves this invalid and the animation unnamed.
+      expect(parseFloat(s.dur), `${cls} band has no duration`).toBeGreaterThan(1)
+    }
+  })
+
+  /**
+   * Where each band is in its cycle, as the browser's own timeline reports it.
+   *
+   * Not `transform`, which is the obvious probe and cannot answer this: the band
+   * is parked at the identity matrix for 60% of every cycle, so two independent
+   * bands read as identical whenever both happen to be parked — better than a
+   * third of the time, and `crt-fault-a`'s parked run is 7.8 continuous seconds,
+   * so widening the sampling window does not fix it. `progress` is derived from
+   * the timeline rather than from the painted value, so it separates two parked
+   * animations that are at different points of being parked — and it is still a
+   * claim about what is *happening*, not about what was declared, because it
+   * only advances if the animation is actually running.
+   */
+  const bandPhases = page => page.evaluate(() => {
+    const out = {}
+    for (const anim of document.getAnimations()) {
+      const effect = anim.effect
+      if (!effect || effect.pseudoElement !== '::after') continue
+      const el = effect.target
+      if (!el || !el.classList.contains('crt-picture')) continue
+      const cls = [...(el.closest('.crt-grain')?.classList ?? [])].find(c => c.startsWith('crt-fault-'))
+      if (cls) out[cls] = effect.getComputedTiming().progress
+    }
+    return out
+  })
+
+  test('runs the two sparklines independently of each other', async ({ page }) => {
+    // The requirement, in a browser. Three samples two seconds apart, and the
+    // interval is a derivation rather than a guess: the phase difference between
+    // a 13s and a 19s cycle drifts at |1/13 - 1/19| = 0.0243 per second, so
+    // three samples 2s apart span 0.097 of a cycle — wider than twice the 0.02
+    // threshold, so they cannot all sit inside it. Two bands genuinely in step
+    // would report a difference of exactly 0 at all three.
+    await bothAttached(page)
+    const samples = []
+    for (let i = 0; i < 3; i++) {
+      if (i) await page.waitForTimeout(2000)
+      samples.push(await bandPhases(page))
+    }
+    for (const s of samples) {
+      expect(Object.keys(s).sort(), 'a band is not animating at all').toEqual(['crt-fault-a', 'crt-fault-b'])
+    }
+
+    // Both are actually running, not frozen at the same value.
+    for (const cls of ['crt-fault-a', 'crt-fault-b']) {
+      expect(samples[0][cls], `${cls} is not advancing`).not.toBeCloseTo(samples[2][cls], 3)
+    }
+
+    // Circular, because progress wraps: 0.99 and 0.01 are close, not far.
+    const apart = ({ 'crt-fault-a': a, 'crt-fault-b': b }) => {
+      const d = Math.abs(a - b)
+      return Math.min(d, 1 - d)
+    }
+    const distances = samples.map(apart)
+    expect(
+      distances.some(d => d > 0.02),
+      `the two bands never left each other's phase: ${distances.map(d => d.toFixed(3)).join(', ')}`,
+    ).toBe(true)
+  })
+
+  test('displaces each band when its sweep is under way', async ({ page }) => {
+    // The pixels behind the phase numbers above: a band can advance perfectly
+    // and translate nothing. Driven by seeking the real animation rather than by
+    // waiting on the clock, so this costs no wall time and cannot land in the
+    // parked 60%.
+    await bothAttached(page)
+    const shifted = await page.evaluate(() => {
+      const out = {}
+      for (const anim of document.getAnimations()) {
+        const effect = anim.effect
+        if (!effect || effect.pseudoElement !== '::after') continue
+        const el = effect.target
+        if (!el || !el.classList.contains('crt-picture')) continue
+        const cls = [...(el.closest('.crt-grain')?.classList ?? [])].find(c => c.startsWith('crt-fault-'))
+        if (!cls) continue
+        const { duration, delay } = effect.getTiming()
+        anim.currentTime = delay + duration * 0.9
+        const m = getComputedStyle(el, '::after').transform
+        out[cls] = Number(m.match(/matrix\(.*,\s*(-?[\d.]+)\)$/)?.[1] ?? 0)
+      }
+      return out
+    })
+    expect(Object.keys(shifted).sort()).toEqual(['crt-fault-a', 'crt-fault-b'])
+    for (const [cls, y] of Object.entries(shifted)) {
+      expect(y, `${cls} declares a sweep it does not perform`).toBeGreaterThan(10)
+    }
+  })
+
+  test('slips each picture on its own cadence', async ({ page }) => {
+    await bothAttached(page)
+    const seen = {}
+    for (const [cls, box] of Object.entries(boxes(page))) {
+      seen[cls] = await box.locator('.crt-picture').evaluate(el => {
+        const c = getComputedStyle(el)
+        return { name: c.animationName, dur: c.animationDuration }
+      })
+      expect(seen[cls].name, `${cls} is not slipping`).toBe('crt-slip')
+    }
+    expect(seen['crt-fault-a'].dur, 'both sparklines slip at one cadence')
+      .not.toBe(seen['crt-fault-b'].dur)
   })
 })
