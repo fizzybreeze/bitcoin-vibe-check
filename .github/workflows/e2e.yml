@@ -41,14 +41,30 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      # The browser build, which the runner does not carry. Deliberately **not**
+      # `--with-deps`: that shells out to apt, and coupling the one step that
+      # must succeed to a package mirror is what took CI down on 18 Aug — three
+      # runs in a row hung for the full job timeout inside apt, with
+      # `azure.archive.ubuntu.com` unreachable, before a single test body ran.
       - name: Install chromium
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
-      # System deps are not covered by the browser cache, so install them even
-      # on a cache hit.
+      # System libraries, best-effort and bounded — and this is the part worth
+      # reading before tightening it. `ubuntu-latest` already ships Chrome, and
+      # therefore Chrome's shared libraries, so this is usually a no-op that
+      # still pays for an apt round trip. Making it non-fatal is **not**
+      # silencing a gate: the gate is the test run below, which is untouched.
+      # If these libraries are ever genuinely missing, chromium fails to launch
+      # and the suite goes red naming that — which is a far better signal than
+      # the job dying in setup having tested nothing.
+      #
+      # Runs on both paths on purpose: the browser cache covers `~/.cache/
+      # ms-playwright` and not system packages, so a cache hit needs them every
+      # bit as much as a miss did.
       - name: Install system dependencies
-        if: steps.pw-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 3
+        continue-on-error: true
         run: npx playwright install-deps chromium
 
       - name: Run E2E tests
