@@ -117,5 +117,53 @@ export function patchSeriesTail(points, price, nowMs) {
   const rounded = Math.round(price)
   if (rounded === last.price) return points
 
-  return [...points.slice(0, -1), { ...last, price: rounded }]
+  // The bucket's extremes travel with its close. A trade above the high Kraken
+  // last reported *is* the bucket's new high — it is the same event as the
+  // close moving — and leaving them behind would put the chart's high reference
+  // line under the right-hand end of its own line on any rally. The pair only
+  // ever widens: a tick back down does not un-happen the spike that preceded
+  // it, which is what a candle high means.
+  const widen = (bound, pick) => (Number.isFinite(bound) ? pick(bound, rounded) : rounded)
+
+  return [...points.slice(0, -1), {
+    ...last,
+    price: rounded,
+    high: widen(last.high, Math.max),
+    low: widen(last.low, Math.min),
+  }]
+}
+
+/**
+ * The high and low of the drawn range, or null when there is nothing drawn.
+ *
+ * **Off the candles' own extremes, not off the closes.** A line chart plots
+ * closes, so reading its high out of the plotted points answers "the largest
+ * close" — and a range's real high is inside a candle far more often than it is
+ * one of the closes. That shipped: the 7D and 1M charts reported a high of the
+ * live price while the 1D chart, on the same screen, showed one $1,500 above
+ * it. Daily closes cannot express an intraday peak, so no amount of redrawing
+ * fixes it from the plotted series; the extremes have to be carried.
+ *
+ * Falls back to a point's close when it carries no extremes, for the reason
+ * `extremum` gives in `ohlc.js`: these bound the y-axis as well as labelling the
+ * lines, so a series shaped by something else renders as it did before rather
+ * than not at all.
+ *
+ * Here rather than in the card because the card's chart draws nothing under
+ * jsdom — `ResponsiveContainer` has no dimensions — so a derivation left inline
+ * beside the axes it configures is one no unit test can reach.
+ */
+export function chartExtremes(points) {
+  if (!Array.isArray(points) || points.length === 0) return null
+
+  let hi = -Infinity
+  let lo = Infinity
+  for (const p of points) {
+    const high = Number.isFinite(p?.high) ? p.high : p?.price
+    const low = Number.isFinite(p?.low) ? p.low : p?.price
+    if (Number.isFinite(high)) hi = Math.max(hi, high)
+    if (Number.isFinite(low)) lo = Math.min(lo, low)
+  }
+
+  return Number.isFinite(hi) && Number.isFinite(lo) ? { hi, lo } : null
 }

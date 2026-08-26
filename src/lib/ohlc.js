@@ -250,8 +250,38 @@ function quoteVolume(candle) {
 }
 
 /**
- * Shape Kraken candles into the chart's { date, price, volume, until } points,
- * taking the most recent `count` since Kraken cannot bound the response itself.
+ * The traded extremes of a candle — indices 2 and 3.
+ *
+ * These are the whole reason the reference lines can say anything true. A line
+ * chart draws closes, so the closes are the only figures it *has* — and the
+ * range's real high happens inside a candle far more often than it happens to
+ * be one of its closes. Reading the extremes off the drawn points made the 7D
+ * and 1M highs disagree with the 1D one on the same screen: the 1D chart showed
+ * a high of $80,539 while the 7D and 1M charts, whose closes never reached it,
+ * both reported the *live price*, which was lower. A seven-day high below a
+ * one-day high is not a rounding difference, it is the wrong measurement.
+ *
+ * Falls back to the close when the column is unusable, which is the one piece of
+ * tolerance here and is deliberate: these two decide the y-axis domain as well
+ * as the labels, so a NaN in either takes the whole chart down — where a close
+ * standing in for them reproduces exactly the behaviour that shipped before
+ * this field existed.
+ */
+function extremum(raw, close) {
+  const value = Math.round(parseFloat(raw))
+  return Number.isFinite(value) ? value : close
+}
+
+/**
+ * Shape Kraken candles into the chart's { date, price, high, low, volume, until }
+ * points, taking the most recent `count` since Kraken cannot bound the response
+ * itself.
+ *
+ * **`price` is the close and `high`/`low` are what actually traded.** The line
+ * is drawn from the first; the chart's high and low reference lines and its
+ * y-axis domain read the other two. Keeping them apart is what stops a range's
+ * high being "the largest close we happened to plot" — see `extremum` above for
+ * what that cost.
  *
  * **`until` is the instant the point's candle stops forming** — its open plus
  * the interval — and it exists for exactly one consumer: `patchSeriesTail`,
@@ -271,40 +301,45 @@ export function parseKrakenOhlc(candles, days, count) {
   const intervalMs = krakenParamsForDays(days).interval * 60_000
   const openedAt = c => c[0] * 1000
 
-  if (days === 1) {
-    return recent.map(c => ({
-      date: new Date(openedAt(c)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-      price: Math.round(parseFloat(c[4])),
+  const point = (c, date) => {
+    const price = Math.round(parseFloat(c[4]))
+    return {
+      date,
+      price,
+      high: extremum(c[2], price),
+      low: extremum(c[3], price),
       volume: quoteVolume(c),
       until: openedAt(c) + intervalMs,
-    }))
+    }
   }
 
-  // 7D fetches 4-hourly candles but renders one bar per day: sum the volumes
-  // and keep the last close of each day.
+  const timeLabel = c => new Date(openedAt(c)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const dateLabel = c => new Date(openedAt(c)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
+  if (days === 1) return recent.map(c => point(c, timeLabel(c)))
+
+  // 7D fetches 4-hourly candles but renders one bar per day: sum the volumes,
+  // keep the last close of each day — and keep the day's *widest* high and low,
+  // which is the half that was missing. Keeping only the last candle's extremes
+  // would throw away five sixths of the day's range and put the same defect one
+  // level down from the one this field exists to fix.
   //
   // `until` is that last candle's own window, not the calendar day's — the
   // group's price is one 4-hourly close, so it stops being the live one when
   // that candle closes. Deliberately the conservative reading: refusing to
-  // patch a point is never wrong, patching a closed one is.
+  // patch is never wrong, patching a closed one is.
   if (days === 7) {
     const groups = {}
     for (const c of recent) {
-      const date = new Date(openedAt(c)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-      groups[date] = {
-        date,
-        price: Math.round(parseFloat(c[4])),
-        volume: (groups[date]?.volume ?? 0) + quoteVolume(c),
-        until: openedAt(c) + intervalMs,
-      }
+      const date = dateLabel(c)
+      const prev = groups[date]
+      const next = point(c, date)
+      groups[date] = prev
+        ? { ...next, high: Math.max(prev.high, next.high), low: Math.min(prev.low, next.low), volume: prev.volume + next.volume }
+        : next
     }
     return Object.values(groups)
   }
 
-  return recent.map(c => ({
-    date: new Date(openedAt(c)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-    price: Math.round(parseFloat(c[4])),
-    volume: quoteVolume(c),
-    until: openedAt(c) + intervalMs,
-  }))
+  return recent.map(c => point(c, dateLabel(c)))
 }
