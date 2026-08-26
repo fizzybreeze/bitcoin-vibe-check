@@ -10,8 +10,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 // Kraken candle: [time_s, open, high, low, close, vwap, volume_base, count]
-function candle(timeSeconds, close, { vwap = close, volumeBtc = 10 } = {}) {
-  return [timeSeconds, String(close - 100), String(close + 100), String(close - 200),
+function candle(timeSeconds, close, { vwap = close, volumeBtc = 10, high = close + 100, low = close - 200 } = {}) {
+  return [timeSeconds, String(close - 100), String(high), String(low),
           String(close), String(vwap), String(volumeBtc), 50]
 }
 
@@ -193,6 +193,25 @@ describe('parseKrakenOhlc', () => {
     expect(out[0].price).toBe(42_000)
   })
 
+  it('carries what traded — high from index 2, low from index 3', () => {
+    // The chart's high and low reference lines read these rather than the
+    // closes it plots. Without them a range's high is "the largest close we
+    // happened to draw", which is how the 7D and 1M charts came to report the
+    // live price as their high while the 1D chart showed one above it.
+    const out = parseKrakenOhlc([candle(DAY_S, 42_000, { high: 45_000, low: 39_000 })], 30, 1)
+    expect(out[0].high).toBe(45_000)
+    expect(out[0].low).toBe(39_000)
+  })
+
+  it('stands in with the close when a candle carries no usable extremes', () => {
+    // These bound the y-axis as well as labelling the lines, so a NaN in either
+    // takes the whole chart down where a close reproduces the old behaviour.
+    const broken = [DAY_S, '1', 'n/a', null, '42000', '42000', '10', 50]
+    const out = parseKrakenOhlc([broken], 30, 1)
+    expect(out[0].high).toBe(42_000)
+    expect(out[0].low).toBe(42_000)
+  })
+
   it('treats index 0 as seconds, not milliseconds', () => {
     // Read as ms this would land in 1970. Binance used ms; Kraken uses seconds.
     const out = parseKrakenOhlc([candle(1_700_000_000, 35_000)], 30, 1)
@@ -233,6 +252,25 @@ describe('parseKrakenOhlc', () => {
     expect(out[0].volume).toBe(15)
     expect(out[1].price).toBe(150)
     expect(out[1].volume).toBe(21)
+  })
+
+  it('gives a 7D bar the widest high and low of the day it covers', () => {
+    // Six 4-hourly candles become one bar, so keeping only the last candle's
+    // extremes would throw away five sixths of the day's range — the same
+    // defect one level down from the one the extremes exist to fix. The day's
+    // high here belongs to the *first* candle and its low to the middle one,
+    // neither of which is the close the bar draws.
+    const base = Date.UTC(2023, 10, 15, 12, 0, 0) / 1000
+    const out = parseKrakenOhlc([
+      candle(base,              100, { high: 900, low: 95  }),
+      candle(base + 2 * HOUR_S, 110, { high: 130, low: 40  }),
+      candle(base + 4 * HOUR_S, 120, { high: 125, low: 115 }),
+    ], 7, 42)
+    expect(out).toHaveLength(1)
+    expect(out[0].high).toBe(900)
+    expect(out[0].low).toBe(40)
+    // And still the day's last close, which is what the line is drawn from.
+    expect(out[0].price).toBe(120)
   })
 
   it('uses time labels for 1D and date labels for longer ranges', () => {

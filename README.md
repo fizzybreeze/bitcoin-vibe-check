@@ -63,7 +63,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Interactive area chart with overlaid volume bars
 - Four time ranges: **1D · 7D · 1M · 1Y**
 - **Range percentage change alongside the chart label, named with the range it measures** (`+2.41% · 1D`). It is first-point-to-last-point of what is drawn, which is deliberately *not* the same measurement as the header's rolling 24-hour change — the label is what stops one being read as the other's error
-- **High and low reference lines** for the selected period
+- **High and low reference lines** for the selected period — the highest and lowest prices that actually *traded* in it, taken from the candles' own high and low, not from the closes the line is drawn through. They will therefore sit slightly outside the line: a period's peak usually happens inside a candle rather than at the end of one
 - **Follows the currency selector** — the chart is redrawn from Kraken's market for the selected currency (XBT/USD, GBP, EUR, CAD, CHF), so the axis, the reference lines and the tooltip all quote real trades in that currency rather than a converted dollar series. If Kraken has no market for a selection the chart falls back to USD, labels itself USD, and says which market was missing
 - **Volume bars show one Kraken pair only** — a tooltip in the chart header names the pair and explains the discrepancy with the 24H Volume card, which shows global volume aggregated across all exchanges
 - Manual **refresh button** — useful when using the app as a PWA with no browser chrome

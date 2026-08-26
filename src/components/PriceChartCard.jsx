@@ -7,6 +7,7 @@ import CardTooltip from './CardTooltip.jsx'
 import ChartTooltip from './ChartTooltip.jsx'
 import Icon from './Icon.jsx'
 import Skeleton from './Skeleton.jsx'
+import { chartExtremes } from '../lib/chartSeries.js'
 import { CARD, CARD_LABEL } from '../lib/typography.js'
 import { CURRENCY_META } from '../utils.js'
 
@@ -22,7 +23,11 @@ const chartVolumeTooltip = pair =>
  *
  * The y-axis bounds and the x-axis tick interval are derived here rather than
  * in App. They are presentation, they are used nowhere else, and deriving them
- * beside the axes they configure is what keeps the prop list honest.
+ * beside the axes they configure is what keeps the prop list honest. The
+ * *extremes* those bounds are built from come from `chartSeries.js`, which is
+ * the one thing here that is not presentation: which number counts as the
+ * range's high is a fact about the candles, and it was wrong for as long as it
+ * was answered inline from the plotted closes.
  *
  * **The change badge names its range, and that label is the whole of it.**
  * `computeChartChange` is first-point-to-last-point of whatever is drawn, so
@@ -75,9 +80,14 @@ export default function PriceChartCard({
   const showFallbackNote = requested !== served
   const fellBackFrom     = requested.toUpperCase()
 
-  const chartPrices = chart?.map(d => d.price) ?? []
-  const lo  = chartPrices.length ? Math.min(...chartPrices) : 0
-  const hi  = chartPrices.length ? Math.max(...chartPrices) : 0
+  // The candles' own traded extremes, never the plotted closes — see
+  // `chartExtremes`. The two are the same number often enough that the wrong
+  // one looked right at 1D and 1Y while the 7D and 1M highs quietly tracked the
+  // live price. They bound the y-axis as well as labelling the reference lines,
+  // which is what keeps a high above every close inside the plot area.
+  const extremes = chartExtremes(chart)
+  const lo  = extremes?.lo ?? 0
+  const hi  = extremes?.hi ?? 0
   const pad = (hi - lo) * 0.08
   const xInterval = chart?.length ? Math.max(0, Math.floor(chart.length / 7) - 1) : 0
 
@@ -199,7 +209,7 @@ export default function PriceChartCard({
                     fill="url(#priceGrad)" dot={false}
                     activeDot={{ r: 4, fill: colors.accent, strokeWidth: 0 }}
                   />
-                  {chartPrices.length > 0 && (
+                  {extremes && (
                     <>
                       <ReferenceLine
                         yAxisId="price"

@@ -111,10 +111,21 @@ export const chainDataFixture = {
 const nowS = Math.floor(now / 1000)
 const DAY_S = 86_400
 
+/**
+ * How far above and below its close this fixture puts a candle's high and low.
+ *
+ * Exported because the chart's high and low reference lines read those columns
+ * rather than the close — a range's high traded inside a candle far more often
+ * than it was one of the closes — so a test asserting the figure they draw has
+ * to account for the offset instead of restating a number that happens to fit.
+ */
+export const CANDLE_HIGH_OFFSET = 500
+export const CANDLE_LOW_OFFSET = 800
+
 function krakenCandle(timeSeconds, close) {
   return [
     timeSeconds,
-    String(close - 500), String(close + 500), String(close - 800),
+    String(close - 500), String(close + CANDLE_HIGH_OFFSET), String(close - CANDLE_LOW_OFFSET),
     String(close), String(close), '500', 1000,
   ]
 }

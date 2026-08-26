@@ -8,7 +8,7 @@
 // prove the predicate matches a string this test wrote — not that Kraken's real
 // envelope reaches it. Every failure below is expressed as a response body.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { fetchChartSeries, FALLBACK_CURRENCY, patchSeriesTail } from '../chartSeries.js'
+import { fetchChartSeries, FALLBACK_CURRENCY, patchSeriesTail, chartExtremes } from '../chartSeries.js'
 import { _resetInFlight } from '../ohlc.js'
 
 // [ time, open, high, low, close, vwap, volume, count ]
@@ -250,5 +250,82 @@ describe('patchSeriesTail', () => {
   it('passes an empty or absent series straight through', () => {
     expect(patchSeriesTail([], 103_456, NOW)).toEqual([])
     expect(patchSeriesTail(null, 103_456, NOW)).toBeNull()
+  })
+
+  // The bucket's extremes are part of the same event as its close. A trade
+  // above the high Kraken last reported *is* the new high, and a patched close
+  // sitting above a stale high would draw the chart's high reference line under
+  // the right-hand end of its own line.
+  const withBounds = (until) => [
+    { date: '13:00', price: 101_000, high: 101_400, low: 100_600, volume: 2, until: until - 3_600_000 },
+    { date: '14:00', price: 102_000, high: 102_500, low: 101_500, volume: 3, until },
+  ]
+
+  it('lifts the forming candle\'s high to a live price above it', () => {
+    const out = patchSeriesTail(withBounds(OPEN_UNTIL), 103_456, NOW)
+    expect(out[out.length - 1].high).toBe(103_456)
+    expect(out[out.length - 1].low).toBe(101_500)
+  })
+
+  it('drops the forming candle\'s low to a live price below it', () => {
+    const out = patchSeriesTail(withBounds(OPEN_UNTIL), 100_800, NOW)
+    expect(out[out.length - 1].low).toBe(100_800)
+    expect(out[out.length - 1].high).toBe(102_500)
+  })
+
+  it('only ever widens them — a tick back does not un-happen the spike', () => {
+    // The bounds are the extremes of everything that traded in the bucket, not
+    // of the last frame. Narrowing them would make the range's high flicker
+    // with the price, which is the defect this whole change is about.
+    const out = patchSeriesTail(withBounds(OPEN_UNTIL), 101_900, NOW)
+    expect(out[out.length - 1].high).toBe(102_500)
+    expect(out[out.length - 1].low).toBe(101_500)
+  })
+})
+
+describe('chartExtremes', () => {
+  // The reported bug, as a fixture: a range whose real high traded inside a
+  // candle and never was a close. Reading the closes answers with the last
+  // point — which is the live price, because that is what `patchSeriesTail`
+  // writes there — so the 7D and 1M charts reported a high *below* the 1D one
+  // on the same screen.
+  const points = [
+    { date: '1 Aug', price: 70_000, high: 80_539, low: 69_000 },
+    { date: '2 Aug', price: 72_000, high: 73_000, low: 62_760 },
+    { date: '3 Aug', price: 79_017, high: 79_100, low: 78_000 },
+  ]
+
+  it('reports what traded, not the largest and smallest close', () => {
+    expect(chartExtremes(points)).toEqual({ hi: 80_539, lo: 62_760 })
+  })
+
+  it('does not follow the live price when the tail is not the range high', () => {
+    // Every close is below the high above, so a closes-only reading returns the
+    // final point and moves with every socket frame.
+    const closes = points.map(p => p.price)
+    expect(chartExtremes(points).hi).toBeGreaterThan(Math.max(...closes))
+    expect(chartExtremes(points).lo).toBeLessThan(Math.min(...closes))
+  })
+
+  it('falls back to a point\'s close when it carries no extremes', () => {
+    // These bound the y-axis as well as labelling the lines, so a series shaped
+    // by something else has to render as it did before rather than not at all.
+    expect(chartExtremes([{ date: '1 Aug', price: 100 }, { date: '2 Aug', price: 300 }]))
+      .toEqual({ hi: 300, lo: 100 })
+  })
+
+  it('ignores an unusable bound on one point without losing the rest', () => {
+    expect(chartExtremes([
+      { date: '1 Aug', price: 100, high: null, low: undefined },
+      { date: '2 Aug', price: 200, high: 250, low: 150 },
+    ])).toEqual({ hi: 250, lo: 100 })
+  })
+
+  it('answers null when there is nothing to draw', () => {
+    // The card gates its reference lines on this: a `hi` of 0 against a `lo` of
+    // 0 is a flat domain and two labels reading zero.
+    expect(chartExtremes([])).toBeNull()
+    expect(chartExtremes(null)).toBeNull()
+    expect(chartExtremes([{ date: '1 Aug' }])).toBeNull()
   })
 })

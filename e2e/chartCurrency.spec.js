@@ -14,7 +14,7 @@
 // these assert the *numbers on the chart* changed rather than only the label.
 import { test, expect } from '@playwright/test'
 import { mockApis } from './mocks.js'
-import { krakenUnknownPairResponse, krakenEmptySeriesResponse, PAIR_BASE_PRICE } from './fixtures.js'
+import { krakenUnknownPairResponse, krakenEmptySeriesResponse, PAIR_BASE_PRICE, CANDLE_HIGH_OFFSET } from './fixtures.js'
 
 const TIMEOUT = 10_000
 // A currency switch costs a 400ms debounce plus a fetch, on top of whatever the
@@ -55,10 +55,12 @@ async function expectHighLine(page, symbol, pair) {
 
   // Bounds derived from the fixture rather than restated: it ramps 200 candles
   // by 10 off the pair's base, so any window of it lands inside this band — and
-  // no two pairs' bands overlap.
+  // no two pairs' bands overlap. `CANDLE_HIGH_OFFSET` is in it because this line
+  // draws the candle's *high* rather than its close, which is the whole reason
+  // the 7D and 1M highs used to follow the live price.
   const drawn = Number((await highReferenceLabel(page)).replace(/\D/g, ''))
   expect(drawn).toBeGreaterThanOrEqual(PAIR_BASE_PRICE[pair])
-  expect(drawn).toBeLessThan(PAIR_BASE_PRICE[pair] + 2_100)
+  expect(drawn).toBeLessThan(PAIR_BASE_PRICE[pair] + 2_100 + CANDLE_HIGH_OFFSET)
 }
 
 async function waitForChart(page) {
