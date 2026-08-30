@@ -104,8 +104,15 @@ export const BAND_HEIGHT_PX = 44
  * of the bottom and the pass never completes. `crt.test.js` reads the chart's
  * height out of `PriceChartCard` and checks that, rather than leaving the two
  * numbers to agree by memory.
+ *
+ * **The chart's height is no longer one number.** The desktop layout pass grew
+ * it from a flat 264px to 264px→420px at `lg:`, so the bound this constant has
+ * to clear is the *tallest* rendering, not the one the chart happened to ship
+ * at when this was written — `crt.test.js` reads every height the card
+ * declares and checks against the largest, which is what stops a future
+ * breakpoint quietly outgrowing a travel distance tuned for a shorter chart.
  */
-export const BAND_TRAVEL_PCT = 700
+export const BAND_TRAVEL_PCT = 1100
 
 /**
  * The two cycle lengths, in seconds. **Deliberately different, and deliberately

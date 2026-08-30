@@ -52,6 +52,11 @@ test.describe('Responsive layout', () => {
           heights: kids.map(k => Math.round(k.getBoundingClientRect().height)),
           label: kids[0].querySelector('h2')?.textContent?.trim()
             ?? kids[0].textContent.trim().slice(0, 24),
+          // The Network Health row is `lg:items-start` on purpose — see the
+          // test below this one — so its own `align-items` is read here
+          // rather than assumed, and the equal-height rule is scoped to rows
+          // that actually ask CSS Grid's default stretch for it.
+          alignItems: getComputedStyle(grid).alignItems,
         })
       }
       return out
@@ -65,10 +70,40 @@ test.describe('Responsive layout', () => {
     // Only rows that actually *are* rows. At 390px every card grid is
     // `grid-cols-1`, so the children stack into implicit rows of their own and
     // differing heights are correct rather than ragged.
-    for (const { heights, label, columns } of cardRows.filter(r => r.columns > 1)) {
+    for (const { heights, label, columns, alignItems } of cardRows.filter(r => r.columns > 1)) {
+      // `flex-start` is CSS's name for Tailwind's `items-start` — the one row
+      // that deliberately opts out of stretch, so its cards size to their own
+      // content instead of to the tallest sibling. Ragged is the point there.
+      if (alignItems === 'flex-start') continue
       expect(new Set(heights).size,
         `"${label}" row (${columns} cols) is ragged: ${heights.join(', ')}px`).toBe(1)
     }
+  })
+
+  test('Network Health sizes to its own content once it stops stretching', async ({ page }, testInfo) => {
+    // The row only reaches its 3-column, `items-start` shape at `lg:` (1024px),
+    // which only the desktop project's 1280px viewport meets — `mobile` stays
+    // single-column, where this card and its siblings are stacked rather than
+    // side by side and the comparison below means nothing.
+    test.skip(testInfo.project.name !== 'desktop', 'the network row is single-column below lg:')
+
+    // This is the other half of the exception carved out above: a loose
+    // filter that merely *skips* asserting equal heights would stay green
+    // even if `lg:items-start` were silently dropped, because the row would
+    // then just go back to being equal — the case the filter was written to
+    // ignore. This proves the row is actually ragged, not merely unchecked.
+    const heights = await page.evaluate(() => ({
+      pulse: document.querySelector('[data-testid="card-network-pulse"]')?.getBoundingClientRect().height,
+      fees:  document.querySelector('[data-testid="card-network-fees"]')?.getBoundingClientRect().height,
+    }))
+    expect(heights.pulse, 'card-network-pulse not found').not.toBeUndefined()
+    expect(heights.fees,  'card-network-fees not found').not.toBeUndefined()
+    // Network Health has two stats and a bar; Network Fees has a congestion
+    // bar, a 3-up fee grid and Lightning stats — reliably taller. The gap only
+    // has to be large enough to prove the shorter card stopped stretching, not
+    // to pin an exact figure that redesigning either card's contents would
+    // then have to keep matching.
+    expect(heights.pulse).toBeLessThan(heights.fees - 40)
   })
 
   test('page does not scroll horizontally', async ({ page }) => {

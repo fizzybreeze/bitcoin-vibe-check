@@ -262,9 +262,13 @@ describe('the two cadences', () => {
     // stated in band-heights — and it has to exceed the chart plus the band or
     // the pass stops short and never reaches the bottom. The chart's height is
     // read from the card rather than restated, since that is the number that
-    // would move.
-    const chartHeight = Number(chartCard.match(/ResponsiveContainer width="100%" height=\{(\d+)\}/)?.[1])
-    expect(chartHeight, 'could not read the chart height from PriceChartCard').toBeGreaterThan(0)
+    // would move — and as of the desktop layout pass it is not one number but
+    // several (`h-[264px] lg:h-[420px]`), so this takes every pixel height the
+    // card declares and checks the *tallest*: the travel has to clear whichever
+    // breakpoint renders the most chart, not whichever one was fixed first.
+    const chartHeights = [...chartCard.matchAll(/h-\[(\d+)px\]/g)].map(m => Number(m[1]))
+    expect(chartHeights.length, 'could not read a chart height from PriceChartCard').toBeGreaterThan(0)
+    const chartHeight = Math.max(...chartHeights)
     const travelPx = (BAND_TRAVEL_PCT / 100) * BAND_HEIGHT_PX
     expect(travelPx).toBeGreaterThanOrEqual(chartHeight + BAND_HEIGHT_PX)
     // Bounded to the chart's own keyframe. Unbounded this was `expect(css)`,

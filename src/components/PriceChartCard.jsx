@@ -49,6 +49,23 @@ const chartVolumeTooltip = pair =>
  * defect this card shipped with was the heading reading the first while the
  * axis, the reference lines and the tooltip were hard-coded to dollars.
  */
+
+// The chart's rendered height, stepped by breakpoint rather than fixed at the
+// 264px it shipped at. At desktop width the card sits beside `BtcPriceCard`
+// in a `md:grid-cols-3` row under CSS Grid's default stretch, so whichever
+// card is taller sets the row — a fixed 264px chart left ~190px of the taller
+// card empty below it. Growing the chart with the viewport is the fix at the
+// source the task asks for, rather than a fixed height chosen to match
+// whatever `BtcPriceCard` happens to render today. `ResponsiveContainer`
+// takes a numeric height, not a class, so this is a class on its wrapper
+// (`height="100%"` below) — and the skeleton shares the same class so the
+// loading state does not jump when the chart arrives.
+//
+// Deliberately no `md:` step: the mobile-through-tablet band (below 1024) is
+// out of scope for this pass and the 768px screenshot has to stay pixel-
+// identical to what shipped before it, so the first change is at `lg:`.
+const CHART_HEIGHT_CLASS = 'h-[264px] lg:h-[420px]'
+
 export default function PriceChartCard({
   chart, chartLoading, chartError, chartChange,
   range, setRange, refreshChart, ranges, currency, chartCurrency, chartRequestedCurrency,
@@ -162,16 +179,20 @@ export default function PriceChartCard({
       )}
 
       {chartLoading && !chart
-        ? <Skeleton className="h-64" />
+        ? <Skeleton className={CHART_HEIGHT_CLASS} />
         : (
           <div className="relative">
             {/* `crt-wobble` and the overlay below are the CRT treatment — see
               * `src/lib/crt.js`. The wobble is on this wrapper rather than on the
               * series so the axes and gridlines move with it: a line displaced
               * against its own scale is a decorative effect changing a reading.
-              * `relative` is what the overlay's `inset: 0` anchors to. */}
-            <div className={`crt-wobble relative transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-              <ResponsiveContainer width="100%" height={264}>
+              * `relative` is what the overlay's `inset: 0` anchors to. The height
+              * classes live here rather than on `ResponsiveContainer` itself —
+              * recharts takes a numeric pixel height, not a class, so the
+              * breakpoint step has to happen one element out, with `height="100%"`
+              * below reading whatever this div resolves to. */}
+            <div className={`crt-wobble relative ${CHART_HEIGHT_CLASS} transition-opacity duration-200 ${chartLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+              <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chart ?? []} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">

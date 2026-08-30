@@ -171,8 +171,14 @@ export const TABULAR = 'tabular-nums'
  * face: those are the numbers the dashboard exists to show, they already carry
  * `tabular-nums` where they tick, and moving them would be a re-skin rather
  * than a register.
+ *
+ * **`lg:text-sm` was added for the desktop layout pass.** Body copy sat at
+ * 12–14px everywhere while the headline figures below it grew to `text-5xl`
+ * at `xl:` — a gap that reads as broken hierarchy rather than restraint once
+ * the page is wide enough to show both at once. One breakpoint step, in the
+ * one place every label in the app already goes through.
  */
-export const CARD_LABEL = 'font-mono text-xs font-semibold uppercase tracking-widest text-quiet'
+export const CARD_LABEL = 'font-mono text-xs font-semibold uppercase tracking-widest text-quiet lg:text-sm'
 
 /**
  * The smaller label tier, for a label inside a grid that is already inside a
@@ -190,7 +196,7 @@ export const CARD_LABEL = 'font-mono text-xs font-semibold uppercase tracking-wi
  * labels that sit inside each other in the Vibe Score breakdown — which is the
  * drift this module exists to stop, arriving through the file that names it.
  */
-export const CARD_LABEL_SM = 'font-mono text-[10px] uppercase tracking-wider text-quiet'
+export const CARD_LABEL_SM = 'font-mono text-[10px] uppercase tracking-wider text-quiet lg:text-xs'
 
 /**
  * The figure a card exists to show. Five treatments served this role across
@@ -205,23 +211,31 @@ export const CARD_LABEL_SM = 'font-mono text-[10px] uppercase tracking-wider tex
  * Weight and size only. Colour and `tabular-nums` stay at the call site: a
  * figure is `text-accent` or `text-ink` for reasons that have nothing to do
  * with its prominence, and `tabular-nums` belongs to whether it ticks.
+ *
+ * **Each tier gained one more step at `lg:` or `xl:` for the desktop layout
+ * pass.** A card built to be read at 360px wide does not need a bigger number
+ * at 1500px, it needs the number to still look like the point of the card
+ * once the label above it and the padding around it have both grown too —
+ * three sizes (`base`, `dense`, `tight`) step up at `lg:`, and the two that
+ * already had a `md:` step (`hero`, `lead`) get one more at `xl:` rather than
+ * stacking a second bump on top of the first at the same breakpoint.
  */
 export const CARD_VALUE = {
   /** The one number a card is *for*. Only the Vibe Score qualifies today. */
-  hero:  'text-3xl font-bold md:text-4xl',
+  hero:  'text-3xl font-bold md:text-4xl xl:text-5xl',
   /** A card's headline figure — the BTC price, the 24h volume. */
-  lead:  'text-2xl font-bold md:text-3xl',
+  lead:  'text-2xl font-bold md:text-3xl xl:text-4xl',
   /** The ordinary card figure, and the default when in doubt. */
-  base:  'text-2xl font-bold',
+  base:  'text-2xl font-bold lg:text-3xl',
   /**
    * A figure in a multi-column strip, which has to give way on a phone. This
    * is the tier that stops `text-sm` being anybody's idea of a big number:
    * `NetworkHeartbeatCard` rendered the block height at 14px on mobile, which
    * is smaller than the label above it.
    */
-  dense: 'text-lg font-bold md:text-2xl',
+  dense: 'text-lg font-bold md:text-2xl lg:text-3xl',
   /** A secondary figure sitting under another one. */
-  tight: 'text-lg font-bold',
+  tight: 'text-lg font-bold lg:text-2xl',
 }
 
 export const CARD_VALUE_TIERS = Object.keys(CARD_VALUE)

@@ -779,13 +779,25 @@ export default function App() {
 
   return (
     // `circuit-ground` paints the trace pattern behind everything below it —
-    // see `src/lib/circuitry.js`. It carries its own positioning, so nothing
-    // about the page frame moves out of this one class list.
-    <div className="circuit-ground min-h-screen bg-ground p-4 md:p-8 text-ink">
+    // see `src/lib/circuitry.js`. It is on the outer element, which stays
+    // `min-h-screen` and unconstrained so the ground still bleeds to the
+    // window edges; everything that used to size *itself* against the
+    // viewport now sizes against the capped wrapper one level in.
+    <div className="circuit-ground min-h-screen bg-ground text-ink">
+    {/* The desktop bug this whole file exists to fix: below this there was no
+        maximum width at all, so a card row was however wide the monitor was.
+        1440px is wide enough that the four-column rows below still read as
+        columns rather than as four thin ribbons, and narrow enough that a
+        2560px display still has visible page margin either side rather than
+        the ground disappearing under the content. Padding steps up with the
+        viewport rather than staying at `p-8` for the same reason the grids
+        below step: the same 32px gutter that reads as generous at 768px reads
+        as stingy once the content beside it has room to be 1440px wide. */}
+    <div className="mx-auto max-w-[1440px] p-4 md:p-8 lg:px-10 lg:py-9 xl:px-12">
 
       {/* Header */}
       {/* Mobile: 3 stacked rows (title / subtitle / controls). Desktop (md+): single flex row. */}
-      <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0">
+      <header className="mb-8 flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-0 lg:items-center">
         <div>
           {/* The mark is the picture; the heading's name is the `sr-only` text
               beside it. Both are needed — a drawn wordmark with no text leaves
@@ -794,7 +806,14 @@ export default function App() {
             <span className="sr-only">{WORDMARK_TEXT}</span>
             <Wordmark />
           </h1>
-          <p className="mt-1.5 text-xs text-quiet">{vibeSummary ?? 'Read the room.'}</p>
+          {/* The one line of editorial voice on the page, and at desktop width
+              it was sitting at the same 12px as a card caption while the
+              logo beside it grew. `lg:`/`xl:` steps it up rather than the
+              logo, because growing the wordmark means re-deriving its pixel
+              grid at a new cell size (see `wordmark.test.js`) for a change
+              this task did not ask for — the summary sentence is plain text
+              and costs nothing to resize. */}
+          <p className="mt-1.5 text-xs text-quiet lg:mt-2 lg:text-sm xl:text-base">{vibeSummary ?? 'Read the room.'}</p>
         </div>
         <div className="flex items-center gap-4 self-end md:self-auto">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -873,19 +892,36 @@ export default function App() {
         </div>
       </div>
 
-      {/* Row 2+3: Market Stats + Sentiment */}
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <VolumeCard
-          volumeUsd={volumeUsd}
-          volume={volume}
-          currency={currency}
-          btcDominance={btcDominance}
-          volHistory={volHistory}
-          marketCapUsd={marketCapUsd}
-          marketCapEstimated={marketCapEstimated}
-          price={price}
-        />
-        <MarketSentimentCard fng={fng} fngHistory={fngHistory} loading={loading} />
+      {/* Row 2+3: Market Stats + Sentiment. `xl:grid-cols-4` rather than a
+          plain two-column grid that just gets wider: each card spans 2 of 4,
+          which is the same 50/50 split but on the column grid Cycle
+          Indicators and the halving row already use at this width — the
+          columns line up down the page instead of each row inventing its
+          own division of the same 1440px.
+
+          `lg:items-start` for the same reason as the Network row below: once
+          `VolumeCard` gets its own internal two-column split at `lg:` (see
+          that file), it is naturally *shorter* than `MarketSentimentCard`'s
+          value-plus-30-day-sparkline — measured at 126px of empty card below
+          its content under the default stretch. Below `lg:` both cards are
+          still single-column and close enough in height that this changes
+          nothing there. */}
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:items-start">
+        <div className="xl:col-span-2">
+          <VolumeCard
+            volumeUsd={volumeUsd}
+            volume={volume}
+            currency={currency}
+            btcDominance={btcDominance}
+            volHistory={volHistory}
+            marketCapUsd={marketCapUsd}
+            marketCapEstimated={marketCapEstimated}
+            price={price}
+          />
+        </div>
+        <div className="xl:col-span-2">
+          <MarketSentimentCard fng={fng} fngHistory={fngHistory} loading={loading} />
+        </div>
       </div>
 
       {/* Row 4: Valuation / Cycle Indicators */}
@@ -905,8 +941,18 @@ export default function App() {
         />
       </div>
 
-      {/* Row 5: Network Health + Recent Blocks + Network Fees */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* Row 5: Network Health + Recent Blocks + Network Fees.
+          `lg:items-start` is the one deliberate break from every other row's
+          default stretch: Network Health has genuinely less to show than
+          either card beside it (two stats and a bar, against a five-block
+          list or a fee grid plus Lightning stats), and forcing it to their
+          height at 1512px left ~260px of card painted with nothing in it.
+          Sizing it to its own content moves that space *outside* the card,
+          where it reads as normal page air rather than a broken section —
+          see `responsive.spec.js`'s exception for this row, and the test
+          beside it confirming the row is actually ragged now rather than
+          silently still stretched. */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
         <NetworkPulseCard difficulty={difficulty} loading={loading} hashRateTrend={hashRateTrend} />
         <div className="flex flex-col gap-4">
           {/* Mobile-only: NetworkHeartbeatCard (desktop merges this data into RecentBlocksCard) */}
@@ -977,6 +1023,13 @@ export default function App() {
       <SatoshiQuote />
 
       <p className="py-4 text-center text-xs text-quiet">© 2026 Bitcoin Vibe Check · MIT Licence</p>
+
+    </div>
+    {/* Everything below is a viewport-level overlay — a modal, a popover, the
+        share canvas — rather than page content, so it sits outside the
+        1440px-capped wrapper rather than inside it. Nothing here is
+        positioned relative to that wrapper, and closing it above rather than
+        below keeps that true by construction instead of by accident. */}
 
       {/* First-visit newsletter modal */}
       <NewsletterModal />

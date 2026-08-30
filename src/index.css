@@ -272,10 +272,13 @@ body {
 /* The band parks above the plot area for most of the cycle and then sweeps
  * through it, so the chart is undisturbed roughly 60% of the time. Both ends of
  * the travel are outside the clipping frame, which is what makes the loop
- * seamless without a fade. */
+ * seamless without a fade. 1100% (mirrors `BAND_TRAVEL_PCT`) rather than the
+ * 700% this shipped at — the chart itself grows to 420px at `lg:` now, and the
+ * travel has to clear the tallest rendering plus the band's own height or the
+ * sweep stops short of the bottom on a desktop screen. */
 @keyframes crt-band-roll {
   0%, 60% { transform: translate3d(0, 0, 0); }
-  100%    { transform: translate3d(0, 700%, 0); }
+  100%    { transform: translate3d(0, 1100%, 0); }
 }
 
 /* The clipping frame, carrying both artifacts as pseudo-elements: `::before` is
