@@ -50,26 +50,33 @@ export default function DonationCard() {
         <p className="text-sm text-quiet">2. Enter your name or handle below and click Submit.</p>
         <p className="text-sm text-quiet">We'll add you to the list once we see your payment come through.</p>
       </div>
-      <div className="mt-4">
-        <input
-          type="text"
-          value={name}
-          onChange={handleNameChange}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="Your name or handle…"
-          maxLength={50}
-          className="w-full rounded-xl bg-raised border border-line px-4 py-2.5 text-base text-ink placeholder-quiet"
-        />
-        {submitted && validErr && <p className="mt-2 text-xs text-down">{validErr}</p>}
-      </div>
-      <div className="mt-3">
-        <button
-          onClick={handleSubmit}
-          disabled={status === 'loading'}
-          className="rounded-full border border-accent bg-transparent px-6 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent-fill hover:text-accent-ink disabled:opacity-50"
-        >
-          Submit my name
-        </button>
+      {/* Below `lg:` this is unchanged: input on its own line, button below
+          it. At `lg:` the input caps at `max-w-md` — it was measured at
+          1346px wide on a card whose whole content is a two-word name — and
+          the button moves up beside it instead of sitting under empty field
+          width. */}
+      <div className="mt-4 lg:flex lg:items-start lg:gap-3">
+        <div className="lg:max-w-md lg:flex-1">
+          <input
+            type="text"
+            value={name}
+            onChange={handleNameChange}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            placeholder="Your name or handle…"
+            maxLength={50}
+            className="w-full rounded-xl bg-raised border border-line px-4 py-2.5 text-base text-ink placeholder-quiet"
+          />
+          {submitted && validErr && <p className="mt-2 text-xs text-down">{validErr}</p>}
+        </div>
+        <div className="mt-3 lg:mt-0 lg:shrink-0">
+          <button
+            onClick={handleSubmit}
+            disabled={status === 'loading'}
+            className="rounded-full border border-accent bg-transparent px-6 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent-fill hover:text-accent-ink disabled:opacity-50"
+          >
+            Submit my name
+          </button>
+        </div>
       </div>
       {status === 'success' && (
         <p className="mt-3 text-xs text-up">Thanks! You'll appear in the banner within 24 hours.</p>

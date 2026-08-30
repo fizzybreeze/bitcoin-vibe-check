@@ -50,7 +50,13 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
     <div data-testid="card-cycle-indicators" className={`${CARD} flex flex-col gap-4 h-full`}>
       <h2 className={CARD_LABEL}>Cycle Indicators</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 md:divide-x divide-line-soft">
+      {/* `lg:grid-cols-4` is the one change here: at 1024px and up all four
+          stats sit in a single row, one per column, rather than a 2×2 grid
+          whose columns computed to 661px each at a 1394px card — four short
+          figures each with ~500px of dead space beside the label. `md:divide-x`
+          still applies (Tailwind cascades it forward), so the same divider
+          convention just draws three lines instead of one. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 md:divide-x divide-line-soft">
         {/* Top-left: MVRV Ratio */}
         <div className="flex flex-col gap-0.5">
           {!mvrvError && mvrvLoading && mvrv == null ? (
@@ -92,8 +98,10 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
           />
         </div>
 
-        {/* Bottom-left: 200-Day Moving Average */}
-        <div className="flex flex-col gap-0.5">
+        {/* Bottom-left at md (2 cols), third column at lg (4 cols) — where it
+            sits after a divider like items two and four, so it needs the same
+            left padding they carry, just starting one breakpoint later. */}
+        <div className="flex flex-col gap-0.5 lg:pl-6">
           {ohlcLoading && ma200 == null ? (
             <div className="animate-pulse space-y-1">
               <div className="h-3 w-28 rounded bg-raised" />

@@ -68,7 +68,17 @@ export default function NetworkPulseCard({ difficulty, loading, hashRateTrend })
   }, [])
 
   return (
-    <div data-testid="card-network-pulse" className={`${CARD} h-full`}>
+    // No `h-full`, deliberately, since v1.21.0: the Network row now sits under
+    // `lg:items-start` (see `App.jsx`) so this card sizes to its own shorter
+    // content instead of stretching to match Recent Blocks or Network Fees —
+    // and `h-full` on a *direct* grid item is not a no-op the way it is under
+    // the default stretch. `align-items: start` only governs boxes whose own
+    // height is `auto`; a percentage height still resolves against the row's
+    // (by-then-definite) track size regardless of that setting, so leaving
+    // `h-full` here would have silently defeated `items-start` — measured, not
+    // assumed, after the first draft still stretched to 395px with the class
+    // still attached.
+    <div data-testid="card-network-pulse" className={CARD}>
       <h2 className={CARD_LABEL}>Network Health</h2>
 
       {/* Row 1: Hash Rate | Difficulty */}
