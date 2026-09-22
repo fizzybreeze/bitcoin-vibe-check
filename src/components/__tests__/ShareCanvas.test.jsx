@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import ShareCanvas from '../ShareCanvas.jsx'
 import { PALETTE } from '../../lib/palette.js'
 import { mvrvBand } from '../../lib/scales.js'
+import { FLAT_CAPTION } from '../../lib/feeTiers.js'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -64,6 +65,49 @@ describe('ShareCanvas — BTC Price', () => {
     // because the formatter labels it; a bare percentage carries no such tell.
     renderPriceCard({ currency: 'eur' })
     expect(screen.queryByText(/\(24h\)/)).toBeNull()
+  })
+})
+
+function renderFeesCard(fees, props = {}) {
+  return render(
+    <ShareCanvas
+      selectedCards={['fees']}
+      sentimentSummary=""
+      cardData={{ priceUsd: 100_000, fees, mempool: null }}
+      currency="usd"
+      forwardedRef={null}
+      {...props}
+    />
+  )
+}
+
+describe('ShareCanvas — Network Fees', () => {
+  // The same collapse as the live card, and worse here for the reason the
+  // 24h-change tests above give: a posted image cannot be re-rendered, so
+  // three prices that are one price sit under three different waits forever.
+  it('collapses to one figure when every tier carries the same rate', () => {
+    renderFeesCard({ hourFee: 1, halfHourFee: 1, fastestFee: 1 })
+    expect(screen.getByText('Every Tier')).toBeTruthy()
+    // The exact shared constant, not an alternation that matches either of two
+    // divergent literals — which is how the card's caption and this one had
+    // already come apart while the test stayed green.
+    expect(screen.getByText(FLAT_CAPTION)).toBeTruthy()
+    expect(screen.queryByText('Slow')).toBeNull()
+    expect(screen.queryByText('Medium')).toBeNull()
+    expect(screen.queryByText('Fast')).toBeNull()
+  })
+
+  it('keeps the three tiers when the rates differ', () => {
+    renderFeesCard({ hourFee: 5, halfHourFee: 8, fastestFee: 12 })
+    expect(screen.getByText('Slow')).toBeTruthy()
+    expect(screen.queryByText('Every Tier')).toBeNull()
+    expect(screen.getByText('12')).toBeTruthy()
+  })
+
+  it('labels the tiers in blocks rather than in minutes', () => {
+    renderFeesCard({ hourFee: 5, halfHourFee: 8, fastestFee: 12 })
+    expect(screen.getByText('next block')).toBeTruthy()
+    expect(screen.queryByText(/~10 min|~30 min|~1 hr/)).toBeNull()
   })
 })
 

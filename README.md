@@ -71,7 +71,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 - Chart data is memoised per range *and currency* for the session, and the three inactive ranges are prefetched in the background once the active one loads, so switching range is instant
 
 ### Network Fees & Mempool
-- **Fee tiers** — Slow (~1 hour), Medium (~30 min), and Fast (~10 min) in sat/vB
+- **Fee tiers** — Slow (~6 blocks), Medium (~3 blocks) and Fast (next block) in sat/vB. Blocks rather than minutes because a block interval is random: it averages ten minutes, but half arrive inside seven and one in ten takes over twenty-three. When every tier carries the same rate — which it did on 22 of the first 50 days captured, an empty fee market genuinely charging one price — the card shows that one figure and says paying more buys nothing, instead of printing it three times under three different waits
 - **Mempool congestion** indicator (Clear / Light / Moderate / Busy / Congested) with a visual fill bar, measured as blocks of backlog bidding above the 1 sat/vbyte relay floor rather than as the mempool's total size — most of that total is transactions at the floor that never clear, so it stays near 40 MB whether the chain is busy or idle
 - On desktop, the Network Fees card sits in the **network health row** alongside Network Pulse and Recent Blocks (3-column layout)
 
@@ -199,6 +199,7 @@ src/
     vibeHistory.js           which snapshot rows are comparable enough to plot
     scales.js                the band ladders (vibe, Fear & Greed, MVRV, congestion, block time)
     mempool.js               blocks of backlog above the relay floor, from the fee histogram
+    feeTiers.js              whether the fee tiers are a choice or one price wearing three labels
     palette.js               every colour in both themes — the source of truth index.css mirrors
     typography.js            the font stacks and the card label/value/shell class constants
     icons.js                 every icon on one 24×24 grid, plus the header button shell
