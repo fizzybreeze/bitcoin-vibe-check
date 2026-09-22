@@ -550,6 +550,39 @@ describe('computeHashRateTrend', () => {
     expect(computeHashRateTrend(holed)).not.toBeCloseTo(12, 6)
   })
 
+  // The finding from reviewing this change. Interior gaps were always handled,
+  // and an end gap silently shortened the window instead: a dropped newest
+  // bucket turned +10% into 9.66%, still labelled 30d and still fed to a
+  // 30-day anchor. The span is the array's now, not the survivors'.
+  it.each([
+    ['the newest reading', [29]],
+    ['the newest two', [28, 29]],
+    ['the oldest reading', [0]],
+    ['both ends at once', [0, 29]],
+    ['an interior reading', [10]],
+    ['an end and an interior', [10, 29]],
+  ])('reports the same trend when %s is screened out', (_label, drop) => {
+    const clean = linear(10)
+    const holed = clean.map((h, i) => (drop.includes(i) ? { avgHashrate: 0 } : h))
+    expect(computeHashRateTrend(holed)).toBeCloseTo(10, 6)
+  })
+
+  // The other half of that fix: the span is only legitimate to project across
+  // because the fit covers it. Past half the window the survivors are being
+  // extrapolated further than they were measured over, which amplifies
+  // whatever few readings are left rather than reporting a 30-day trend.
+  it('refuses a fit that would be projected further than it was measured over', () => {
+    const clean = linear(10)
+    const thin = clean.map((h, i) => (i <= 12 ? h : { avgHashrate: 0 }))  // covers 12 of 29
+    expect(computeHashRateTrend(thin)).toBeNull()
+  })
+
+  it('still answers when the fit covers at least half the window', () => {
+    const clean = linear(10)
+    const half = clean.map((h, i) => (i <= 15 ? h : { avgHashrate: 0 }))  // covers 15 of 29
+    expect(computeHashRateTrend(half)).toBeCloseTo(10, 6)
+  })
+
   it.each([
     ['null input', null],
     ['not an array', { avgHashrate: 1e21 }],

@@ -334,8 +334,8 @@ export function computeHashRateTrend(hashrates) {
   if (!Array.isArray(hashrates)) return null
 
   // Screen the readings but keep each one's original position, so a dropped
-  // entry leaves a gap in x rather than silently closing up and compressing
-  // the span. The old code screened nothing at all.
+  // entry leaves a gap in x rather than silently closing up. The old code
+  // screened nothing at all — a null first entry threw, and a NaN propagated.
   const points = []
   hashrates.forEach((h, i) => {
     const v = h?.avgHashrate
@@ -356,11 +356,35 @@ export function computeHashRateTrend(hashrates) {
   // distinct values is always positive. A guard nothing can reach is a guard
   // nothing can test, so it is left out rather than banked.
   const slope = num / den
-  const span  = points[n - 1][0] - points[0][0]
-  // The fitted value where the series starts, not the first *reading* — using
-  // the reading would put the noise this function exists to remove straight
-  // back into the denominator.
-  const fittedStart = meanY + slope * (points[0][0] - meanX)
+
+  // The span is the **whole window the endpoint described**, not the distance
+  // between the first and last readings that survived screening.
+  //
+  // Measuring it between usable points looks equivalent and is not: a screened
+  // reading at either *end* then shortens the window, so a dropped newest
+  // bucket — a partial day reported as 0 is the realistic case — turns a 30-day
+  // change into a 28-day one still labelled 30d and still fed to a 30-day
+  // anchor. Measured at +10%: 9.66 with the newest reading gone, 9.31 with the
+  // newest two. Interior gaps were already correct, which is what made this
+  // easy to miss; the invariant one comment up holds for every gap only once
+  // the span stops being derived from the survivors.
+  //
+  // Both ends are read off the fitted line rather than off a reading, which is
+  // what makes that legitimate: `fittedStart` was never the first *reading*
+  // (using it would put the noise this function exists to remove straight back
+  // into the denominator), so evaluating the same line at the far end of the
+  // array is the same kind of value, not an invented one.
+  const span = hashrates.length - 1
+  const measured = points[n - 1][0] - points[0][0]
+
+  // …but a fitted line may not be projected further than it was measured over.
+  // With most of the array screened out, extrapolating across the full window
+  // amplifies whatever the few survivors happened to say. The bar is that the
+  // fit covers at least half the span, so extrapolation never exceeds
+  // interpolation — a property rather than a tuned figure.
+  if (measured * 2 < span) return null
+
+  const fittedStart = meanY + slope * (0 - meanX)
   if (!(fittedStart > 0)) return null
 
   return ((slope * span) / fittedStart) * 100
