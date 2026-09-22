@@ -471,39 +471,144 @@ describe('computeVibeDimensions / summary without a score', () => {
 // ─── Hash rate 30d trend ──────────────────────────────────────────────────────
 
 describe('computeHashRateTrend', () => {
-  it('returns the correct positive percentage', () => {
+  // A clean series with no noise: the fitted change across the span is the
+  // trend, exactly. This is the property that makes regression usable here —
+  // averaging the first and last week is quieter and under-reports a real
+  // trend by about a fifth, which fixed anchors would turn into a standing
+  // error. See the function's header for the simulation.
+  const linear = (pct, n = 30) =>
+    Array.from({ length: n }, (_, i) => ({ avgHashrate: 1e21 * (1 + (pct / 100) * (i / (n - 1))) }))
+
+  it.each([[0], [5], [15], [-10]])('recovers a clean %i%% trend exactly', pct => {
+    expect(computeHashRateTrend(linear(pct))).toBeCloseTo(pct, 6)
+  })
+
+  it('equals the old endpoint formula when there are only two readings', () => {
+    // Two points define the line, so this degrades to exactly what shipped
+    // before — which is what keeps a short series honest rather than refused.
     const rates = [{ avgHashrate: 780e18 }, { avgHashrate: 800e18 }]
     expect(computeHashRateTrend(rates)).toBeCloseTo(((800 - 780) / 780) * 100, 5)
   })
 
-  it('returns the correct negative percentage', () => {
-    const rates = [{ avgHashrate: 800e18 }, { avgHashrate: 780e18 }]
-    expect(computeHashRateTrend(rates)).toBeCloseTo(((780 - 800) / 800) * 100, 5)
+  // The inverted test. Until v1.23.0 this suite asserted the opposite — "uses
+  // the first and last entries only, ignoring middle values" — which pinned
+  // the defect as though it were the specification.
+  it('reads the middle of the series rather than only its ends', () => {
+    const ends = [{ avgHashrate: 780e18 }, { avgHashrate: 800e18 }]
+    const withMiddle = [{ avgHashrate: 780e18 }, { avgHashrate: 900e18 }, { avgHashrate: 800e18 }]
+    expect(computeHashRateTrend(withMiddle)).not.toBeCloseTo(computeHashRateTrend(ends), 3)
   })
 
-  it('uses the first and last entries only, ignoring middle values', () => {
-    const rates = [
-      { avgHashrate: 780e18 },
-      { avgHashrate: 900e18 },
-      { avgHashrate: 800e18 },
-    ]
-    expect(computeHashRateTrend(rates)).toBeCloseTo(((800 - 780) / 780) * 100, 5)
+  // The whole point of the change, asserted rather than claimed. A daily
+  // avgHashrate is inferred from ~144 Poisson block times, so it carries about
+  // 8.3% relative error; the shipped estimator put two of those in a ratio and
+  // measured 10.6pp of standard deviation across the 50 captured rows.
+  it('cuts the estimator noise well below the endpoint reading', () => {
+    let seed = 20260922
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+    const gauss = () => {
+      let u = 0, v = 0
+      while (!u) u = rnd()
+      while (!v) v = rnd()
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
+    }
+    const SE = 1 / Math.sqrt(144)
+    const noisy = pct => linear(pct).map(h => ({ avgHashrate: h.avgHashrate * (1 + SE * gauss()) }))
+    const endpoints = h => ((h[h.length - 1].avgHashrate - h[0].avgHashrate) / h[0].avgHashrate) * 100
+
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length
+    const sd = a => Math.sqrt(mean(a.map(x => (x - mean(a)) ** 2)))
+
+    const runs = Array.from({ length: 1500 }, () => noisy(5))
+    const fitted = runs.map(computeHashRateTrend)
+    const naive  = runs.map(endpoints)
+
+    expect(sd(fitted)).toBeLessThan(sd(naive) / 1.8)
+    // And it is not quieter by being wrong: still centred on the real trend.
+    expect(mean(fitted)).toBeCloseTo(5, 0)
   })
 
-  it('returns null for null input', () => {
-    expect(computeHashRateTrend(null)).toBeNull()
+  it('screens readings it cannot use instead of letting them into the fit', () => {
+    const clean = linear(10)
+    const dirty = clean.map((h, i) => (i === 5 ? { avgHashrate: NaN } : h))
+    // The bad entry is dropped, and the remaining 29 still describe the same
+    // line, so the answer is unchanged rather than NaN.
+    expect(computeHashRateTrend(dirty)).toBeCloseTo(10, 6)
+    expect(computeHashRateTrend(clean.map((h, i) => (i === 5 ? { avgHashrate: 0 } : h)))).toBeCloseTo(10, 6)
+    expect(computeHashRateTrend(clean.map((h, i) => (i === 5 ? {} : h)))).toBeCloseTo(10, 6)
   })
 
-  it('returns null for an empty array', () => {
-    expect(computeHashRateTrend([])).toBeNull()
+  // A dropped entry must leave a hole in x. Closing the gap would shorten the
+  // span the fit is scaled across and shrink every figure that follows a
+  // missing day.
+  it('keeps a dropped reading as a gap rather than closing up the series', () => {
+    const clean = linear(12)
+    const holed = clean.filter((_, i) => i !== 10)      // index collapses
+    const gapped = clean.map((h, i) => (i === 10 ? { avgHashrate: null } : h))
+    expect(computeHashRateTrend(gapped)).toBeCloseTo(12, 6)
+    // The naive version, with the gap closed, spans one day fewer.
+    expect(computeHashRateTrend(holed)).not.toBeCloseTo(12, 6)
   })
 
-  it('returns null for a single-element array', () => {
-    expect(computeHashRateTrend([{ avgHashrate: 800e18 }])).toBeNull()
+  // The finding from reviewing this change. Interior gaps were always handled,
+  // and an end gap silently shortened the window instead: a dropped newest
+  // bucket turned +10% into 9.66%, still labelled 30d and still fed to a
+  // 30-day anchor. The span is the array's now, not the survivors'.
+  it.each([
+    ['the newest reading', [29]],
+    ['the newest two', [28, 29]],
+    ['the oldest reading', [0]],
+    ['both ends at once', [0, 29]],
+    ['an interior reading', [10]],
+    ['an end and an interior', [10, 29]],
+  ])('reports the same trend when %s is screened out', (_label, drop) => {
+    const clean = linear(10)
+    const holed = clean.map((h, i) => (drop.includes(i) ? { avgHashrate: 0 } : h))
+    expect(computeHashRateTrend(holed)).toBeCloseTo(10, 6)
   })
 
-  it('returns null when the first hashrate is zero (division guard)', () => {
-    expect(computeHashRateTrend([{ avgHashrate: 0 }, { avgHashrate: 800e18 }])).toBeNull()
+  // The other half of that fix: the span is only legitimate to project across
+  // because the fit covers it. Past half the window the survivors are being
+  // extrapolated further than they were measured over, which amplifies
+  // whatever few readings are left rather than reporting a 30-day trend.
+  it('refuses a fit that would be projected further than it was measured over', () => {
+    const clean = linear(10)
+    const thin = clean.map((h, i) => (i <= 12 ? h : { avgHashrate: 0 }))  // covers 12 of 29
+    expect(computeHashRateTrend(thin)).toBeNull()
+  })
+
+  it('still answers when the fit covers at least half the window', () => {
+    const clean = linear(10)
+    const half = clean.map((h, i) => (i <= 15 ? h : { avgHashrate: 0 }))  // covers 15 of 29
+    expect(computeHashRateTrend(half)).toBeCloseTo(10, 6)
+  })
+
+  it.each([
+    ['null input', null],
+    ['not an array', { avgHashrate: 1e21 }],
+    ['an empty array', []],
+    ['a single reading', [{ avgHashrate: 1e21 }]],
+    ['nothing usable', [{ avgHashrate: 0 }, { avgHashrate: -5 }, { avgHashrate: NaN }]],
+  ])('returns null for %s', (_label, input) => {
+    expect(computeHashRateTrend(input)).toBeNull()
+  })
+
+  // A flat series that jumps at the end is convex, so the least-squares line
+  // runs *below zero* where the series starts — here the fit begins at
+  // -18.8e18. A percentage of a negative starting hash rate is not a reading,
+  // so it is refused rather than reported with a sign nobody can interpret.
+  it('refuses a fit that extrapolates to a non-positive start', () => {
+    const convex = [1, 1, 1, 100].map(v => ({ avgHashrate: v * 1e18 }))
+    expect(computeHashRateTrend(convex)).toBeNull()
+  })
+
+  it('still reports an ordinary steep decline, which fits to a positive start', () => {
+    // The guard above must not swallow a real collapse: a falling series has
+    // its *largest* fitted value at the start, so it can never trip it.
+    const falling = [10, 8, 6, 4, 2].map(v => ({ avgHashrate: v * 1e18 }))
+    const r = computeHashRateTrend(falling)
+    expect(r).toBeLessThan(-50)
+    expect(Number.isFinite(r)).toBe(true)
   })
 })
 
