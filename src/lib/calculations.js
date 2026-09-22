@@ -1,3 +1,4 @@
+import { CONGESTED_AT_BLOCKS } from './mempool.js'
 // Build: confirm `npm run build` passes before running tests.
 
 export function computeAthDistance(priceUsd, athUsd) {
@@ -81,7 +82,7 @@ export const VIBE_ANCHORS = Object.freeze({
   // log10(1 + blocks of backlog bidding above the relay floor). 0 blocks is a
   // clear chain, 30 is the top of the "Congested" band. Log for the same reason
   // the fee tier is read through log10 — a fee market is log-distributed.
-  backlogLog10: { cold: 0, hot: Math.log10(1 + 30) },
+  backlogLog10: { cold: 0, hot: Math.log10(1 + CONGESTED_AT_BLOCKS) },
 })
 
 // A score is only shown when enough of it is real. Both conditions matter:

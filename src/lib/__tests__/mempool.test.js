@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   mempoolBacklogBlocks, parseFeeHistogram, backlogBarPct,
   BLOCK_VSIZE, BACKLOG_MIN_FEE_RATE, BACKLOG_BAR_FULL_BLOCKS,
-  HISTOGRAM_OVERSHOOT_TOLERANCE,
+  HISTOGRAM_OVERSHOOT_TOLERANCE, CONGESTED_AT_BLOCKS,
 } from '../mempool.js'
+import { backlogBand } from '../scales.js'
+import { VIBE_ANCHORS } from '../calculations.js'
 
 // A histogram shaped like the days this change was written against: almost
 // everything at the relay floor, a little above it. Totals to 41M vbytes, the
@@ -118,11 +120,30 @@ describe('mempoolBacklogBlocks', () => {
     expect(mempoolBacklogBlocks({ fee_histogram: [[5, 2_000_000]] })).toBe(2)
   })
 
+  // An empty histogram is the one case where `[]` is an answer rather than a
+  // failure: a chain with nothing queued reports exactly that, and it is the
+  // "Clear" day this whole change exists to be able to show. Refusing it would
+  // hide the indicator on the day it is most correct.
+  it.each([
+    ['vsize of zero', { count: 0, vsize: 0, fee_histogram: [] }],
+    ['no vsize and no transactions', { count: 0, fee_histogram: [] }],
+  ])('reads an empty histogram beside an empty mempool (%s) as zero backlog', (_label, input) => {
+    expect(mempoolBacklogBlocks(input)).toBe(0)
+    expect(backlogBand(mempoolBacklogBlocks(input)).label).toBe('Clear')
+  })
+
+  // The same `[]` beside a mempool with real size in it means the field did
+  // not populate: the buckets cannot be empty while the transactions they
+  // describe are not.
+  it('refuses an empty histogram beside a mempool that has size in it', () => {
+    expect(mempoolBacklogBlocks({ count: 84_000, vsize: 41_000_000, fee_histogram: [] })).toBeNull()
+  })
+
   it.each([
     ['a missing mempool', null],
     ['an undefined mempool', undefined],
     ['a mempool with no histogram', { count: 1, vsize: 41_000_000 }],
-    ['an empty histogram', { count: 1, vsize: 41_000_000, fee_histogram: [] }],
+    ['an empty histogram beside a full mempool', { count: 1, vsize: 41_000_000, fee_histogram: [] }],
   ])('answers null for %s, never zero', (_label, input) => {
     // Null and zero are different claims: one is "we cannot read this", the
     // other is "the chain is clear". Callers hide the first and draw the second.
@@ -158,5 +179,27 @@ describe('backlogBarPct', () => {
 
   it.each([[null], [undefined], [NaN], [-1]])('answers null for %p', input => {
     expect(backlogBarPct(input)).toBeNull()
+  })
+})
+
+// The bar, the bands and the Vibe Score's hot anchor all describe the same
+// point, and it used to be written out three times. Retuning the band boundary
+// then left the bar saturating early and the score's anchor on the old figure,
+// with every gate in the repo still green — so this is the test that fails if
+// any of the three drifts from the other two.
+describe('CONGESTED_AT_BLOCKS is the one figure all three scales share', () => {
+  it('is where the band becomes Congested', () => {
+    expect(backlogBand(CONGESTED_AT_BLOCKS).label).toBe('Congested')
+    expect(backlogBand(CONGESTED_AT_BLOCKS - 0.01).label).toBe('Busy')
+  })
+
+  it('is where the bar reads full', () => {
+    expect(BACKLOG_BAR_FULL_BLOCKS).toBe(CONGESTED_AT_BLOCKS)
+    expect(backlogBarPct(CONGESTED_AT_BLOCKS)).toBeCloseTo(100, 10)
+    expect(backlogBarPct(CONGESTED_AT_BLOCKS - 1)).toBeLessThan(100)
+  })
+
+  it("is the hot anchor of the score's backlog input", () => {
+    expect(VIBE_ANCHORS.backlogLog10.hot).toBeCloseTo(Math.log10(1 + CONGESTED_AT_BLOCKS), 12)
   })
 })

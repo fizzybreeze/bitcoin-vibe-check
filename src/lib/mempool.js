@@ -45,6 +45,19 @@ const num = v => {
 
 const isNum = v => typeof v === 'number' && Number.isFinite(v)
 
+// Where a backlog stops being measured and starts being off the scale: the
+// bottom of the "Congested" band, the point the bar reads full, and the hot
+// anchor of the Vibe Score's backlog input.
+//
+// **One constant for all three on purpose.** It was written out three times —
+// here, as `max: 30` in `scales.js`, and as `Math.log10(1 + 30)` in
+// `calculations.js` — each commented as tracking the other two. Retuning the
+// band boundary then left the bar saturating early and the score's anchor
+// pinned to the old figure, with every gate in the repo still green. That is
+// this repo's oldest recurring defect (two sources of truth for one number),
+// and three copies is worse than two.
+export const CONGESTED_AT_BLOCKS = 30
+
 /** One block's worth of block space, in vbytes. */
 export const BLOCK_VSIZE = 1_000_000
 
@@ -90,10 +103,26 @@ export function parseFeeHistogram(histogram) {
  * as zero — an empty mempool and an unreadable one are not the same claim.
  */
 export function mempoolBacklogBlocks(mempool, minFeeRate = BACKLOG_MIN_FEE_RATE) {
+  const reported = num(mempool?.vsize)
+
+  // An empty histogram beside an *empty mempool* is a chain with nothing
+  // queued, which is a reading of zero rather than a failure to read — and it
+  // is precisely the "Clear" day this whole change exists to be able to show,
+  // so refusing it would hide the indicator on the one day it is most correct.
+  //
+  // Beside a mempool with real size in it, the same `[]` means something else:
+  // the field did not populate, because the buckets cannot be empty while the
+  // transactions they describe are not. `parseFeeHistogram` still refuses `[]`
+  // on its own, because at that level there genuinely are no buckets to read;
+  // it is the pairing with the reported size that makes it a zero here.
+  if (Array.isArray(mempool?.fee_histogram) && mempool.fee_histogram.length === 0) {
+    const size = reported ?? num(mempool?.count)
+    return size === 0 ? 0 : null
+  }
+
   const buckets = parseFeeHistogram(mempool?.fee_histogram)
   if (buckets == null) return null
 
-  const reported = num(mempool?.vsize)
   if (reported != null && reported > 0) {
     const total = buckets.reduce((sum, b) => sum + b.vsize, 0)
     if (total > reported * (1 + HISTOGRAM_OVERSHOOT_TOLERANCE)) return null
@@ -103,9 +132,8 @@ export function mempoolBacklogBlocks(mempool, minFeeRate = BACKLOG_MIN_FEE_RATE)
   return bidding / BLOCK_VSIZE
 }
 
-// Where the bar reads full. The top of the "Congested" band, so the bar spans
-// the whole range the labels describe rather than saturating inside it.
-export const BACKLOG_BAR_FULL_BLOCKS = 30
+// Kept as an alias because the bar is what most callers mean by "full scale".
+export const BACKLOG_BAR_FULL_BLOCKS = CONGESTED_AT_BLOCKS
 
 /**
  * Bar fill for a backlog, 0–100.
@@ -118,6 +146,6 @@ export const BACKLOG_BAR_FULL_BLOCKS = 30
  */
 export function backlogBarPct(blocks) {
   if (!isNum(blocks) || blocks < 0) return null
-  const pct = (Math.log10(1 + blocks) / Math.log10(1 + BACKLOG_BAR_FULL_BLOCKS)) * 100
+  const pct = (Math.log10(1 + blocks) / Math.log10(1 + CONGESTED_AT_BLOCKS)) * 100
   return Math.min(100, pct)
 }

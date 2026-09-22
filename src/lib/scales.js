@@ -23,6 +23,8 @@
 
 import { token } from './palette.js'
 
+import { CONGESTED_AT_BLOCKS } from './mempool.js'
+
 const band = (label, name, extra = {}) => ({ label, token: name, ...extra })
 
 // ── The Vibe Score temperature ladder ────────────────────────────────────────
@@ -106,7 +108,7 @@ const CONGESTION_BANDS = Object.freeze([
   { max: 1,        label: 'Clear',     text: 'text-up',   bar: 'bg-up',   token: 'up' },
   { max: 3,        label: 'Light',     text: 'text-up',   bar: 'bg-up',   token: 'up' },
   { max: 10,       label: 'Moderate',  text: 'text-warn', bar: 'bg-warn', token: 'warn' },
-  { max: 30,       label: 'Busy',      text: 'text-warn', bar: 'bg-warn', token: 'warn' },
+  { max: CONGESTED_AT_BLOCKS, label: 'Busy', text: 'text-warn', bar: 'bg-warn', token: 'warn' },
   { max: Infinity, label: 'Congested', text: 'text-down', bar: 'bg-down', token: 'down' },
 ])
 
