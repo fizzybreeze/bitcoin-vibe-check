@@ -66,7 +66,7 @@ import {
   computeIssuedSupply, computeAthDistance,
 } from '../../src/lib/calculations.js'
 import { blocksToNextHalving, epochPercentage } from '../../src/utils.js'
-import { congestionBand } from '../../src/lib/scales.js'
+import { backlogBand } from '../../src/lib/scales.js'
 import { quoteForWeek } from '../../src/lib/quotes.js'
 import { vibeInputsFromMetrics, vibeSufficiency } from './metrics.js'
 
@@ -486,10 +486,10 @@ export function networkSection(week) {
 
   // Fees and the mempool.
   const second = []
-  const band = isNum(m.mempool_vsize_mb) ? congestionBand(m.mempool_vsize_mb * 1e6) : null
+  const band = isNum(m.mempool_backlog_blocks) ? backlogBand(m.mempool_backlog_blocks) : null
   if (band) {
     const queued = isNum(m.mempool_tx_count) ? `, with ${fmtInt(m.mempool_tx_count)} transactions queued` : ''
-    second.push(`Mempool congestion is ${band.label}${queued}.`)
+    second.push(`Mempool congestion is ${band.label}, ${m.mempool_backlog_blocks.toFixed(1)} blocks of backlog above the relay floor${queued}.`)
   }
   const tiers = [
     ['fastest',  m.fee_fastest_sv],

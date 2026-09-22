@@ -46,11 +46,25 @@ export const lightningFixture = {
   },
 }
 
+// The histogram is what congestion is read from — see `src/lib/mempool.js`.
+// It was `[]` until v1.22.0, which is why nothing in this repo had ever
+// exercised the field. Buckets sum to `vsize`, because the parser refuses a
+// histogram that overshoots the total the same response reports.
+//
+// 6.5M vbytes bid at 2 sat/vB or above, so 6.5 blocks of backlog: "Moderate",
+// and far enough from both boundaries (3 and 10) that a small change to the
+// parser moves the number without silently moving the band.
 export const mempoolFixture = {
   count: 14203,
-  vsize: 25_000_000,  // Moderate congestion (5M–50M vbytes)
+  vsize: 25_000_000,
   total_fee: 950000000,
-  fee_histogram: [],
+  fee_histogram: [
+    [1, 18_500_000],
+    [2, 3_000_000],
+    [5, 2_000_000],
+    [12, 1_000_000],
+    [40, 500_000],
+  ],
 }
 
 // CoinPaprika /v1/tickers/btc-bitcoin — price, volume, change, ATH

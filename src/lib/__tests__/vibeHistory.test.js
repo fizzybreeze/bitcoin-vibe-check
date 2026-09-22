@@ -19,6 +19,7 @@ function metrics(overrides = {}) {
     hashrate_trend_30d:   3,
     fee_fastest_sv:       8,
     mempool_tx_count:     90_000,
+    mempool_backlog_blocks: 4,
     ...overrides,
   }
 }
@@ -48,7 +49,9 @@ describe('buildVibeHistory', () => {
     const points = buildVibeHistory([row('2026-09-10')], { now: NOW })
     expect(points).toHaveLength(1)
     expect(points[0].date).toBe('2026-09-10')
-    expect(points[0].score).toBe(46)
+    // 46 before v1.22.0, when the congestion dimension's second input was the
+    // transaction count rather than the backlog above the relay floor.
+    expect(points[0].score).toBe(47)
   })
 
   it('moves with the stored inputs rather than reporting a constant', () => {

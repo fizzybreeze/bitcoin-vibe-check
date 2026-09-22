@@ -34,7 +34,13 @@ function fullSources(overrides = {}) {
     feesRaw: { fastestFee: 8, halfHourFee: 5, hourFee: 3, economyFee: 1 },
     blockHeightRaw: 961_279,
     diffRaw: { difficultyChange: 1.09, remainingBlocks: 353 },
-    mempoolRaw: { count: 91_570, vsize: 44_060_000 },
+    mempoolRaw: {
+      count: 91_570,
+      vsize: 44_060_000,
+      // The congestion input is read from here, not from `count` — see
+      // `src/lib/mempool.js`. 2.06M vbytes at 2 sat/vB or above is 2.06 blocks.
+      fee_histogram: [[1, 42_000_000], [2, 1_500_000], [6, 400_000], [25, 160_000]],
+    },
     lightningRaw: { latest: { total_capacity: 4.8966e11, channel_count: 41_087, node_count: 17_437 } },
     fngRaw: { data: [{ value: '25', value_classification: 'Extreme Fear' }] },
     hashrate3dRaw: { currentHashrate: 9.407e20 },
@@ -178,7 +184,8 @@ describe('buildMetrics, the rest of the row', () => {
       'fear_greed_value', 'fee_1h_sv', 'fee_30m_sv', 'fee_economy_sv',
       'fee_fastest_sv', 'hashrate_eh', 'hashrate_trend_30d',
       'lightning_capacity_btc', 'lightning_channels', 'lightning_nodes',
-      'ma_200d_usd', 'market_cap_usd', 'mayer_multiple', 'mempool_tx_count',
+      'ma_200d_usd', 'market_cap_usd', 'mayer_multiple',
+      'mempool_backlog_blocks', 'mempool_tx_count',
       'mempool_vsize_mb', 'mvrv_value', 'mvrv_date', 'power_law_fair_value',
       'price_change_30d_pct', 'price_usd', 'remaining_blocks', 'volume_24h_usd',
     ].sort())

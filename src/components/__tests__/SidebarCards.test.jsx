@@ -83,15 +83,44 @@ describe('NetworkFeesCard', () => {
     expect(screen.getByText('≈ $6.25')).toBeInTheDocument()
   })
 
-  it('reads the congestion bands off mempool vsize', () => {
-    const { rerender } = renderCard({ mempool: { vsize: 4_999_999, count: 1 } })
-    expect(screen.getByText('Low')).toHaveClass('text-up')
+  // Blocks of backlog bidding at 2 sat/vB or above, read from `fee_histogram`.
+  // `vsize` only has to be large enough not to trip the overshoot guard.
+  const mempoolWith = (aboveFloor, count = 1) => ({
+    count,
+    vsize: 400_000_000,
+    fee_histogram: [[1, 30_000_000], [4, aboveFloor]],
+  })
 
-    rerender(<NetworkFeesCard fees={fees} mempool={{ vsize: 5_000_000, count: 1 }} loading={false} price={0} />)
+  it('reads the congestion bands off the backlog above the relay floor', () => {
+    const { rerender } = renderCard({ mempool: mempoolWith(500_000) })   // 0.5 blocks
+    expect(screen.getByText('Clear')).toHaveClass('text-up')
+
+    rerender(<NetworkFeesCard fees={fees} mempool={mempoolWith(5_000_000)} loading={false} price={0} />)
     expect(screen.getByText('Moderate')).toHaveClass('text-warn')
 
-    rerender(<NetworkFeesCard fees={fees} mempool={{ vsize: 50_000_001, count: 1 }} loading={false} price={0} />)
-    expect(screen.getByText('High')).toHaveClass('text-down')
+    rerender(<NetworkFeesCard fees={fees} mempool={mempoolWith(60_000_000)} loading={false} price={0} />)
+    expect(screen.getByText('Congested')).toHaveClass('text-down')
+  })
+
+  // The defect this replaced: an idle chain was reported as Moderate because
+  // the measure was the mempool's total size, most of which is at the floor.
+  it('calls an idle mempool Clear however large its total vsize is', () => {
+    renderCard({ mempool: { count: 84_000, vsize: 41_000_000,
+      fee_histogram: [[1, 40_800_000], [2, 150_000], [3, 50_000]] } })
+    expect(screen.getByText('Clear')).toBeInTheDocument()
+    expect(screen.queryByText('Moderate')).not.toBeInTheDocument()
+  })
+
+  it('hides the congestion row when the histogram is unusable rather than calling it Clear', () => {
+    // An unreadable mempool is not an idle one. A cumulative histogram sums to
+    // far more than the vsize beside it, which is how an unexpected shape is
+    // caught instead of being reported as a backlog.
+    renderCard({ mempool: { count: 84_000, vsize: 41_000_000, fee_histogram: [] } })
+    expect(screen.queryByText(/Mempool Congestion/)).not.toBeInTheDocument()
+
+    renderCard({ mempool: { count: 84_000, vsize: 41_000_000,
+      fee_histogram: [[1, 41_000_000], [2, 40_000_000], [3, 30_000_000]] } })
+    expect(screen.queryByText(/Mempool Congestion/)).not.toBeInTheDocument()
   })
 
   it('hides the congestion indicator rather than the card when mempool is missing', () => {

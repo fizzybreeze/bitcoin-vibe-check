@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ALL_BANDS, VIBE_BANDS, FNG_BANDS,
   vibeLabelClass, vibeLabelHex, fngLabelClass, fngLabelHex, fngScoreHex,
-  blockTimeBand, congestionBand, mvrvBand, powerLawBand,
+  blockTimeBand, backlogBand, mvrvBand, powerLawBand,
 } from '../lib/scales.js'
 import { PALETTE, THEMES } from '../lib/palette.js'
 
@@ -105,16 +105,30 @@ describe('block time', () => {
 })
 
 describe('mempool congestion', () => {
+  // Blocks of backlog bidding above the relay floor, not the mempool's total
+  // vsize. The old bands were 5 MB and 50 MB against a total that never left
+  // 38–46 MB across 50 captured days, so they answered Moderate every time.
   it.each([
-    [0, 'Low'], [4_999_999, 'Low'],
-    [5_000_000, 'Moderate'], [50_000_000, 'Moderate'],
-    [50_000_001, 'High'],
-  ])('calls %i vbytes %s', (vsize, label) => {
-    expect(congestionBand(vsize).label).toBe(label)
+    [0, 'Clear'], [0.99, 'Clear'],
+    [1, 'Light'], [2.99, 'Light'],
+    [3, 'Moderate'], [9.99, 'Moderate'],
+    [10, 'Busy'], [29.99, 'Busy'],
+    [30, 'Congested'], [500, 'Congested'],
+  ])('calls %f blocks of backlog %s', (blocks, label) => {
+    expect(backlogBand(blocks).label).toBe(label)
   })
 
-  it('answers null when the mempool fetch failed', () => {
-    expect(congestionBand(null)).toBeNull()
+  it('answers null when the backlog could not be read', () => {
+    expect(backlogBand(null)).toBeNull()
+    expect(backlogBand(undefined)).toBeNull()
+    expect(backlogBand(NaN)).toBeNull()
+  })
+
+  // An idle chain has to be able to say so. This is the assertion that would
+  // have failed on the shipped bands, which had no label below "Moderate"
+  // reachable by any mempool this app has ever observed.
+  it('calls an idle chain Clear', () => {
+    expect(backlogBand(0.2).label).toBe('Clear')
   })
 })
 

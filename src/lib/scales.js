@@ -23,6 +23,8 @@
 
 import { token } from './palette.js'
 
+import { CONGESTED_AT_BLOCKS } from './mempool.js'
+
 const band = (label, name, extra = {}) => ({ label, token: name, ...extra })
 
 // ── The Vibe Score temperature ladder ────────────────────────────────────────
@@ -92,23 +94,30 @@ export function blockTimeBand(mins) {
 }
 
 // ── Mempool congestion ───────────────────────────────────────────────────────
-// Read from the mempool's virtual size. Not to be confused with
-// `computeMempoolPressurePct`, which feeds the Vibe Score's congestion
-// dimension from the transaction *count* — two measures of the same queue, so
-// the percentage drawn here is not the one inside the score.
+// Backlog in **blocks** of block space bidding above the relay floor, from
+// `src/lib/mempool.js`. Read that module before touching these numbers: until
+// v1.22.0 this read the mempool's *total vsize* against thresholds of 5 MB and
+// 50 MB, and across 50 days of captured snapshots that answered "Moderate" every
+// single time, because the observed total never left 38 to 46 MB.
+//
+// The function is named for what it takes. It was `congestionBand(vsize)`, and a
+// caller left on the old units would pass ~41,000,000 and be told "Congested" on
+// an idle chain — a wrong answer that looks like a working feature, so the
+// rename is what turns a missed call site into an import error.
 const CONGESTION_BANDS = Object.freeze([
-  { max: 5_000_000,  label: 'Low',      text: 'text-up',   bar: 'bg-up',   token: 'up' },
-  { max: 50_000_000, label: 'Moderate', text: 'text-warn', bar: 'bg-warn', token: 'warn' },
-  { max: Infinity,   label: 'High',     text: 'text-down', bar: 'bg-down', token: 'down' },
+  { max: 1,        label: 'Clear',     text: 'text-up',   bar: 'bg-up',   token: 'up' },
+  { max: 3,        label: 'Light',     text: 'text-up',   bar: 'bg-up',   token: 'up' },
+  { max: 10,       label: 'Moderate',  text: 'text-warn', bar: 'bg-warn', token: 'warn' },
+  { max: CONGESTED_AT_BLOCKS, label: 'Busy', text: 'text-warn', bar: 'bg-warn', token: 'warn' },
+  { max: Infinity, label: 'Congested', text: 'text-down', bar: 'bg-down', token: 'down' },
 ])
 
-export function congestionBand(vsize) {
-  if (vsize == null) return null
-  // `<` for the first boundary and `<=` for the second, preserving the exact
-  // thresholds the two implementations this replaces both used.
-  if (vsize < CONGESTION_BANDS[0].max) return CONGESTION_BANDS[0]
-  return vsize <= CONGESTION_BANDS[1].max ? CONGESTION_BANDS[1] : CONGESTION_BANDS[2]
+export function backlogBand(backlogBlocks) {
+  if (backlogBlocks == null || !Number.isFinite(backlogBlocks)) return null
+  return CONGESTION_BANDS.find(b => backlogBlocks < b.max) ?? CONGESTION_BANDS[CONGESTION_BANDS.length - 1]
 }
+
+export { CONGESTION_BANDS as BACKLOG_BANDS }
 
 // ── MVRV ─────────────────────────────────────────────────────────────────────
 // The five bands the live card has always drawn. `ShareCanvas` drew the same

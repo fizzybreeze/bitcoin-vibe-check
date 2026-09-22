@@ -122,6 +122,22 @@ async function main() {
     )
   }
 
+  // `mempool_backlog_blocks` is the one input parsed from a field whose shape
+  // this repo has never seen live (see `src/lib/mempool.js`). It is called out
+  // separately from the null list above because its consequence does not
+  // follow from "a column is null": if it stops parsing, *every* row loses it,
+  // every row stops being replayable, and the Vibe Score sparkline goes blank
+  // and stays blank — while the live score carries on rendering on
+  // renormalised weights, so nothing on the dashboard looks broken.
+  if (metrics.mempool_backlog_blocks == null) {
+    console.warn(
+      '[snapshot] mempool_backlog_blocks is null — fee_histogram did not parse. ' +
+      'No row captured while this persists will replay into the Vibe Score ' +
+      'sparkline. The congestion row on the dashboard hides for the same ' +
+      'reason, so check whether it is showing.'
+    )
+  }
+
   // Refuse to store a worthless row. Price is the one field every other market
   // metric is anchored to, so if CoinPaprika failed there is nothing useful to
   // record — better to go red in the Actions tab than to pollute the series

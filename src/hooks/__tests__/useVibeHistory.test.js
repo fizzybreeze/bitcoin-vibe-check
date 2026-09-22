@@ -16,7 +16,7 @@ function metrics() {
   return {
     fear_greed_value: 50, mayer_multiple: 1.2, mvrv_value: 2.0,
     price_change_30d_pct: 5, hashrate_trend_30d: 3,
-    fee_fastest_sv: 8, mempool_tx_count: 90_000,
+    fee_fastest_sv: 8, mempool_tx_count: 90_000, mempool_backlog_blocks: 4,
   }
 }
 
