@@ -104,12 +104,22 @@ export const krakenTickerFixture = {
 // /mining/hashrate/3d — current network hash rate
 export const hashrate3dFixture = { currentHashrate: 800e18 }
 
-// /mining/hashrate/1m — two entries so the trend calculation has a first and last
+// /mining/hashrate/1m — a month of daily averages, which is what the endpoint
+// actually returns. It held **two** entries until v1.23.0, and with two points
+// a least-squares fit is the line through them, so the e2e suite could not run
+// the real path at all: no loop, no screening, no gap handling.
+//
+// The series is clean and linear on purpose. A fitted trend and the old
+// endpoint difference agree exactly on clean data, so widening this exercises
+// the real 30-point path while leaving every rendered figure — and therefore
+// the `btc-price` baseline — byte-identical. **It does not distinguish the two
+// estimators**; nothing in a browser can, on data with no noise in it. The unit
+// tests are what separate them, and the mutation round is what shows they do.
 export const hashrate1mFixture = {
-  hashrates: [
-    { avgHashrate: 780e18 },
-    { avgHashrate: 800e18 },
-  ],
+  hashrates: Array.from({ length: 30 }, (_, i) => ({
+    timestamp: 1_757_000_000 + i * 86_400,
+    avgHashrate: 780e18 + (20e18 * i) / 29,
+  })),
 }
 
 // /api/chain-data — serverless proxy response for BGeometrics data

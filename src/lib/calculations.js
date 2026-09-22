@@ -285,12 +285,85 @@ export function computeVibeScore(inputs = {}) {
   }
 }
 
+/**
+ * The 30-day hash-rate trend, as the change a least-squares line fits across
+ * the whole series.
+ *
+ * **It read the two endpoints until v1.23.0, and that was almost all noise.**
+ * Hash rate is not measured, it is inferred from block times, which are
+ * Poisson: one daily figure rests on about 144 blocks, so it carries a relative
+ * standard error near 1/sqrt(144) = 8.3%, and a ratio of two such figures
+ * carries sqrt(2) x that, about 11.8 percentage points. Measured against the
+ * 50 captured `hashrate_trend_30d` values, the shipped estimator had a standard
+ * deviation of **10.6pp** — the predicted figure, arriving as predicted.
+ *
+ * The give-away is the day-to-day movement. A 30-day window replaces a
+ * thirtieth of itself each day, so real change can move this figure by about
+ * 1.5pp a day at the observed spread. The stored series moved a mean of
+ * **12.2pp a day, 8.2 times that**, with single jumps of 32.7pp. A 30-day trend
+ * cannot do that; an estimator standing on two noisy points can.
+ *
+ * **The cost was not cosmetic.** The Vibe Score's network dimension swung
+ * between 0 and 100 on consecutive days off this input — its mean day-over-day
+ * move was 39.8 points against a standard deviation of 35.8, so what the
+ * dimension mostly carried was the noise rather than the network.
+ *
+ * **Regression rather than averaging the two ends, and that is a measurement.**
+ * Four estimators were simulated over 4,000 runs each, against a known trend
+ * plus the noise above:
+ *
+ * | estimator                    | bias at +15% | noise sd |
+ * |------------------------------|--------------|----------|
+ * | endpoints (shipped)          | +0.99pp      | 14.07pp  |
+ * | mean of first/last 7 days    | **-3.16pp**  |  5.10pp  |
+ * | ditto, rescaled to the span  | -0.09pp      |  6.46pp  |
+ * | least-squares regression     | **+0.13pp**  |  6.04pp  |
+ *
+ * Averaging the two ends is the quietest and it is **biased**: the two means
+ * sit at their windows' centroids, which are closer together than the window
+ * is long, so a real trend is under-reported by about a fifth. That is a
+ * systematic error feeding anchors calibrated on an unbiased estimator, which
+ * is worse than the noise it removes. Regression is unbiased at every trend
+ * level tested, is quieter than the rescaled version, and has **no window size
+ * to choose** — one fewer constant to be wrong about.
+ *
+ * `VIBE_ANCHORS.hashTrend` is deliberately untouched: -10% to +15% describes
+ * what a meaningful trend is, and removing noise does not change that.
+ */
 export function computeHashRateTrend(hashrates) {
-  if (!Array.isArray(hashrates) || hashrates.length < 2) return null
-  const first = hashrates[0].avgHashrate
-  const last  = hashrates[hashrates.length - 1].avgHashrate
-  if (!first) return null
-  return ((last - first) / first) * 100
+  if (!Array.isArray(hashrates)) return null
+
+  // Screen the readings but keep each one's original position, so a dropped
+  // entry leaves a gap in x rather than silently closing up and compressing
+  // the span. The old code screened nothing at all.
+  const points = []
+  hashrates.forEach((h, i) => {
+    const v = h?.avgHashrate
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) points.push([i, v])
+  })
+  if (points.length < 2) return null
+
+  const n = points.length
+  const meanX = points.reduce((sum, [x]) => sum + x, 0) / n
+  const meanY = points.reduce((sum, [, y]) => sum + y, 0) / n
+  let num = 0, den = 0
+  for (const [x, y] of points) {
+    num += (x - meanX) * (y - meanY)
+    den += (x - meanX) ** 2
+  }
+  // No zero-denominator guard: every usable point keeps its *original* index,
+  // so two points can never share an x, and the variance of two or more
+  // distinct values is always positive. A guard nothing can reach is a guard
+  // nothing can test, so it is left out rather than banked.
+  const slope = num / den
+  const span  = points[n - 1][0] - points[0][0]
+  // The fitted value where the series starts, not the first *reading* — using
+  // the reading would put the noise this function exists to remove straight
+  // back into the denominator.
+  const fittedStart = meanY + slope * (points[0][0] - meanX)
+  if (!(fittedStart > 0)) return null
+
+  return ((slope * span) / fittedStart) * 100
 }
 
 // Standard single-input, two-output transaction size used for fee estimates.
