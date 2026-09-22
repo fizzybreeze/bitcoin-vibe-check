@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { readFeeTiers, FEE_TIERS } from '../feeTiers.js'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { readFeeTiers, FEE_TIERS, FLAT_CAPTION } from '../feeTiers.js'
 
 const at = (hour, half, fastest) => ({ hourFee: hour, halfHourFee: half, fastestFee: fastest })
 
@@ -62,5 +64,57 @@ describe('readFeeTiers', () => {
 
   it('names the mempool.space field each tier reads', () => {
     expect(FEE_TIERS.map(t => t.key)).toEqual(['hourFee', 'halfHourFee', 'fastestFee'])
+  })
+})
+
+describe('the flat caption', () => {
+  const src = f => readFileSync(resolve('src/components', f), 'utf8')
+  const SURFACES = ['NetworkFeesCard.jsx', 'ShareCanvas.jsx']
+
+  // It was written out at both call sites and had already diverged: the card's
+  // copy ended "so paying more buys nothing" and the share image's did not,
+  // while the only test on the share wording matched either. Rewording one
+  // would have left the other — the surface that cannot be re-rendered once
+  // posted — on the old sentence with every gate green.
+  // Asserted on the *render* rather than on the name: `FLAT_CAPTION` appears on
+  // the import line too, so a file that imports it and then hand-writes a
+  // sentence anyway satisfies a bare name scan. The v1.16.0 trap — a surface
+  // check that matched the import and stayed green when the call was deleted.
+  it.each(SURFACES)('%s renders the shared caption rather than its own', file => {
+    expect(src(file)).toMatch(/\{FLAT_CAPTION\}/)
+  })
+
+  // The import line and the tooltip are both stripped first: the tooltip
+  // legitimately explains what a premium for priority is, so scanning the whole
+  // file for the phrase flags correct copy. What this forbids is a second
+  // *rendered* sentence beside the shared one.
+  it.each(SURFACES)('%s does not hand-write a caption beside it', file => {
+    const body = src(file)
+      .replace(/^import .*$/gm, '')
+      .replace(/const FEES_TOOLTIP = '[^']*'/, '')
+    expect(body).not.toMatch(/premium for priority|paying more buys nothing/i)
+  })
+
+  // Flatness means there is no premium for priority. It does **not** mean the
+  // rate is the relay floor — three tiers agreeing at 5 sat/vB is a flat market
+  // nowhere near it. All 22 observed flat days sat at exactly 1, so a floor
+  // claim would have been true of the whole sample and wrong the first time it
+  // mattered. The card's tooltip carried exactly that claim after the caption
+  // had been corrected for it, on the one surface nothing tested.
+  it('never explains the collapse by naming the relay floor', () => {
+    const tooltip = src('NetworkFeesCard.jsx').match(/const FEES_TOOLTIP = '([^']*)'/)[1]
+    for (const copy of [FLAT_CAPTION, tooltip]) {
+      for (const sentence of copy.split(/(?<=\.)\s+/)) {
+        const saysFlat  = /same rate|same number|one price|one figure/.test(sentence)
+        const saysFloor = /relay floor/.test(sentence)
+        expect(saysFlat && saysFloor,
+          `copy ties the collapse to the relay floor: "${sentence}"`).toBe(false)
+      }
+    }
+  })
+
+  it('states the condition the card actually collapses on', () => {
+    const tooltip = src('NetworkFeesCard.jsx').match(/const FEES_TOOLTIP = '([^']*)'/)[1]
+    expect(tooltip).toMatch(/every tier carries the same rate/)
   })
 })

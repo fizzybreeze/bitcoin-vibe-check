@@ -29,14 +29,22 @@ test('collapses the fee tiers to one figure when every tier carries the same rat
   await expect(card).not.toContainText('~3 blocks')
   await expect(card).not.toContainText('~6 blocks')
 
-  // The collapsed row is a layout nothing else here has rendered, so check it
-  // fits its own card rather than trusting that a wider box always does.
-  const overhang = await card.evaluate(el => {
-    const box = el.getBoundingClientRect()
-    const row = el.querySelector('[data-testid="fees-flat"]').getBoundingClientRect()
-    return Math.max(0, row.right - box.right, box.left - row.left)
+  // The collapsed row is a layout nothing else here has rendered, so check its
+  // content fits.
+  //
+  // **Measured on the row's own rect this could not fail**: it is a stretched
+  // flex child, so its width is the card's content width whatever it holds.
+  // Both expressions against the same mutation in one run — 200 characters
+  // forced into the value span — give **0 for the difference of the two rects
+  // and 1,562px for this one**, with the document scrolling past its own
+  // window. Only an explicit width on the div turned the old form red, which
+  // is what the first mutation round happened to use. `scrollWidth` against
+  // `clientWidth` is what sees content overflow.
+  const overflow = await card.evaluate(el => {
+    const flat = el.querySelector('[data-testid="fees-flat"]')
+    return Math.max(0, flat.scrollWidth - flat.clientWidth, el.scrollWidth - el.clientWidth)
   })
-  expect(overhang, 'the collapsed fee row overhangs its card').toBe(0)
+  expect(overflow, 'the collapsed fee row overflows its card').toBe(0)
 })
 
 test('keeps the three tiers, labelled in blocks, when the rates differ', async ({ page }) => {

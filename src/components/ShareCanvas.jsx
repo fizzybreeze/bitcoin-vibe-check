@@ -22,7 +22,7 @@ import Wordmark from './Wordmark.jsx'
 // disagreed with the live card's for the same five bands.
 import { backlogBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
 import { mempoolBacklogBlocks } from '../lib/mempool.js'
-import { readFeeTiers } from '../lib/feeTiers.js'
+import { readFeeTiers, FLAT_CAPTION } from '../lib/feeTiers.js'
 import { FONT_STACKS } from '../lib/typography.js'
 // The raster the chart and the sparklines wear, in the one form html2canvas can
 // actually draw — see `crt.js`, which records the measurement. A share image
@@ -337,9 +337,7 @@ function FeesShareCard({ cardData, currency, theme }) {
             {tiers.rate} <span style={{ fontSize: 9, fontWeight: 400, color: p.quiet }}>sat/vB</span>
             {flatFiat && <span style={{ fontSize: 9, fontWeight: 400, color: p.muted }}> {flatFiat}</span>}
           </p>
-          <p style={{ fontSize: 9, color: p.quiet, margin: '3px 0 0' }}>
-            No premium for priority: the next block costs the same as the slow tier
-          </p>
+          <p style={{ fontSize: 9, color: p.quiet, margin: '3px 0 0' }}>{FLAT_CAPTION}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

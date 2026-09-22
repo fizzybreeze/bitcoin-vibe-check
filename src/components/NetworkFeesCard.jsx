@@ -3,10 +3,10 @@ import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
 import { backlogBand } from '../lib/scales.js'
 import { mempoolBacklogBlocks, backlogBarPct } from '../lib/mempool.js'
-import { readFeeTiers } from '../lib/feeTiers.js'
+import { readFeeTiers, FLAT_CAPTION } from '../lib/feeTiers.js'
 import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
-const FEES_TOOLTIP = 'Fee rates in sat/vbyte for getting into the next block, into about three blocks, or into about six. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Tiers are shown in blocks rather than minutes because a block interval is random: it averages ten minutes, but half arrive inside seven and one in ten takes over twenty-three. When nothing is bidding above the 1 sat/vbyte relay floor all three rates are the same number, and the card says so rather than printing one price three times. Congestion is measured as blocks of backlog above that floor, not as the total size of the mempool: most of that total is transactions at the floor that do not clear, so it stays near 40 MB whether the chain is busy or idle.'
+const FEES_TOOLTIP = 'Fee rates in sat/vbyte for getting into the next block, into about three blocks, or into about six. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Tiers are shown in blocks rather than minutes because a block interval is random: it averages ten minutes, but half arrive inside seven and one in ten takes over twenty-three. When every tier carries the same rate there is no premium for priority, and the card shows that one figure rather than printing one price three times. Congestion is measured as blocks of backlog bidding above the 1 sat/vbyte relay floor, not as the total size of the mempool: most of that total is transactions at the floor that do not clear, so it stays near 40 MB whether the chain is busy or idle.'
 
 export default function NetworkFeesCard({ fees, mempool, lightning, loading, price, currencySym }) {
   // Blocks of backlog bidding above the relay floor — the same figure the Vibe
@@ -71,10 +71,7 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
                   <span className="text-xs text-quiet">sat/vB</span>
                   {flatFiat && <span className="text-xs text-quiet tabular-nums">{flatFiat}</span>}
                 </div>
-                <p className="mt-1 text-xs text-quiet">
-                  No premium for priority: the next block costs the same as the slow
-                  tier, so paying more buys nothing.
-                </p>
+                <p className="mt-1 text-xs text-quiet">{FLAT_CAPTION}</p>
               </div>
             )
             : (

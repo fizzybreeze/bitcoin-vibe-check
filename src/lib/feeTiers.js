@@ -51,6 +51,23 @@ export const FEE_TIERS = [
   { key: 'fastestFee',  label: 'Fast',   blocks: 'next block' },
 ]
 
+// The one sentence both surfaces print over the collapsed figure.
+//
+// **It lives here rather than at the two call sites because it was written out
+// twice and had already diverged** — the card's copy ended "so paying more buys
+// nothing" and the share image's did not, while the only test on the share
+// wording was an alternation matching either. So rewording the card would have
+// left the share image, the surface that cannot be re-rendered once posted, on
+// the old sentence with every gate green. This repo's oldest recurring defect,
+// met in copy.
+//
+// **It must not explain the collapse by naming the relay floor.** Flat means
+// there is no premium for priority; it does not mean the rate is the floor. All
+// 22 observed flat days happened to sit at 1 sat/vB, so a floor claim would be
+// true of the entire sample and wrong the first time it mattered.
+export const FLAT_CAPTION =
+  'No premium for priority: the next block costs the same as the slow tier, so paying more buys nothing.'
+
 // A rate of 0 is not something anyone can pay — the relay floor is 1 — so it is
 // screened out rather than drawn as a free transaction.
 const rate = v => (isNum(v) && v > 0 ? v : null)

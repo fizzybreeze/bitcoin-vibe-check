@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import ShareCanvas from '../ShareCanvas.jsx'
 import { PALETTE } from '../../lib/palette.js'
 import { mvrvBand } from '../../lib/scales.js'
+import { FLAT_CAPTION } from '../../lib/feeTiers.js'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -87,7 +88,10 @@ describe('ShareCanvas — Network Fees', () => {
   it('collapses to one figure when every tier carries the same rate', () => {
     renderFeesCard({ hourFee: 1, halfHourFee: 1, fastestFee: 1 })
     expect(screen.getByText('Every Tier')).toBeTruthy()
-    expect(screen.getByText(/paying more buys nothing|no premium for priority/i)).toBeTruthy()
+    // The exact shared constant, not an alternation that matches either of two
+    // divergent literals — which is how the card's caption and this one had
+    // already come apart while the test stayed green.
+    expect(screen.getByText(FLAT_CAPTION)).toBeTruthy()
     expect(screen.queryByText('Slow')).toBeNull()
     expect(screen.queryByText('Medium')).toBeNull()
     expect(screen.queryByText('Fast')).toBeNull()
