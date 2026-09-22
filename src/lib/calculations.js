@@ -78,6 +78,10 @@ export const VIBE_ANCHORS = Object.freeze({
   hashTrend: { cold: -10, hot: 15 },
   // log10 sat/vB: 1 sat/vB is empty, 100 is a fee market in earnest.
   feeLog10:  { cold: 0,   hot: 2  },
+  // log10(1 + blocks of backlog bidding above the relay floor). 0 blocks is a
+  // clear chain, 30 is the top of the "Congested" band. Log for the same reason
+  // the fee tier is read through log10 — a fee market is log-distributed.
+  backlogLog10: { cold: 0, hot: Math.log10(1 + 30) },
 })
 
 // A score is only shown when enough of it is real. Both conditions matter:
@@ -115,7 +119,7 @@ export function computeVibeDimensions({
   priceChange30dPct   = null,
   hashRateTrendPct    = null,
   fastestFeeSatsPerVb = null,
-  mempoolTxCount      = null,
+  mempoolBacklogBlocks = null,
 } = {}) {
   return {
     sentiment: dimension([isNum(fngScore) ? clamp01(fngScore / 100) * 100 : null], 1),
@@ -135,13 +139,25 @@ export function computeVibeDimensions({
     ], 1),
 
     // Fee tier alone is a step function with no resolution at the quiet end — it
-    // sits at 1 sat/vB for days while the mempool visibly fills — so the two
-    // congestion readings are averaged rather than picking one.
+    // sits at 1 sat/vB for days — so two congestion readings are averaged rather
+    // than one being picked.
+    //
+    // The second used to be `computeMempoolPressurePct(mempoolTxCount)`, and it
+    // was measuring the wrong thing: across the 50 snapshots captured to 22
+    // September 2026 the transaction count sat between 73k and 92k against a
+    // 200,000 anchor, so it reported heat of 37 to 46 — "half full" — on days
+    // the fee input correctly reported 0 to 30. The count includes the tail of
+    // transactions at the relay floor, which never drains, so it measures the
+    // dust rather than the queue. The result was a dimension holding 10% of the
+    // weight and carrying **0.7% of the score's variance**, correlating 0.06
+    // with the score it was part of. See `src/lib/mempool.js`.
     congestion: dimension([
       isNum(fastestFeeSatsPerVb) && fastestFeeSatsPerVb > 0
         ? heat(Math.log10(fastestFeeSatsPerVb), VIBE_ANCHORS.feeLog10.cold, VIBE_ANCHORS.feeLog10.hot)
         : null,
-      isNum(mempoolTxCount) ? computeMempoolPressurePct(mempoolTxCount) : null,
+      isNum(mempoolBacklogBlocks) && mempoolBacklogBlocks >= 0
+        ? heat(Math.log10(1 + mempoolBacklogBlocks), VIBE_ANCHORS.backlogLog10.cold, VIBE_ANCHORS.backlogLog10.hot)
+        : null,
     ], 2),
 
     network: dimension([
@@ -274,13 +290,6 @@ export function computeHashRateTrend(hashrates) {
   const last  = hashrates[hashrates.length - 1].avgHashrate
   if (!first) return null
   return ((last - first) / first) * 100
-}
-
-// Fill percentage for the mempool pressure bar based on unconfirmed transaction count.
-// Cap at 100% — the bar overflows if the mempool is severely congested.
-export function computeMempoolPressurePct(count) {
-  if (count == null) return null
-  return Math.min(100, (count / 200_000) * 100)
 }
 
 // Standard single-input, two-output transaction size used for fee estimates.

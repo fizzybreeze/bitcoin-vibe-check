@@ -22,6 +22,7 @@ const full = (over = {}) => ({
   hashrate_trend_30d: 4.25,
   fee_fastest_sv: 7,
   mempool_tx_count: 42000,
+  mempool_backlog_blocks: 4,
   block_height: 900123,
   ...over,
 })

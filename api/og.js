@@ -24,6 +24,7 @@
 import { KRAKEN_INTERVAL, krakenOhlcUrl, extractKrakenOhlc } from '../src/lib/ohlc.js'
 import { calc200DMA, calcMayerMultiple } from '../src/utils/cycleCalculations.js'
 import { computeVibeScore, computePriceChange30d, computeHashRateTrend } from '../src/lib/calculations.js'
+import { mempoolBacklogBlocks } from '../src/lib/mempool.js'
 import { buildOgModel, ogElement, ogModelIsRenderable, OG_WIDTH, OG_HEIGHT } from './lib/ogView.js'
 import { createRateLimiter, hasQueryParams, rateLimitVerdict } from './lib/abuseGuard.js'
 
@@ -111,7 +112,7 @@ export async function collectOgData(now = new Date()) {
     priceChange30dPct:   computePriceChange30d(candles),
     hashRateTrendPct:    computeHashRateTrend(hashrateRaw?.hashrates),
     fastestFeeSatsPerVb: num(feesRaw?.fastestFee),
-    mempoolTxCount:      num(mempoolRaw?.count),
+    mempoolBacklogBlocks: mempoolBacklogBlocks(mempoolRaw),
   })
 
   return buildOgModel({

@@ -20,7 +20,8 @@ import Wordmark from './Wordmark.jsx'
 // allowed to colour them differently. This file carried its own copies of the
 // congestion and MVRV ladders until the Afterglow pass; the MVRV one had
 // disagreed with the live card's for the same five bands.
-import { congestionBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
+import { backlogBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
+import { mempoolBacklogBlocks } from '../lib/mempool.js'
 import { FONT_STACKS } from '../lib/typography.js'
 // The raster the chart and the sparklines wear, in the one form html2canvas can
 // actually draw — see `crt.js`, which records the measurement. A share image
@@ -307,7 +308,7 @@ function FeesShareCard({ cardData, currency, theme }) {
     priceUsd, priceGbp, priceEur, priceCad, priceChf } = cardData
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
   const currSym = CURRENCY_META[currency]?.sym ?? '$'
-  const cg = mempool?.vsize != null ? congestionBand(mempool.vsize) : null
+  const cg = backlogBand(mempoolBacklogBlocks(mempool))
 
   function fmtFiatFee(feeRate) {
     if (!(price > 0)) return null

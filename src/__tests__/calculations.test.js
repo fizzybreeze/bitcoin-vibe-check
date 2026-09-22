@@ -6,7 +6,6 @@ import {
   computeSatsPerFiat,
   computeIssuedSupply,
   computeHashRateTrend,
-  computeMempoolPressurePct,
   calcFiatFee,
   computeVol7dAvg,
   computeVibeScore,
@@ -146,7 +145,10 @@ const NEUTRAL_INPUTS = {
   priceChange30dPct:   0,       // midpoint of -25–+25
   hashRateTrendPct:    2.5,     // midpoint of -10–+15
   fastestFeeSatsPerVb: 10,      // log10 = 1, midpoint of 0–2
-  mempoolTxCount:      100_000, // half of the 200k pressure cap
+  // Midpoint of the log backlog scale: log10(1 + b) / log10(31) = 0.5, so
+  // 1 + b = sqrt(31). Written as the expression rather than 4.57 so the
+  // "scores 50 at every midpoint" test stays exact if the anchor moves.
+  mempoolBacklogBlocks: Math.sqrt(31) - 1,
 }
 
 describe('computeVibeScore', () => {
@@ -160,21 +162,21 @@ describe('computeVibeScore', () => {
   it('scores 100 when every input is at or past its hot anchor', () => {
     expect(computeVibeScore({
       fngScore: 100, mayerMultiple: 2.4, mvrv: 3.7, priceChange30dPct: 25,
-      hashRateTrendPct: 15, fastestFeeSatsPerVb: 100, mempoolTxCount: 200_000,
+      hashRateTrendPct: 15, fastestFeeSatsPerVb: 100, mempoolBacklogBlocks: 30,
     }).score).toBe(100)
   })
 
   it('scores 0 when every input is at or past its cold anchor', () => {
     expect(computeVibeScore({
       fngScore: 0, mayerMultiple: 0.8, mvrv: 1.0, priceChange30dPct: -25,
-      hashRateTrendPct: -10, fastestFeeSatsPerVb: 1, mempoolTxCount: 0,
+      hashRateTrendPct: -10, fastestFeeSatsPerVb: 1, mempoolBacklogBlocks: 0,
     }).score).toBe(0)
   })
 
   it('clamps inputs beyond their anchors rather than letting them run away', () => {
     const beyond = computeVibeScore({
       fngScore: 100, mayerMultiple: 99, mvrv: 99, priceChange30dPct: 5000,
-      hashRateTrendPct: 500, fastestFeeSatsPerVb: 100_000, mempoolTxCount: 9e9,
+      hashRateTrendPct: 500, fastestFeeSatsPerVb: 100_000, mempoolBacklogBlocks: 9e9,
     })
     expect(beyond.score).toBe(100)
     expect(beyond.score).toBeLessThanOrEqual(100)
@@ -185,11 +187,11 @@ describe('computeVibeScore', () => {
   it('separates a cycle top from a cycle bottom by a wide margin', () => {
     const top = computeVibeScore({
       fngScore: 84, mayerMultiple: 1.55, mvrv: 3.2, priceChange30dPct: 22,
-      hashRateTrendPct: 6, fastestFeeSatsPerVb: 60, mempoolTxCount: 150_000,
+      hashRateTrendPct: 6, fastestFeeSatsPerVb: 60, mempoolBacklogBlocks: 12,
     })
     const bottom = computeVibeScore({
       fngScore: 22, mayerMultiple: 0.72, mvrv: 0.75, priceChange30dPct: -18,
-      hashRateTrendPct: 2, fastestFeeSatsPerVb: 2, mempoolTxCount: 8_000,
+      hashRateTrendPct: 2, fastestFeeSatsPerVb: 2, mempoolBacklogBlocks: 0.15,
     })
     expect(top.score).toBeGreaterThan(70)
     expect(bottom.score).toBeLessThan(25)
@@ -228,7 +230,7 @@ describe('computeVibeScore', () => {
   })
 
   it('counts a dropped congestion input too', () => {
-    const result = computeVibeScore({ ...NEUTRAL_INPUTS, mempoolTxCount: null })
+    const result = computeVibeScore({ ...NEUTRAL_INPUTS, mempoolBacklogBlocks: null })
     expect(result.inputsUsed).toBe(6)
     expect(result.dimensions.congestion).not.toBeNull()
   })
@@ -266,8 +268,9 @@ describe('computeVibeScore', () => {
   it('ignores a zero or negative fee rather than taking log10 of it', () => {
     const result = computeVibeScore({ ...NEUTRAL_INPUTS, fastestFeeSatsPerVb: 0 })
     expect(Number.isFinite(result.score)).toBe(true)
-    // Mempool pressure alone still carries the dimension.
-    expect(result.dimensions.congestion).toBeCloseTo(50, 5)
+    // The backlog alone still carries the dimension.
+    expect(result.dimensions.congestion).toBeCloseTo(
+      (Math.log10(1 + NEUTRAL_INPUTS.mempoolBacklogBlocks) / Math.log10(31)) * 100, 5)
   })
 
   it('always returns an integer within 0–100', () => {
@@ -289,7 +292,7 @@ describe('computeVibeScore', () => {
   it('carries a summary that agrees in direction with a hot score', () => {
     const hot = computeVibeScore({
       fngScore: 95, mayerMultiple: 2.4, mvrv: 3.7, priceChange30dPct: 40,
-      hashRateTrendPct: 15, fastestFeeSatsPerVb: 120, mempoolTxCount: 220_000,
+      hashRateTrendPct: 15, fastestFeeSatsPerVb: 120, mempoolBacklogBlocks: 40,
     })
     expect(hot.score).toBeGreaterThan(80)
     expect(hot.label).toBe('Overheated')
@@ -300,7 +303,7 @@ describe('computeVibeScore', () => {
   it('carries a summary that agrees in direction with a cold score', () => {
     const cold = computeVibeScore({
       fngScore: 8, mayerMultiple: 0.7, mvrv: 0.8, priceChange30dPct: -30,
-      hashRateTrendPct: -9, fastestFeeSatsPerVb: 1, mempoolTxCount: 3_000,
+      hashRateTrendPct: -9, fastestFeeSatsPerVb: 1, mempoolBacklogBlocks: 0.05,
     })
     expect(cold.score).toBeLessThan(20)
     expect(cold.label).toBe('Ice Cold')
@@ -443,7 +446,7 @@ describe('computeVibeDimensions / summary without a score', () => {
   it('produces a summary when the score is null for lack of coverage', () => {
     // MVRV rate-limited and the OHLC fetch failed: no Mayer, no MVRV, no
     // momentum. Coverage is 0.15 — far below the floor.
-    const inputs = { fngScore: 27, fastestFeeSatsPerVb: 2, mempoolTxCount: 30_000, hashRateTrendPct: 3 }
+    const inputs = { fngScore: 27, fastestFeeSatsPerVb: 2, mempoolBacklogBlocks: 0.66, hashRateTrendPct: 3 }
     expect(computeVibeScore(inputs)).toBeNull()
 
     const summary = computeVibeSummary(vibeDimensionValues(computeVibeDimensions(inputs)))
@@ -505,29 +508,6 @@ describe('computeHashRateTrend', () => {
 })
 
 // ─── Mempool pressure bar ─────────────────────────────────────────────────────
-
-describe('computeMempoolPressurePct', () => {
-  it('returns 0% for an empty mempool', () => {
-    expect(computeMempoolPressurePct(0)).toBe(0)
-  })
-
-  it('returns 50% for 100,000 unconfirmed transactions', () => {
-    expect(computeMempoolPressurePct(100_000)).toBe(50)
-  })
-
-  it('returns exactly 100% at the 200,000 transaction threshold', () => {
-    expect(computeMempoolPressurePct(200_000)).toBe(100)
-  })
-
-  it('caps at 100% for counts above the threshold', () => {
-    expect(computeMempoolPressurePct(250_000)).toBe(100)
-    expect(computeMempoolPressurePct(1_000_000)).toBe(100)
-  })
-
-  it('returns null for null input', () => {
-    expect(computeMempoolPressurePct(null)).toBeNull()
-  })
-})
 
 // ─── Fiat fee estimate ────────────────────────────────────────────────────────
 

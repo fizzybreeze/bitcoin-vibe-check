@@ -35,6 +35,7 @@ const full = (over = {}) => ({
   fee_1h_sv: 3,
   fee_economy_sv: 1,
   mempool_tx_count: 42000,
+  mempool_backlog_blocks: 4,
   mempool_vsize_mb: 12.5,
   block_height: 900123,
   remaining_blocks: 1200,
@@ -261,13 +262,22 @@ describe('the network section', () => {
     expect(networkSection(w).join(' ')).toContain('Every fee tier is at 1 sat/vB')
   })
 
-  it('reads the congestion band off the shared scale in bytes, not megabytes', () => {
-    // `congestionBand` takes vsize in bytes and the column stores megabytes.
-    // Feeding it the raw column silently reports every mempool as Low.
-    const busy = week({ '2026-08-09': { mempool_vsize_mb: 120 } })
-    const quiet = week({ '2026-08-09': { mempool_vsize_mb: 2 } })
-    expect(networkSection(busy).join(' ')).toContain('congestion is High')
-    expect(networkSection(quiet).join(' ')).toContain('congestion is Low')
+  it('reads the congestion band off the stored backlog, in blocks', () => {
+    // The column is blocks of backlog above the relay floor. It was the
+    // mempool's total vsize in megabytes until v1.22.0, which reported the
+    // same band on every day the job has ever captured.
+    const busy = week({ '2026-08-09': { mempool_backlog_blocks: 45 } })
+    const quiet = week({ '2026-08-09': { mempool_backlog_blocks: 0.3 } })
+    expect(networkSection(busy).join(' ')).toContain('congestion is Congested')
+    expect(networkSection(quiet).join(' ')).toContain('congestion is Clear')
+  })
+
+  it('drops the congestion sentence for a row captured before the backlog existed', () => {
+    // Rows captured before v1.22.0 carry a vsize and no backlog. A brief that
+    // silently reported those as Clear would be stating an idle chain it has
+    // no evidence for.
+    const old = week({ '2026-08-09': { mempool_backlog_blocks: null } })
+    expect(networkSection(old).join(' ')).not.toContain('congestion is')
   })
 
   it('places the halving from the height it read', () => {

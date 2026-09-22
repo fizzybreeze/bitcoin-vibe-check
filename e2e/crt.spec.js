@@ -330,7 +330,7 @@ test.describe('sparkline faults', () => {
           price_change_30d_pct: 5 - (i % 9),
           hashrate_trend_30d: 3 + (i % 3),
           fee_fastest_sv: 8 + (i % 6),
-          mempool_tx_count: 40_000 + i * 1_000,
+          mempool_tx_count: 40_000 + i * 1_000, mempool_backlog_blocks: 4,
         },
       }
     })

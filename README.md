@@ -30,7 +30,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 ### The Vibe Score
 - **One composite 0–100 reading** of how hot the market is running, in the BTC Price card. Not a new data source — a synthesis of what the dashboard already fetches, so it costs no extra request
 - **Never a black box** — the five components are listed beneath the score with their individual 0–100 values, and the full formula and weights are in the card tooltip
-- **Weights**: sentiment 30% (Fear & Greed), valuation 30% (Mayer Multiple and MVRV), momentum 25% (30-day price change), congestion 10% (fee tier and mempool), network 5% (30-day hash-rate trend)
+- **Weights**: sentiment 30% (Fear & Greed), valuation 30% (Mayer Multiple and MVRV), momentum 25% (30-day price change), congestion 10% (fee tier and blocks of mempool backlog), network 5% (30-day hash-rate trend)
 - **Single-polarity by design** — every input is scaled so that higher means hotter (greedier, more extended, more congested). 100 is euphoric, 0 is frozen. It is a summary of public metrics, not advice, and deliberately not a buy or sell signal
 - **Degrades rather than disappears** — a missing input drops its dimension and the remaining weights renormalise, with the card stating how many of the five it scored on. Below three dimensions, or 60% of the weight, no score is shown at all
 
@@ -72,7 +72,7 @@ A real-time Bitcoin dashboard that surfaces everything you need to understand th
 
 ### Network Fees & Mempool
 - **Fee tiers** — Slow (~1 hour), Medium (~30 min), and Fast (~10 min) in sat/vB
-- **Mempool congestion** indicator (Low / Moderate / High) with a visual fill bar and unconfirmed transaction count
+- **Mempool congestion** indicator (Clear / Light / Moderate / Busy / Congested) with a visual fill bar, measured as blocks of backlog bidding above the 1 sat/vbyte relay floor rather than as the mempool's total size — most of that total is transactions at the floor that never clear, so it stays near 40 MB whether the chain is busy or idle
 - On desktop, the Network Fees card sits in the **network health row** alongside Network Pulse and Recent Blocks (3-column layout)
 
 ### Lightning Network
@@ -198,6 +198,7 @@ src/
     alertRules.js            what an alert is and when it fires — shared with the sender
     vibeHistory.js           which snapshot rows are comparable enough to plot
     scales.js                the band ladders (vibe, Fear & Greed, MVRV, congestion, block time)
+    mempool.js               blocks of backlog above the relay floor, from the fee histogram
     palette.js               every colour in both themes — the source of truth index.css mirrors
     typography.js            the font stacks and the card label/value/shell class constants
     icons.js                 every icon on one 24×24 grid, plus the header button shell

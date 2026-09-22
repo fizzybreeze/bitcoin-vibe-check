@@ -1,26 +1,32 @@
 import { calcFiatFee } from '../lib/calculations.js'
 import CardTooltip from './CardTooltip.jsx'
 import Skeleton from './Skeleton.jsx'
-import { congestionBand } from '../lib/scales.js'
+import { backlogBand } from '../lib/scales.js'
+import { mempoolBacklogBlocks, backlogBarPct } from '../lib/mempool.js'
 import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
-const FEES_TOOLTIP = 'Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Fees rise during congestion and fall when the mempool is clear.'
+const FEES_TOOLTIP = 'Fee rates in sat/vbyte across slow, medium, and fast confirmation tiers. Fiat estimates assume a standard 250-vbyte transaction -- a typical single-input transfer. Congestion is measured as blocks of backlog bidding above the 1 sat/vbyte relay floor, not as the total size of the mempool: most of that total is transactions at the floor that do not clear, so it stays near 40 MB whether the chain is busy or idle.'
 
 export default function NetworkFeesCard({ fees, mempool, lightning, loading, price, currencySym }) {
-  // Read from the mempool's virtual size — not to be confused with
-  // `computeMempoolPressurePct`, which feeds the Vibe Score's congestion
-  // dimension from the transaction *count*. Two measures of the same queue, and
-  // the bar below is drawn from vsize too, so the percentage on screen here is
-  // not the one inside the score.
-  const cg  = mempool != null ? congestionBand(mempool.vsize) : null
-  const pct = mempool != null ? Math.min(100, (mempool.vsize / 100_000_000) * 100) : 0
+  // Blocks of backlog bidding above the relay floor — the same figure the Vibe
+  // Score's congestion dimension reads, so the label here and the number inside
+  // the score are one measure rather than two that can disagree. It was the
+  // mempool's *total vsize* until v1.22.0, which answered "Moderate" on all 50
+  // captured days; `src/lib/mempool.js` has the measurement and the reason.
+  //
+  // `null` when the histogram is missing or in a shape that module refuses, and
+  // the whole row is then hidden: an unreadable mempool is not a clear one, and
+  // there is no honest band to draw for it.
+  const backlog = mempoolBacklogBlocks(mempool)
+  const cg  = backlogBand(backlog)
+  const pct = backlogBarPct(backlog) ?? 0
 
   return (
     <div data-testid="card-network-fees" className={`${CARD} flex flex-col gap-4 justify-between`}>
       <h2 className={`${CARD_LABEL} flex items-center`}>Network Fees<CardTooltip text={FEES_TOOLTIP} /></h2>
 
       {/* Congestion indicator — hidden gracefully if mempool fetch failed */}
-      {mempool != null && (
+      {cg != null && (
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <p className={CARD_LABEL}>Mempool Congestion</p>
@@ -30,7 +36,8 @@ export default function NetworkFeesCard({ fees, mempool, lightning, loading, pri
             <div className={`h-full rounded-full ${cg.bar}`} style={{ width: `${pct}%` }} />
           </div>
           <p className="mt-1.5 text-xs text-quiet tabular-nums">
-            {mempool.count.toLocaleString('en-US')} unconfirmed transactions
+            {backlog < 0.1 ? 'under 0.1' : backlog.toFixed(1)} blocks of backlog
+            {mempool?.count != null && ` · ${mempool.count.toLocaleString('en-US')} unconfirmed`}
           </p>
         </div>
       )}

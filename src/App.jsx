@@ -23,6 +23,7 @@ import {
   computeAthDistance, computeHashRateTrend, computeVibeScore, computePriceChange30d,
   computeVibeDimensions, computeVibeSummary, vibeDimensionValues,
 } from './lib/calculations.js'
+import { mempoolBacklogBlocks } from './lib/mempool.js'
 import { calc200DMA, calcMayerMultiple } from './utils/cycleCalculations.js'
 import { KRAKEN_INTERVAL, fetchKrakenCandles } from './lib/ohlc.js'
 import { fetchChartSeries, patchSeriesTail } from './lib/chartSeries.js'
@@ -760,7 +761,7 @@ export default function App() {
     priceChange30dPct:   computePriceChange30d(ohlcData200),
     hashRateTrendPct:    hashRateTrend,
     fastestFeeSatsPerVb: fees?.fastestFee ?? null,
-    mempoolTxCount:      mempool?.count ?? null,
+    mempoolBacklogBlocks: mempoolBacklogBlocks(mempool),
   }
   const vibe = computeVibeScore(vibeInputs)
   // The header sentence is derived from the same dimension values as the score

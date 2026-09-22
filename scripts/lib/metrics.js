@@ -18,6 +18,7 @@ import {
   computePriceChange30d,
   computeVibeDimensions,
 } from '../../src/lib/calculations.js'
+import { mempoolBacklogBlocks } from '../../src/lib/mempool.js'
 import { calcPowerLawFairValue } from '../../src/utils/cycleCalculations.js'
 import { extractKrakenOhlc, calc200DMA, calcMayerMultiple } from './ohlc.js'
 
@@ -106,6 +107,7 @@ export function buildMetrics({
     // Mempool
     mempool_tx_count:      mempoolRaw?.count ?? null,
     mempool_vsize_mb:      mempoolRaw?.vsize != null ? round(mempoolRaw.vsize / 1e6, 2) : null,
+    mempool_backlog_blocks: round(mempoolBacklogBlocks(mempoolRaw), 2),
 
     // Lightning
     lightning_capacity_btc: lightning?.total_capacity != null
@@ -135,7 +137,7 @@ export function vibeInputsFromMetrics(metrics = {}) {
     priceChange30dPct:   metrics.price_change_30d_pct,
     hashRateTrendPct:    metrics.hashrate_trend_30d,
     fastestFeeSatsPerVb: metrics.fee_fastest_sv,
-    mempoolTxCount:      metrics.mempool_tx_count,
+    mempoolBacklogBlocks: metrics.mempool_backlog_blocks,
   }
 }
 
