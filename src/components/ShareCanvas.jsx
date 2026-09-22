@@ -22,6 +22,7 @@ import Wordmark from './Wordmark.jsx'
 // disagreed with the live card's for the same five bands.
 import { backlogBand, mvrvBand, vibeLabelHex, fngLabelHex } from '../lib/scales.js'
 import { mempoolBacklogBlocks } from '../lib/mempool.js'
+import { readFeeTiers } from '../lib/feeTiers.js'
 import { FONT_STACKS } from '../lib/typography.js'
 // The raster the chart and the sparklines wear, in the one form html2canvas can
 // actually draw — see `crt.js`, which records the measurement. A share image
@@ -309,23 +310,40 @@ function FeesShareCard({ cardData, currency, theme }) {
   const price = { usd: priceUsd, gbp: priceGbp, eur: priceEur, cad: priceCad, chf: priceChf }[currency] ?? priceUsd
   const currSym = CURRENCY_META[currency]?.sym ?? '$'
   const cg = backlogBand(mempoolBacklogBlocks(mempool))
+  const tiers = readFeeTiers(fees)
 
   function fmtFiatFee(feeRate) {
     if (!(price > 0)) return null
     const f = calcFiatFee(feeRate, price)
     return `≈ ${currSym}${f >= 0.10 ? f.toFixed(2) : f.toFixed(4)}`
   }
+  const flatFiat = tiers?.flat ? fmtFiatFee(tiers.rate) : null
 
   return (
     <>
       <p style={S.label}>Network Fees</p>
-      {fees ? (
+      {/* Collapses to one figure when every tier carries the same rate — the
+          card's own rule, and this is the surface where getting it wrong is
+          permanent, since a share image is posted and cannot be re-rendered. */}
+      {tiers == null ? (
+        <p style={{ ...S.value, fontSize: 18 }}>—</p>
+      ) : tiers.flat ? (
+        <div style={{
+          marginTop: 8, background: p.raised, borderRadius: 8, padding: '8px 10px',
+          border: `1px solid ${p['line-soft']}`,
+        }}>
+          <p style={{ ...S.label, fontSize: 9 }}>Every Tier</p>
+          <p style={{ fontSize: 16, fontWeight: 700, color: p.accent, margin: '4px 0 0' }}>
+            {tiers.rate} <span style={{ fontSize: 9, fontWeight: 400, color: p.quiet }}>sat/vB</span>
+            {flatFiat && <span style={{ fontSize: 9, fontWeight: 400, color: p.muted }}> {flatFiat}</span>}
+          </p>
+          <p style={{ fontSize: 9, color: p.quiet, margin: '3px 0 0' }}>
+            No premium for priority: the next block costs the same as the slow tier
+          </p>
+        </div>
+      ) : (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          {[
-            { label: 'Slow',   value: fees.hourFee,     time: '~1 hr'  },
-            { label: 'Medium', value: fees.halfHourFee, time: '~30 min' },
-            { label: 'Fast',   value: fees.fastestFee,  time: '~10 min' },
-          ].map(({ label, value, time }) => {
+          {tiers.tiers.map(({ label, value, blocks }) => {
             const fiatStr = fmtFiatFee(value)
             return (
               <div key={label} style={{
@@ -335,14 +353,12 @@ function FeesShareCard({ cardData, currency, theme }) {
                 <p style={{ ...S.label, fontSize: 9 }}>{label}</p>
                 <p style={{ fontSize: 16, fontWeight: 700, color: p.accent, margin: '4px 0 0' }}>{value}</p>
                 <p style={{ fontSize: 9, color: p.quiet, margin: '2px 0 0' }}>sat/vB</p>
-                <p style={{ fontSize: 9, color: p.quiet, margin: '2px 0 0' }}>{time}</p>
+                <p style={{ fontSize: 9, color: p.quiet, margin: '2px 0 0' }}>{blocks}</p>
                 {fiatStr && <p style={{ fontSize: 9, color: p.muted, margin: '3px 0 0' }}>{fiatStr}</p>}
               </div>
             )
           })}
         </div>
-      ) : (
-        <p style={{ ...S.value, fontSize: 18 }}>—</p>
       )}
       {cg && (
         <p style={{ ...S.sub, marginTop: 8 }}>

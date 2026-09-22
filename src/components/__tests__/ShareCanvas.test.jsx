@@ -67,6 +67,46 @@ describe('ShareCanvas — BTC Price', () => {
   })
 })
 
+function renderFeesCard(fees, props = {}) {
+  return render(
+    <ShareCanvas
+      selectedCards={['fees']}
+      sentimentSummary=""
+      cardData={{ priceUsd: 100_000, fees, mempool: null }}
+      currency="usd"
+      forwardedRef={null}
+      {...props}
+    />
+  )
+}
+
+describe('ShareCanvas — Network Fees', () => {
+  // The same collapse as the live card, and worse here for the reason the
+  // 24h-change tests above give: a posted image cannot be re-rendered, so
+  // three prices that are one price sit under three different waits forever.
+  it('collapses to one figure when every tier carries the same rate', () => {
+    renderFeesCard({ hourFee: 1, halfHourFee: 1, fastestFee: 1 })
+    expect(screen.getByText('Every Tier')).toBeTruthy()
+    expect(screen.getByText(/paying more buys nothing|no premium for priority/i)).toBeTruthy()
+    expect(screen.queryByText('Slow')).toBeNull()
+    expect(screen.queryByText('Medium')).toBeNull()
+    expect(screen.queryByText('Fast')).toBeNull()
+  })
+
+  it('keeps the three tiers when the rates differ', () => {
+    renderFeesCard({ hourFee: 5, halfHourFee: 8, fastestFee: 12 })
+    expect(screen.getByText('Slow')).toBeTruthy()
+    expect(screen.queryByText('Every Tier')).toBeNull()
+    expect(screen.getByText('12')).toBeTruthy()
+  })
+
+  it('labels the tiers in blocks rather than in minutes', () => {
+    renderFeesCard({ hourFee: 5, halfHourFee: 8, fastestFee: 12 })
+    expect(screen.getByText('next block')).toBeTruthy()
+    expect(screen.queryByText(/~10 min|~30 min|~1 hr/)).toBeNull()
+  })
+})
+
 describe('ShareCanvas — Cycle Indicators', () => {
   it('labels an MVRV that came from the daily snapshot', () => {
     renderCycleCard({ value: 2.15, date: '2026-08-05', source: 'snapshot' })

@@ -135,6 +135,47 @@ describe('NetworkFeesCard', () => {
     expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
   })
 
+  // The defect: on 22 of the 50 captured days all three tiers carried one rate,
+  // drawn as three boxes promising three different waits. The rate is correct —
+  // an empty fee market really does charge one price — so the fix is to stop
+  // presenting it as a choice.
+  it('collapses to one figure when every tier carries the same rate', () => {
+    renderCard({ fees: { hourFee: 1, halfHourFee: 1, fastestFee: 1 }, mempool: null })
+    expect(screen.getByTestId('fees-flat')).toBeInTheDocument()
+    expect(screen.getByText('Every Tier')).toBeInTheDocument()
+    expect(screen.getByText(/paying more buys nothing/)).toBeInTheDocument()
+    // One figure, not the same number three times under three labels.
+    expect(screen.getAllByText('1')).toHaveLength(1)
+    for (const label of ['Slow', 'Medium', 'Fast']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument()
+    }
+    // The fiat cost survives the collapse — it is the reader's actual question.
+    expect(screen.getByText('≈ $0.25')).toBeInTheDocument()
+  })
+
+  it('keeps the three tiers when only two of them agree', () => {
+    renderCard({ fees: { hourFee: 1, halfHourFee: 1, fastestFee: 2 }, mempool: null })
+    expect(screen.queryByTestId('fees-flat')).not.toBeInTheDocument()
+    expect(screen.getAllByText('1')).toHaveLength(2)
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  // Minutes stated the mean of an exponential wait as though it were a
+  // deadline, and were half of what made three identical rates incoherent.
+  it('labels the tiers in blocks rather than in minutes', () => {
+    renderCard({ mempool: null })
+    expect(screen.getByText('next block')).toBeInTheDocument()
+    expect(screen.getByText('~3 blocks')).toBeInTheDocument()
+    expect(screen.getByText('~6 blocks')).toBeInTheDocument()
+    expect(screen.queryByText(/~10 min|~30 min|~1 hour/)).not.toBeInTheDocument()
+  })
+
+  it('says fee rates are unavailable rather than drawing an empty grid', () => {
+    renderCard({ fees: { hourFee: null, halfHourFee: null, fastestFee: null }, mempool: null })
+    expect(screen.getByText('Fee rates unavailable')).toBeInTheDocument()
+    expect(screen.queryByTestId('fees-flat')).not.toBeInTheDocument()
+  })
+
   it('says Lightning is unavailable rather than rendering empty stats', () => {
     renderCard({ mempool: null, lightning: null, loading: false })
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
