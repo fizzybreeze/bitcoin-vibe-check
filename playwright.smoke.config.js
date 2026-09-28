@@ -22,7 +22,14 @@ export default defineConfig({
   use: {
     // Overridable so the same suite can be pointed at a Vercel preview URL
     // before a risky change reaches production.
-    baseURL: process.env.SMOKE_BASE_URL ?? 'https://bitcoinvibecheck.com',
+    //
+    // **www, not the apex.** Vercel's domain settings redirect the apex to www
+    // with a 307, so every request-level assertion that uses `maxRedirects: 0`
+    // — the live OG render and the query-string refusal — measured that
+    // redirect instead of the route, and read 307 against a healthy site. The
+    // page-level tests passed because a browser follows it. Point this at the
+    // host that serves, not the one that forwards.
+    baseURL: process.env.SMOKE_BASE_URL ?? 'https://www.bitcoinvibecheck.com',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     launchOptions: process.env.PLAYWRIGHT_CHROMIUM_PATH

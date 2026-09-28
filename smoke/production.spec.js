@@ -1,6 +1,6 @@
 // Smoke tests for the DEPLOYED site. Real upstreams, no mocks.
 //
-// Run: npm run test:smoke        (defaults to https://bitcoinvibecheck.com)
+// Run: npm run test:smoke        (defaults to https://www.bitcoinvibecheck.com)
 //      SMOKE_BASE_URL=<url> npm run test:smoke   to point at a preview
 //
 // Every other gate verifies the code. This verifies the thing visitors load,
@@ -30,7 +30,11 @@ test.describe('bitcoinvibecheck.com', () => {
   })
 
   test('the page loads and renders its heading', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check' })).toBeVisible()
+    // `level: 1` because every card title has been a heading since v1.8.4, and
+    // the donation card's "Support Bitcoin Vibe Check" matches this name too —
+    // an unpinned locator is a strict-mode violation, not a pass. e2e's
+    // dashboard.spec.js got this fix at the time; this file was missed.
+    await expect(page.getByRole('heading', { name: 'Bitcoin Vibe Check', level: 1 })).toBeVisible()
   })
 
   test('a live BTC price renders', async ({ page }) => {
