@@ -114,12 +114,13 @@ describe('ShareCanvas — Network Fees', () => {
 describe('ShareCanvas — Cycle Indicators', () => {
   it('labels an MVRV that came from the daily snapshot', () => {
     renderCycleCard({ value: 2.15, date: '2026-08-05', source: 'snapshot' })
-    expect(screen.getByText(/2026-08-05.*daily snapshot/i)).toBeTruthy()
+    expect(screen.getByText('Data as of 5 Aug · from daily snapshot')).toBeTruthy()
   })
 
   it('says nothing about snapshots when the MVRV is live', () => {
     renderCycleCard({ value: 2.15, date: '2026-08-05', source: 'live' })
     expect(screen.getByText('2.15')).toBeTruthy()
+    expect(screen.getByText('Data as of 5 Aug')).toBeTruthy()
     expect(screen.queryByText(/snapshot/i)).toBeNull()
   })
 

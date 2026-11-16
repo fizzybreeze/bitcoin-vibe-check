@@ -29,6 +29,7 @@ import { FONT_STACKS } from '../lib/typography.js'
 // that carries the palette and the wordmark but none of the screen is the
 // treatment stopping at the edge of the app.
 import { grainBackground } from '../lib/crt.js'
+import { mvrvCaption } from '../lib/mvrvCaption.js'
 import Mark from './Mark.jsx'
 
 /** The three text styles every share card is built from, at one theme. */
@@ -385,9 +386,9 @@ function CycleIndicatorsShareCard({ cardData, theme }) {
   // is exhausted. This image gets posted publicly and outlives the moment it
   // was made, so it has to carry the same caveat the live card does — a week-old
   // number presented as today's is worse in a share than it is on screen.
-  const mvrvStored = cardData.chainData?.mvrv?.source === 'snapshot'
-    ? cardData.chainData.mvrv.date
-    : null
+  // The date is carried on a live value too: the source runs about a week
+  // behind, and a posted image with no date reads as today's reading.
+  const mvrvNote = mvrvCaption(cardData.chainData?.mvrv?.date, cardData.chainData?.mvrv?.source)
   const ma200     = cardData.ma200 ?? null
   const price     = cardData.priceUsd ?? null
   const fairValue = calcPowerLawFairValue()
@@ -407,9 +408,9 @@ function CycleIndicatorsShareCard({ cardData, theme }) {
             {mvrv != null ? mvrv.toFixed(2) : '—'}
           </p>
           {mvrvLbl && <p style={{ ...S.sub, color: p[mvrvLbl.token], fontWeight: 600 }}>{mvrvLbl.label}</p>}
-          {mvrvStored && (
+          {mvrvNote && (
             <p style={{ ...S.sub, color: p.quiet, fontSize: 10 }}>
-              {mvrvStored} · from daily snapshot
+              {mvrvNote}
             </p>
           )}
         </div>
