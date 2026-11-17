@@ -57,7 +57,7 @@ describe('CycleIndicatorsCard', () => {
         mvrv={2.15} dataDate="2026-08-05" mvrvSource="snapshot"
       />
     )
-    expect(screen.getByText(/2026-08-05.*daily snapshot/i)).toBeTruthy()
+    expect(screen.getByText('Data as of 5 Aug · from daily snapshot')).toBeTruthy()
   })
 
   it('says nothing extra about a live MVRV', () => {
@@ -67,7 +67,7 @@ describe('CycleIndicatorsCard', () => {
         mvrv={2.15} dataDate="2026-08-05" mvrvSource="live"
       />
     )
-    expect(screen.getByText('2026-08-05')).toBeTruthy()
+    expect(screen.getByText('Data as of 5 Aug')).toBeTruthy()
     expect(screen.queryByText(/snapshot/i)).toBeNull()
   })
 })

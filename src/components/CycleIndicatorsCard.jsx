@@ -2,9 +2,10 @@ import { fmtCurrency } from '../utils.js'
 import { calcMayerMultiple, calcPowerLawFairValue } from '../utils/cycleCalculations.js'
 import CardTooltip from './CardTooltip.jsx'
 import { mvrvBand, powerLawBand } from '../lib/scales.js'
+import { mvrvCaption } from '../lib/mvrvCaption.js'
 import { CARD, CARD_LABEL, CARD_VALUE } from '../lib/typography.js'
 
-const MVRV_TOOLTIP      = "Compares Bitcoin's market cap to the aggregate cost basis of all coins. Above 3.5 has historically marked cycle tops; below 1 has marked bottoms. Near 1 means the market is close to its collective break-even."
+const MVRV_TOOLTIP      = "Compares Bitcoin's market cap to the aggregate cost basis of all coins. Above 3.5 has historically marked cycle tops; below 1 has marked bottoms. Near 1 means the market is close to its collective break-even. Our source publishes it about a week behind, so the date shown is the day the figure describes."
 const POWER_LAW_TOOLTIP = "A long-term model treating adoption as a power function of time since Bitcoin's genesis block. Shows where price sits relative to a historical fair value range. A model, not a prediction — label it accordingly."
 const MA200_TOOLTIP     = 'The most widely cited long-term trend indicator. Price above the 200-day moving average suggests a bull trend; below suggests a bear trend. Many investors use it as a simple entry or exit signal.'
 const MAYER_TOOLTIP     = 'Price divided by the 200-day moving average. Above 2.4 has preceded corrections historically; below 1 has been rare and has often preceded recoveries. Long-run mean sits around 1.0–1.5.'
@@ -78,9 +79,9 @@ export default function CycleIndicatorsCard({ currentPrice, ma200, ohlcLoading, 
                   daily snapshot is a day or more old, and a number that quietly
                   presents itself as live is the failure this fallback would
                   otherwise introduce. */}
-              {dataDate && (
+              {mvrvCaption(dataDate, mvrvSource) && (
                 <p className="text-xs text-quiet">
-                  {dataDate}{mvrvSource === 'snapshot' && ' · from daily snapshot'}
+                  {mvrvCaption(dataDate, mvrvSource)}
                 </p>
               )}
             </>

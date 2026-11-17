@@ -8,7 +8,17 @@
 
 // A snapshot row is one UTC day of dashboard metrics. `metrics.mvrv_value` and
 // `metrics.mvrv_date` are written by scripts/lib/metrics.js; the date is
-// BGeometrics' own, which is typically the day before the capture.
+// BGeometrics' own.
+//
+// **The cap is measured from `captured_on`, not from `mvrv_date`.** The free
+// tier publishes MVRV a week behind — every snapshot from September to
+// November 2026 carried an `mvrv_date` exactly 7 days before its capture — so
+// a cap on the data date was met on the day of capture and exceeded by the
+// next morning. The fallback could therefore almost never serve anything, and
+// nothing showed it, because BGeometrics had not failed. What the cap exists
+// to catch is the snapshot job *stopping*, and that is a fact about when the
+// row was written. The live route serves the same week-old data date, so the
+// fallback now serves exactly what the live path would have, for up to a week.
 export const MAX_SNAPSHOT_AGE_DAYS = 7
 
 // How many rows the query asks for, derived from the cap rather than picked.
@@ -16,8 +26,9 @@ export const MAX_SNAPSHOT_AGE_DAYS = 7
 // it, so a multi-day outage fills the newest rows with null MVRVs — a window
 // narrower than the cap would 503 while a usable row sat just outside it, and
 // the effective cap would silently be the limit rather than the number
-// documented here. `mvrv_date` also trails `captured_on` by about a day, hence
-// the slack.
+// documented here. The cap counts `captured_on` days and the query orders by
+// the same column, so cap + 1 rows would do; the extra two are slack for a
+// day the job wrote twice or not at all.
 export const SNAPSHOT_QUERY_LIMIT = MAX_SNAPSHOT_AGE_DAYS + 3
 
 const DAY_MS = 86_400_000
@@ -60,7 +71,12 @@ function usableMvrv(row) {
   const dateMs = parseUtcDate(metrics.mvrv_date)
   if (dateMs == null) return null
 
-  return { value: metrics.mvrv_value, date: metrics.mvrv_date, dateMs }
+  // Staleness is judged from here, so a row without a capture date cannot be
+  // judged and is refused, the same rule the data date already followed.
+  const capturedMs = parseUtcDate(row.captured_on)
+  if (capturedMs == null) return null
+
+  return { value: metrics.mvrv_value, date: metrics.mvrv_date, dateMs, capturedMs }
 }
 
 /**
@@ -76,7 +92,8 @@ function usableMvrv(row) {
  *   the query, because a fallback that silently serves the older of two rows is
  *   indistinguishable from one that works.
  *
- * - **Stale is refused, not labelled.** MVRV is half of the Vibe Score's
+ * - **Stale is refused, not labelled.** Measured from when the row was
+ *   captured (see MAX_SNAPSHOT_AGE_DAYS). MVRV is half of the Vibe Score's
  *   valuation dimension (15% of the composite), so an unbounded fallback would
  *   keep feeding a number into it long after the snapshot job stopped writing
  *   new ones — and the card would look healthy the whole time. Past
@@ -94,14 +111,19 @@ export function pickSnapshotMvrv(rows, { now = Date.now(), maxAgeDays = MAX_SNAP
   // Whole UTC days apart, not elapsed milliseconds: `mvrv_date` has day
   // granularity, so a millisecond comparison would make the cap mean "6 days
   // and some hours" at 09:00 and something else at 23:00.
-  const today   = Math.floor(now / DAY_MS)
-  const ageDays = (row) => today - row.dateMs / DAY_MS
+  const today    = Math.floor(now / DAY_MS)
+  const daysAgo  = (ms) => today - ms / DAY_MS
 
-  const candidates = rows.map(usableMvrv).filter(Boolean).filter(r => ageDays(r) >= 0)
+  // Future-dated on either date is wrong rather than fresh.
+  const candidates = rows.map(usableMvrv).filter(Boolean)
+    .filter(r => daysAgo(r.dateMs) >= 0 && daysAgo(r.capturedMs) >= 0)
   if (candidates.length === 0) return null
 
-  const newest = candidates.reduce((a, b) => (b.dateMs > a.dateMs ? b : a))
-  if (ageDays(newest) > maxAgeDays) return null
+  // Freshest data wins; a tie goes to the later capture, so the age check
+  // below is made against the most recent evidence that the job is running.
+  const newest = candidates.reduce((a, b) =>
+    (b.dateMs > a.dateMs || (b.dateMs === a.dateMs && b.capturedMs > a.capturedMs) ? b : a))
+  if (daysAgo(newest.capturedMs) > maxAgeDays) return null
 
   return { value: newest.value, date: newest.date, source: 'snapshot' }
 }

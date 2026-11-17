@@ -65,6 +65,40 @@ describe('pickSnapshotMvrv', () => {
     }
   })
 
+  // The real shape since September 2026: BGeometrics' free tier publishes a
+  // week behind, so the newest stored row carries a data date 7 days before
+  // its capture, and 8 days before the morning after. A cap on the data date
+  // refused it on every one of those mornings.
+  it('serves a row whose data trails its capture by a week', () => {
+    const now  = Date.parse('2026-11-16T09:00:00Z')
+    const rows = [row('2026-11-15', { mvrv_value: 1.3958, mvrv_date: '2026-11-08' })]
+    expect(pickSnapshotMvrv(rows, { now }))
+      .toEqual({ value: 1.3958, date: '2026-11-08', source: 'snapshot' })
+  })
+
+  // What the cap is for: the job stopped writing usable rows.
+  it('measures staleness from the capture, not the data date', () => {
+    const now = Date.parse('2026-11-16T09:00:00Z')
+    expect(pickSnapshotMvrv([row('2026-11-08', { mvrv_value: 1.4, mvrv_date: '2026-11-07' })], { now }))
+      .toBeNull()
+    expect(pickSnapshotMvrv([row('2026-11-09', { mvrv_value: 1.4, mvrv_date: '2026-11-02' })], { now })?.value)
+      .toBe(1.4)
+  })
+
+  it('rejects a row with no usable capture date, since staleness could not be judged', () => {
+    for (const captured_on of [null, undefined, '', '2026-8-6', 20260806]) {
+      expect(pickSnapshotMvrv([row(captured_on, FULL_ROW)], { now: NOW })).toBeNull()
+    }
+  })
+
+  it('ignores a row captured in the future', () => {
+    const rows = [
+      row('2027-01-01', { mvrv_value: 9.99, mvrv_date: '2026-08-05' }),
+      row('2026-08-06', { mvrv_value: 2.15, mvrv_date: '2026-08-05' }),
+    ]
+    expect(pickSnapshotMvrv(rows, { now: NOW })?.value).toBe(2.15)
+  })
+
   it('rejects values that would render as a number but are not one', () => {
     for (const mvrv_value of [0, -1, NaN, '2.15', null, undefined]) {
       expect(pickSnapshotMvrv([row('2026-08-06', { mvrv_value, mvrv_date: '2026-08-05' })], { now: NOW }))
